@@ -36,6 +36,7 @@
 - T8에서 핵심 업무 흐름을 확인한다. T9부터는 완성본의 세션·메모리·모델 한도 처리와 캠프 동작을 구현한다. [제품 구상](../concept.md)
 - 첫 설치 때 Electron과 Forge·Vite의 호환 버전을 고정하고 잠금 파일을 커밋한다. Forge의 Vite 플러그인과 Playwright의 Electron 지원은 공식 문서상 실험 기능이므로, 선택한 버전으로 패키징과 앱 시작을 확인한다. SQLite는 설치된 Electron의 내장 Node에서 작동하는지 먼저 확인한다. [Forge Vite](https://www.electronforge.io/config/plugins/vite), [Playwright Electron](https://playwright.dev/docs/api/class-electron)
 - 로컬 LLM 연결 방식은 보유 환경에서 정한다. OpenAI 호환 여부, 스트리밍·도구 호출, 세션 맥락 복원과 중단을 먼저 확인한다. 특정 모델이 역할의 필수 기능을 지원하지 않으면 설정 화면에 이유를 표시한다.
+- Aseprite는 공개 소스를 제작자의 로컬 환경에서 직접 빌드해 사용한다. AI Crew 패키지에는 제작한 스프라이트와 애니메이션 데이터만 넣는다. [Aseprite 빌드 안내](https://github.com/aseprite/aseprite/blob/main/INSTALL.md), [Aseprite FAQ](https://aseprite.org/faq)
 - 첫 워크플로우는 한 프로젝트에서 쓰기 작업 한 건으로 검증한다. 전략 리뷰와 코드 리뷰는 서로 다른 검토 단계로 기록한다. 테스트는 별도 역할이 맡는다.
 - 새 세션에도 적용할 프로젝트 결정과 규칙은 프로젝트 메모리로 관리한다. 이전 작업을 이어갈 때는 해당 세션을 로드한다. 실행 환경 때문에 기존 에이전트 세션을 이어갈 수 없으면 새 실행으로 마지막 결정·변경·남은 일을 넘긴다.
 - 재실행 전에 앞선 작업의 반영 여부를 확인한다. 변경 전 지시나 파일 버전에 대한 늦은 검증 결과는 해당 업무의 이력에 남기고, 완료는 최신 지시와 변경에 대한 검증으로 판단한다.

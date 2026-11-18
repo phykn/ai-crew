@@ -6,7 +6,7 @@
 
 - **제품 경험은 EngChooN의 AI Office가 가깝다.** Claude Code와 Codex를 한 작업공간에서 운영하며 채팅, 업무 보드, 회의, 결재, 보고를 연결한다. 동료 도움 요청도 구현돼 있다. 큰 업무의 계획과 배정, 결과 취합은 팀·랩 리드가 맡는다. [AI Office 소개](https://engchoon.github.io/ai-office/), [v1.4.4 동료 도움 요청 코드](https://github.com/EngChooN/ai-office/blob/v1.4.4/app/src/main/office.ts#L2550-L2591), [계획 실행 코드](https://github.com/EngChooN/ai-office/blob/v1.4.4/app/src/main/office.ts#L3843-L3868)
 - **수평적인 실행 구조는 Microsoft Agensh가 가장 가까운 선행 사례다.** 에이전트가 공유 공간에서 하위 업무를 찾아 맡고, 발견 사항을 공유하고, 결과를 검증·통합한다. Gitea와 Mattermost를 함께 쓰면서도 일감을 배분하는 중앙 에이전트를 두지 않는다. 수평적인 권한 구조는 단일 서버나 공유 보드와 양립할 수 있다. [Agensh GitHub](https://github.com/microsoft/Agensh), [Agensh 논문 §2](https://arxiv.org/html/2609.26781v1)
-- **AI Crew의 비교 기준은 업무가 끝나는 방식이다.** 같은 권한을 가진 에이전트들이 리드의 배정 없이 보드에서 일을 맡고, 결과와 검토 근거를 남기며, 막혔을 때 다른 동료에게 인계할 수 있는지가 핵심이다. 동료 메시지나 사무실 화면 자체는 이미 여러 프로젝트에 있다. [OpenAgents 공유 이슈](https://github.com/openagents-org/openagents/tree/develop/workspace#shared-issues), [AgentLane](https://github.com/thetrueshags/AgentLane), [OpenClaw Office](https://github.com/wickedapp/openclaw-office)
+- **초기 조사에서는 동료의 자율 배정과 인계를 비교했다.** 공유 보드에서 일을 맡는 방식, 결과와 검토 근거를 남기는 방식, 막힌 업무를 동료에게 넘기는 방식을 살폈다. 동료 메시지나 사무실 화면 자체는 이미 여러 프로젝트에 있다. [OpenAgents 공유 이슈](https://github.com/openagents-org/openagents/tree/develop/workspace#shared-issues), [AgentLane](https://github.com/thetrueshags/AgentLane), [OpenClaw Office](https://github.com/wickedapp/openclaw-office)
 
 ## EngChooN AI Office
 
@@ -48,7 +48,9 @@
 | **The Contract Net Protocol** (IEEE Transactions on Computers, 1980) | 노드가 일을 공고하면 다른 노드가 응찰하고 공고자가 계약을 맡기는 고전적 분산 배정 방식이다. 공고자 역할은 업무마다 달라질 수 있다. 한 에이전트가 즉시 가져가는 선점에 비해 역량과 여유를 비교할 수 있고, 공고·응찰·선정 메시지가 필요하다. [저자 공개 원문](https://www.reidgsmith.com/The_Contract_Net_Protocol_Dec-1980.pdf) |
 | **Generative Agents: Interactive Simulacra of Human Behavior** (UIST 2023) | Smallville에서 기억, 성찰, 계획을 가진 캐릭터들이 상호작용한다. 공간 UI와 에이전트 행동을 연결하는 선례로 볼 수 있다. 논문의 평가는 모의 사회적 행동을 다룬다. [저자 공개본](https://arxiv.org/abs/2304.03442) |
 
-## AI Crew에 남는 설계 질문
+## 조사 당시 검토한 설계 선택지
+
+이후 AI Crew는 비서가 배정을 조율하고 역할별 권한을 가진 동료들이 직접 도움과 검토를 요청하는 방식을 선택했다. 업무별 필수 검증을 통과하면 비서가 완료를 확정한다. [현재 제품 구상](concept.md)
 
 - **누가 무엇을 맡나.** 짧고 분리 가능한 일에는 공유 보드의 카드 하나를 에이전트 한 명이 가져가는 선점 방식이 잘 맞는다. 드문 전문성이 필요한 일에서는 능력에 따라 도움을 요청하거나 응찰을 받는 방식도 있다. 카드에 담당자, 선행 업무, 완료 기준을 남기면 서로의 진행 상황을 알 수 있다. [Beads 조율 문서](https://github.com/gastownhall/beads/blob/main/docs/multi-agent/coordination.md), [Contract Net 논문](https://www.reidgsmith.com/The_Contract_Net_Protocol_Dec-1980.pdf)
 - **동료가 어디까지 결정하나.** 예를 들어 에이전트 A가 자료 수집 카드를 맡고, B가 출처 검토 카드를 맡고, C가 둘의 결과로 보고서를 작성할 수 있다. 같은 권한으로 다른 과제에서는 역할을 바꿀 수 있다. 완료 판단의 근거는 채팅의 완료 메시지, 검토자의 판단, 실제 산출물 중 어디에 둘지 비교할 수 있다. 외부 발송처럼 사람의 결재가 필요한 동작에는 업무 검토와 별도 상태를 둘 수 있다. [OpenAgents 공유 이슈](https://github.com/openagents-org/openagents/tree/develop/workspace#shared-issues), [Paperclip](https://github.com/paperclipai/paperclip)

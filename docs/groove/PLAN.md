@@ -21,17 +21,21 @@
 
 ## Design
 
-- 데스크톱 화면: Electron과 React로 프로젝트 선택, 대화·로그·메모리 탭, 역할과 모델 설정을 제공한다. 업무별 카드에 현재 단계, 답변 대기, 상세 로그와 중단 조작을 표시한다. (R1, R2, R4, R5, R6, R8, R10, R12)
-- 로컬 저장소: SQLite에 프로젝트별 메모리, 세션 설정과 실행 환경별 에이전트 세션 참조, 업무 상태, 변경 버전, 활동 이력을 저장한다. `/clear`는 새 세션을 만들고 이전 세션 ID와 이력을 유지한다. (R1, R2, R3, R5, R6, R7, R8, R9, R10)
-- 실행 연결: Electron의 Node.js 프로세스에서 Codex App Server와 로컬 모델에 연결한다. 역할별 모델, 세션, 실행 결과와 확인 가능한 사용량을 업무에 연결한다. (R2, R4, R5, R8, R12)
-- 워크플로우: 비서가 직접 답변과 역할 위임을 구분한다. 같은 역할의 후보가 여럿이면 비서가 담당자를 고른다. 지시·검증·답변은 개별 업무에 연결한다. 같은 에이전트 세션, 겹치는 수정 범위, 의존 관계에는 실행 순서를 둔다. 업무에 연결된 프로젝트 규칙과 현재 권한을 적용하고 모델 한도에 닿은 업무를 멈춘다. (R1, R2, R3, R4, R5, R6, R10, R12)
+- 데스크톱 화면은 Electron Forge의 **Vite + TypeScript 템플릿**에 React를 붙인다. 폴더 선택은 Electron `dialog`, 화면과 메인 프로세스 연결은 `contextBridge`·`ipcMain`·`ipcRenderer`를 사용한다. 탭·모델 선택·확인 창은 Radix Primitives의 `Tabs`·`Select`·`Dialog`를 쓰고, 업무 카드와 로그는 React로 구성한다. IPC, 도구 인자, 에이전트가 반환한 구조화 결과처럼 경계를 넘는 입력은 **Zod**로 검증한다. (R1, R2, R4, R5, R6, R8, R10, R12) [Forge 템플릿](https://www.electronforge.io/templates/vite-%2B-typescript), [Electron 컨텍스트 격리](https://www.electronjs.org/docs/latest/tutorial/context-isolation), [Radix Primitives](https://www.radix-ui.com/primitives/docs/overview/introduction), [Zod](https://zod.dev/)
+- 로컬 저장은 Electron 메인 프로세스의 **`node:sqlite`**로 처리한다. SQL 마이그레이션, 준비된 문장과 트랜잭션으로 프로젝트별 메모리, 세션 설정과 모델 세션 참조, 업무 상태, 변경 버전, 로그를 저장한다. `/clear`는 새 세션을 만들고 이전 이력을 유지한다. 업무 상태 변경과 그에 대응하는 로그는 같이 기록한다. (R1, R2, R3, R5, R6, R7, R8, R9, R10, R12) [Node.js SQLite](https://nodejs.org/api/sqlite.html)
+- **Codex App Server**는 `node:child_process.spawn`으로 시작하고, `node:readline`으로 표준 입출력의 JSONL을 읽는다. 설치된 App Server가 생성하는 TypeScript 스키마를 프로토콜 타입으로 사용한다. 기존 API로 세션 재개와 실행 중 추가 지시·중단을 처리한다. (R2, R4, R5, R8, R12) [Codex App Server](https://developers.openai.com/codex/app-server), [Node.js 프로세스](https://nodejs.org/api/child_process.html), [Node.js readline](https://nodejs.org/api/readline.html)
+- 로컬 모델은 보유 환경이 OpenAI 호환 엔드포인트를 제공하면 **AI SDK**(`ai`, `@ai-sdk/openai-compatible`)로 스트리밍과 도구 호출을 연결한다. 앱이 보관한 세션 맥락과 등록 도구를 넘기고, 지원되는 취소 경로에는 `AbortSignal`을 전달한다. MCP는 Codex의 기본 연동과 앱의 **공식 MCP TypeScript SDK** 클라이언트를 재사용한다. 로컬 모델이 요청한 테스트 등 프로젝트 명령은 권한 확인 뒤 App Server의 샌드박스 실행 API `command/exec`를 사용한다. 실제 환경에서 역할별 권한과 중단 동작을 검증한다. (R2, R4, R5, R8, R12) [AI SDK 호환 제공자](https://ai-sdk.dev/providers/openai-compatible-providers), [도구 호출](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling), [MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk), [Codex App Server](https://developers.openai.com/codex/app-server)
+- **XState**는 업무 상태 전이와 완료 조건을 표현하는 데 쓴다. 비서는 역할과 담당자를 선택하고, 업무 규칙이 필수 검증 통과·재시도 횟수·현재 권한을 판단한다. 지시와 검증 결과는 업무별로 저장하며, 같은 에이전트 세션이나 겹치는 작업은 순서대로 실행한다. 재시작 시 SQLite의 업무 상태를 읽어 표시하고 사용자 지시 후 실행을 재개한다. (R1, R2, R3, R4, R5, R6, R10, R12) [XState 상태 전이](https://stately.ai/docs/transitions), [XState 전이 조건](https://stately.ai/docs/guards)
+- 변경 검증에는 **Git CLI**, `node:fs`·`node:crypto`, **jsdiff**(`diff`)를 사용한다. Git 프로젝트는 상태·diff 조회를 재사용한다. 업무 시작 전 기준과 완료 시점의 대상 파일 내용을 비교해 기존 변경과 업무 변경을 구분하고, 변경 버전에 검토·테스트를 연결한다. Git이 없는 폴더에서도 대상 텍스트 파일의 내용과 해시를 기준으로 검증하며, 텍스트 차이는 jsdiff로 계산한다. (R3, R5, R6) [Git diff](https://git-scm.com/docs/git-diff), [Node.js fs](https://nodejs.org/api/fs.html), [jsdiff](https://github.com/kpdecker/jsdiff)
 - 인사팀: 비서가 요청한 역할과 기존 권한에 맞춰 에이전트를 준비한다. 비서의 채택·투입·해고 결정을 상태에 반영하고, 해고 후에도 설정과 이력을 보존한다. (R4, R7, R11)
-- 캠프와 범례: Phaser 캠프는 배경과 캐릭터 스프라이트를 분리하고 업무 이벤트와 고용 상태를 애니메이션으로 표시한다. 대기 중에는 캠프 경로와 상황별 대사로 이동·잡담을 연출하고, 업무가 시작되면 업무 상태를 우선한다. 범례에서 고용 상태와 별명을 바꾸고, 장면을 선택하면 연결된 업무 카드나 로그를 연다. (R6, R11)
+- 캠프와 범례는 **Phaser**의 스프라이트·애니메이션·Tween을 쓴다. **Tiled**에서 이동 경로와 영역을 정리해 JSON으로 내보내고, **Aseprite**에서 캐릭터 스프라이트 시트를 만든다. 풍부한 캠프 배경과 가림 물체, 캐릭터, 불꽃·마법진을 레이어로 나눈다. 캐릭터 동작은 짧게 재사용하고, 대기 중 이동과 잡담은 경로와 대사로 연출한다. 실제 업무 상태가 우선이며, 장면에서 해당 업무 카드나 로그로 이동한다. (R6, R11) [Phaser 애니메이션](https://docs.phaser.io/phaser/concepts/animations), [Phaser 타일맵](https://docs.phaser.io/api-documentation/class/tilemaps-tilemap), [Tiled](https://doc.mapeditor.org/en/stable/), [Aseprite 스프라이트 시트](https://aseprite.org/docs/sprite-sheet/)
+- 검증은 **Vitest**로 업무 전이·권한·SQLite 복구를 확인하고, **Playwright의 Electron 지원**으로 폴더 선택 후 채팅·카드·로그가 이어지는 화면을 확인한다. 실제 Codex와 로컬 모델을 함께 쓰는 업무는 별도 통합 시나리오에서 실행한다. (R1, R2, R3, R4, R5, R6, R8) [Vitest](https://vitest.dev/guide/), [Playwright Electron](https://playwright.dev/docs/api/class-electron)
 
 ## Decisions
 
 - T8에서 핵심 업무 흐름을 확인한다. T9부터는 완성본의 세션·메모리·모델 한도 처리와 캠프 동작을 구현한다. [제품 구상](../concept.md)
-- Codex 연결은 App Server를 사용한다. 로컬 LLM은 사용자가 이미 가지고 있는 실행 환경의 연결 방식과 지원 기능을 확인한 뒤 연결한다. [Codex App Server](https://developers.openai.com/codex/app-server)
+- 첫 설치 때 Electron과 Forge·Vite의 호환 버전을 고정하고 잠금 파일을 커밋한다. Forge의 Vite 플러그인과 Playwright의 Electron 지원은 공식 문서상 실험 기능이므로, 선택한 버전으로 패키징과 앱 시작을 확인한다. SQLite는 설치된 Electron의 내장 Node에서 작동하는지 먼저 확인한다. [Forge Vite](https://www.electronforge.io/config/plugins/vite), [Playwright Electron](https://playwright.dev/docs/api/class-electron)
+- 로컬 LLM 연결 방식은 보유 환경에서 정한다. OpenAI 호환 여부, 스트리밍·도구 호출, 세션 맥락 복원과 중단을 먼저 확인한다. 특정 모델이 역할의 필수 기능을 지원하지 않으면 설정 화면에 이유를 표시한다.
 - 첫 워크플로우는 한 프로젝트에서 쓰기 작업 한 건으로 검증한다. 전략 리뷰와 코드 리뷰는 서로 다른 검토 단계로 기록한다. 테스트는 별도 역할이 맡는다.
 - 새 세션에도 적용할 프로젝트 결정과 규칙은 프로젝트 메모리로 관리한다. 이전 작업을 이어갈 때는 해당 세션을 로드한다. 실행 환경 때문에 기존 에이전트 세션을 이어갈 수 없으면 새 실행으로 마지막 결정·변경·남은 일을 넘긴다.
 - 재실행 전에 앞선 작업의 반영 여부를 확인한다. 변경 전 지시나 파일 버전에 대한 늦은 검증 결과는 해당 업무의 이력에 남기고, 완료는 최신 지시와 변경에 대한 검증으로 판단한다.
@@ -39,13 +43,13 @@
 ## Tasks
 
 - [ ] T1. 앱 뼈대와 로컬 프로젝트·채팅 저장 (R1)
-  - Done when: 앱에서 폴더를 열고 세션을 만든 뒤 재실행하면 같은 프로젝트에서 그 세션을 로드할 수 있다. `README.md`에 실행 방법을 적고 실제 실행한다. `AGENTS.md`에 `docs/groove/PLAN.md` 경로와 구현을 이어갈 세션이 Groove로 첫 미완료 작업부터 진행한다는 규칙을 적는다.
+  - Done when: 패키징한 Electron 앱의 메인 프로세스에서 `node:sqlite`로 데이터를 저장한다. 폴더를 열고 세션을 만든 뒤 재실행하면 같은 프로젝트에서 로드할 수 있다. `README.md`의 실행 방법을 실제로 확인한다. `AGENTS.md`에 `docs/groove/PLAN.md` 경로와 구현을 이어갈 세션이 Groove로 첫 미완료 작업부터 진행한다는 규칙을 적는다.
 - [ ] T2. 비서 채팅·세션 로드와 Codex·로컬 모델 연결 (R1, R2, R3, R4, R8)
-  - Done when: 사용자가 역할별 모델을 지정한다. 비서가 진행 상황 질문에 위임 없이 답하고 앱에서 응답을 확인할 수 있다. 이전 세션을 로드하면 비서가 지난 맥락에서 답한다. 보유한 로컬 모델에 실제 입력을 보내 결과를 받는다.
+  - Done when: 사용자가 역할별 모델을 지정하고, 비서가 위임 없이 질문에 답한다. 이전 세션을 로드하면 비서가 지난 맥락에서 답한다. 보유한 로컬 모델에서 응답 스트리밍과 등록 도구 호출을 확인한다. Codex App Server의 생성 타입으로 연결을 검사하고, 샌드박스 명령 실행·중단을 실제 지원 환경에서 확인한다.
 - [ ] T3. 전략 검토와 개발 위임 연결 (R2, R3, R4, R6)
   - Done when: 전략 담당이 리뷰 의견을 반영하고, 계획이 통과하면 비서가 개발 담당에게 위임해 실제 파일을 바꾼다. 같은 역할 후보가 여럿이면 비서가 담당자를 고른다. 각 담당자는 자기 세션에서 작업한다. 읽기 권한으로 파일을 수정하려 하면 차단된다.
 - [ ] T4. 코드 리뷰·테스트, 최종 보고와 후속 수정 연결 (R3, R4, R6)
-  - Done when: 리뷰와 별도 테스트 담당이 같은 변경을 확인한다. 최신 변경의 필수 확인이 통과하면 비서가 변경 파일과 검증 결과를 보고한다. 완료한 결과의 수정을 요청하면 같은 업무의 카드가 다시 나타나고 기존 보고와 새 검증이 함께 남는다.
+  - Done when: 리뷰와 별도 테스트 담당이 같은 변경을 확인한다. 업무 전에 이미 있던 변경을 이번 변경과 구분하고, Git이 없는 테스트 폴더에서도 변경을 확인할 수 있다. 최신 변경의 필수 확인이 통과하면 비서가 변경 파일과 검증 결과를 보고한다. 완료한 결과의 수정을 요청하면 같은 업무의 카드가 다시 나타나고 기존 보고와 새 검증이 함께 남는다.
 - [ ] T5. 추가 지시·재시도·중단 및 세션 재개 연결 (R1, R2, R4, R5, R6)
   - Done when: 일시적 실패와 수정·재검증은 각각 최대 3회 반복하고 해결되지 않으면 비서가 막힌 이유를 보고한다. 추가 지시는 해당 업무에만 반영하고 이전 검증은 이력에 남긴다. 같은 에이전트 세션의 업무는 순서대로 실행하고 독립적인 다른 업무는 계속한다. 중단 요청 시 `중단 중`, 실제 정지 후 `중단됨`을 표시하며 기존 변경을 보존한다. 앱 종료 뒤 세션을 로드하면 사용자 지시 후 재개하고, 회수된 권한은 다시 승인받는다.
 - [ ] T6. 인사팀 고용과 비서의 채택·해고 연결 (R4, R6, R7)

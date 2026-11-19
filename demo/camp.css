@@ -1030,7 +1030,6 @@ main {
 }
 #decision section {
   border: 1px solid var(--line-control);
-  border-left: 3px solid var(--warm);
   border-radius: var(--radius-surface);
   background: var(--surface-control);
   padding: var(--space-3);

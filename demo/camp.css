@@ -822,3 +822,252 @@ dialog p {
     bottom: 50px;
   }
 }
+/* Project scope and both controls stay together above the conversation. */
+.bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.62fr) minmax(365px, 1fr);
+  padding: 0;
+  gap: 0;
+  height: 70px;
+}
+.brand {
+  padding-left: 22px;
+}
+.context-strip {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-left: 1px solid #504a3d;
+  padding: 0 18px;
+  background: #20211f;
+}
+#workspace-open,
+#approval-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e8ddc7;
+  text-align: left;
+}
+#workspace-open {
+  min-width: 0;
+  flex: 1;
+  padding: 5px 0;
+}
+#workspace-open > span[data-icon]:first-child {
+  color: var(--warm);
+}
+.context-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+.context-text small,
+.context-text strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.context-text small {
+  font-size: 11px;
+  color: #b9ad98;
+}
+.context-text strong {
+  font-size: 15px;
+}
+#workspace-open #project-name {
+  max-width: 100%;
+}
+#approval-open {
+  flex: none;
+  background: #322e25;
+  border: 1px solid #554b3a;
+  color: var(--warm);
+  font-size: 12px;
+  border-radius: 6px;
+  padding: 5px 7px;
+}
+#approval-open svg {
+  width: 14px;
+}
+main {
+  height: calc(100dvh - 70px);
+}
+.workspace-actions,
+.choices,
+.wiki-heading,
+.wiki-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workspace-actions {
+  margin-bottom: 16px;
+}
+.workspace-actions .text-action {
+  margin-left: auto;
+}
+.project-tree summary {
+  cursor: pointer;
+  font-weight: 650;
+  margin: 8px 0;
+}
+.project-tree summary svg {
+  display: inline;
+  vertical-align: middle;
+  margin: 0 7px;
+}
+.project-tree .session-row {
+  margin-left: 12px;
+  width: calc(100% - 12px);
+  overflow-wrap: anywhere;
+}
+.choices {
+  margin-top: 8px;
+}
+.choices button {
+  border: 1px solid #655943;
+  border-radius: 5px;
+  padding: 4px 12px;
+  text-decoration: none;
+}
+.answered {
+  display: block;
+  color: var(--warm);
+}
+.wiki-heading {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.wiki-heading h2 {
+  margin: 0;
+}
+.wiki-heading button {
+  font-size: 12px;
+  border-radius: 5px;
+  padding: 3px 8px;
+}
+.wiki-heading button[aria-pressed="true"] {
+  background: #51442d;
+  color: #efd09b;
+}
+.wiki-graph {
+  position: relative;
+  background: #202221;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: auto;
+}
+.wiki-graph svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  stroke: #ac986b;
+}
+.wiki-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  max-width: 43%;
+  padding: 5px 9px;
+  border: 1px solid #73654f;
+  background: #302d26;
+  color: #ebdbb9;
+  border-radius: 7px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.flow-stage {
+  margin: 10px 0;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.flow-stage label {
+  display: flex;
+  gap: 4px;
+  flex-direction: column;
+  color: var(--dim);
+  font-size: 12px;
+}
+.flow-stage .wide {
+  grid-column: 1/-1;
+}
+.flow-stage input,
+.flow-stage select,
+#preset {
+  min-width: 0;
+  width: 100%;
+  padding: 5px;
+  background: #191a18;
+  border: 1px solid #484941;
+  border-radius: 4px;
+}
+.flow-stage input,
+.flow-stage select {
+  color: var(--text);
+}
+.flow-stage .text-action {
+  justify-self: start;
+}
+.task-main .chip {
+  max-width: 62%;
+  white-space: normal;
+}
+.stage-facts {
+  display: grid;
+  gap: 5px;
+  list-style: none;
+  padding: 0;
+}
+.stage-facts li {
+  border-left: 2px solid #877246;
+  padding-left: 10px;
+}
+.stage-facts small {
+  display: block;
+  color: var(--dim);
+}
+.route-caption {
+  font-size: 11px;
+  color: #b4aa9a;
+  margin-top: 6px;
+}
+@media (max-width: 760px) {
+  .bar {
+    display: block;
+    height: 62px;
+  }
+  .bar .brand {
+    display: none;
+  }
+  .context-strip {
+    border: 0;
+    padding: 0 14px;
+  }
+  main {
+    height: calc(100dvh - 62px);
+  }
+}
+.crew-row {
+  grid-template-columns: 28px 36px minmax(36px, 1fr) auto;
+}
+.crew-info {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font-size: 11px;
+  color: #d0c8ba;
+  padding: 5px 3px;
+}
+.crew-info svg {
+  color: var(--agent);
+  width: 15px;
+  height: 15px;
+}

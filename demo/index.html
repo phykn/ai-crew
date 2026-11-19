@@ -6,25 +6,30 @@
     <meta name="color-scheme" content="dark" />
     <title>AI Crew · 잿불 야영지</title>
     <link rel="stylesheet" href="camp.css" />
+    <script defer src="workflow.js"></script>
     <script defer src="camp.js"></script>
   </head>
   <body>
     <header class="bar">
       <div class="brand"><span data-icon="fire"></span>AI Crew</div>
-      <button
-        id="project-open"
-        class="subtle"
-        title="프로젝트 폴더 선택"
-        aria-label="프로젝트 폴더 선택"
-      >
-        <span data-icon="folder"></span
-        ><span class="project-label">프로젝트</span
-        ><span id="project-name"></span><span data-icon="down"></span>
-      </button>
-      <div class="bar-end">
-        <span class="local"><b></b>로컬 데모</span
-        ><button id="session-open" class="subtle">
-          <span data-icon="layers"></span><span id="session-name"></span
+      <div class="context-strip">
+        <button
+          id="workspace-open"
+          aria-haspopup="dialog"
+          title="프로젝트 폴더와 세션 선택"
+        >
+          <span data-icon="folder"></span
+          ><span class="context-text"
+            ><small id="project-name"></small
+            ><strong id="session-name"></strong></span
+          ><span data-icon="down"></span>
+        </button>
+        <button
+          id="approval-open"
+          aria-haspopup="dialog"
+          title="현재 프로젝트의 권한 승인 방식"
+        >
+          <span data-icon="shield"></span><span id="approval-name"></span
           ><span data-icon="down"></span>
         </button>
       </div>

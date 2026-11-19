@@ -172,6 +172,7 @@ const remarks = [
 ];
 let campBeat = 0;
 let nextId = 1;
+let nextEventId = 1;
 let current,
   tab = "chat",
   logJob = null;
@@ -192,6 +193,7 @@ function newSession(owner = project) {
 }
 function record(session, role, text, job, details) {
   session.events.unshift({
+    id: nextEventId++,
     role,
     text,
     jobId: job?.id,
@@ -792,21 +794,36 @@ function drawMessages() {
   if (atBottom) space.scrollTop = space.scrollHeight;
 }
 
+function isSteerBlocked(text) {
+  if (
+    !current.steerJob ||
+    text === "/clear" ||
+    /새 업무|새 작업|별도 업무|별도 작업/.test(text)
+  )
+    return false;
+  const job = current.jobs.find((item) => item.id === current.steerJob);
+  return !job || !["run", "approval", "queued"].includes(job.state);
+}
+
 function drawComposer() {
   const job = activeJob(current);
   const hasDraft = !!$("#draft").value.trim();
   $("#commands").hidden =
     !/^\/c?l?e?a?r?$/.test($("#draft").value.trim()) ||
     $("#draft").value.trim() === "/clear";
-  const directed = current.jobs.find(
-    (item) =>
-      item.id === current.steerJob &&
-      ["run", "approval", "queued"].includes(item.state),
-  );
+  const directed = current.jobs.find((item) => item.id === current.steerJob);
   const target = $("#target");
   target.replaceChildren();
+  target.classList.remove("target-unavailable");
   if (directed) {
-    target.append("추가 지시 · " + directed.title + " ");
+    const unavailable = !["run", "approval", "queued"].includes(directed.state);
+    target.append(
+      (unavailable ? "추가 지시를 보낼 수 없는 업무 · " : "추가 지시 · ") +
+        directed.title +
+        " ",
+    );
+    if (unavailable) target.classList.add("target-unavailable");
+
     const clear = document.createElement("button");
     clear.type = "button";
     clear.ariaLabel = "추가 지시 대상 해제";
@@ -823,7 +840,7 @@ function drawComposer() {
   }
   const send =
     '<button class="iconbtn send" type="submit" title="보내기" aria-label="보내기" ' +
-    (hasDraft ? "" : "disabled") +
+    (hasDraft && !isSteerBlocked($("#draft").value.trim()) ? "" : "disabled") +
     ">" +
     icon("send") +
     "</button>";
@@ -847,6 +864,23 @@ function drawComposer() {
 function drawLog() {
   const panel = $("#log");
   const job = current.jobs.find((item) => item.id === logJob);
+  const openRows = new Set(
+    [...panel.querySelectorAll(".log-evidence[open]")].map(
+      (row) => row.closest("[data-event]").dataset.event,
+    ),
+  );
+  const focusedRow = document.activeElement
+    .closest(".log-evidence summary")
+    ?.closest("[data-event]")?.dataset.event;
+  const anchor =
+    panel.scrollTop > 0 && !panel.hidden
+      ? [...panel.querySelectorAll("[data-event]")].find(
+          (row) =>
+            row.getBoundingClientRect().bottom >
+            panel.getBoundingClientRect().top,
+        )
+      : null;
+  const top = anchor?.getBoundingClientRect().top;
   const events = current.events.filter(
     (event) => !job || event.jobId === job.id,
   );
@@ -862,12 +896,16 @@ function drawLog() {
       ? events
           .map((event) => {
             const evidence = event.details
-              ? '<details class="log-evidence"><summary>완료 조건</summary><p>' +
+              ? '<details class="log-evidence"' +
+                (openRows.has(String(event.id)) ? " open" : "") +
+                "><summary>완료 조건</summary><p>" +
                 safe(event.details) +
                 "</p></details>"
               : "";
             return (
-              '<div class="logrow"><time>' +
+              '<div class="logrow" data-event="' +
+              event.id +
+              '"><time>' +
               safe(event.time) +
               "</time><div><strong>" +
               safe(event.role) +
@@ -885,6 +923,16 @@ function drawLog() {
       logJob = null;
       drawLog();
     };
+  if (anchor) {
+    const row = panel.querySelector(
+      '[data-event="' + anchor.dataset.event + '"]',
+    );
+    if (row) panel.scrollTop += row.getBoundingClientRect().top - top;
+  }
+  if (focusedRow)
+    panel
+      .querySelector('[data-event="' + focusedRow + '"] summary')
+      ?.focus({ preventScroll: true });
 }
 function drawMemory() {
   const panel = $("#memory");
@@ -1116,7 +1164,7 @@ function switchSession(session) {
 }
 function submit() {
   const text = $("#draft").value.trim();
-  if (!text) return;
+  if (!text || isSteerBlocked(text)) return;
   $("#draft").value = "";
   current.draft = "";
   if (text === "/clear") {

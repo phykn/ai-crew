@@ -1157,3 +1157,7 @@ main {
   font-size: var(--font-detail);
   margin-bottom: var(--space-3);
 }
+
+#target.target-unavailable {
+  color: var(--warm);
+}

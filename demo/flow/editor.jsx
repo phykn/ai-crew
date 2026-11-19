@@ -147,7 +147,23 @@ function Editor({ config, controls }) {
             저장
           </button>
         </div>
-        <div className="flow-space" ref={canvas}>
+        <div
+          className="flow-space"
+          ref={canvas}
+          onKeyDownCapture={(event) => {
+            if (event.key !== "Enter" || event.repeat) return;
+            const id = event.target.closest(".react-flow__node")?.dataset.id;
+            if (
+              nodes.some(
+                (node) => node.id === id && node.data.role !== undefined,
+              )
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              setEditingId(id);
+            }
+          }}
+        >
           <ReactFlow
             nodes={nodes}
             edges={edges}

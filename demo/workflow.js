@@ -88,40 +88,41 @@ function groupStages(graph) {
   }
   return groups;
 }
-function editWorkflow() {
-  const screen = $("#flow-screen");
-  screen.showModal();
-  const opener = $("#workflow-edit");
-  const close = window.mountCrewFlow($("#flow-root"), {
-    graph: project.workflow,
-    roles: project.crew,
-    projectName: project.name,
-    version: project.version,
+let flowEditor;
+
+function showWorkflow(owner) {
+  if (flowEditor) return;
+  flowEditor = window.mountCrewFlow($("#flow-root"), {
+    graph: owner.workflow,
+    draft: owner.workflowDraft,
+    roles: owner.crew,
+    projectName: owner.name,
+    version: owner.version,
     makeStages,
     validate: groupStages,
     save(graph, logicChanged) {
-      project.workflow = graph;
+      owner.workflow = graph;
       if (logicChanged) {
-        project.version++;
+        owner.version++;
         record(
           current,
           "비서",
-          "워크플로우 v" + project.version + " 저장 · 다음 새 업무부터 적용",
+          "워크플로우 v" + owner.version + " 저장 · 다음 새 업무부터 적용",
         );
       }
       render();
-    },
-    exit() {
-      screen.close();
-      opener.focus();
+      return owner.version;
     },
   });
-  screen.oncancel = (e) => {
-    e.preventDefault();
-    close.requestClose();
-  };
-  screen.onclose = () => close.dispose();
 }
+
+function releaseWorkflow() {
+  if (!flowEditor) return;
+  project.workflowDraft = flowEditor.getDraft();
+  flowEditor.dispose();
+  flowEditor = null;
+}
+
 function wikiGraph(entries) {
   if (!entries.length) return '<p class="empty">아직 연결할 문서가 없어요.</p>';
   const width = 360,

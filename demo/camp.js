@@ -18,8 +18,6 @@ const paths = {
   pin: "m9 3 9 3-2 2-1 5 2 3-12-4 4-1 2-5Zm1 11-4 7",
   send: "m3 11 18-8-7 18-3-8-8-2Zm8 2 10-10",
   stop: "M5 5h14v14H5Z",
-  motion:
-    "m3 8 5-3m-6 9 5-2m3 6 4-9 5 2 2-3m-9 6 5 5m-5-8-4 2m8-9a1.5 1.5 0 1 0 .1 0",
   pen: "m4 16 12-12 4 4L8 20l-5 1Z",
   code: "m7 7-5 5 5 5m10-10 5 5-5 5m-3-15-4 20",
   shield: "m12 2 8 4v6c0 4-4 8-8 10-4-2-8-6-8-10V6Zm-4 10 3 3 5-6",
@@ -169,7 +167,6 @@ let nextId = 1;
 let current,
   tab = "chat",
   logJob = null;
-let quiet = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const reply = (session, text, jobId, stopped = false) =>
   session.messages.push({ text, jobId, stopped });
 function newSession(owner = project) {
@@ -468,9 +465,7 @@ function drawActors() {
     actor.className = "actor" + (job ? " work" : "");
     actor.style.setProperty("--agent", agent.color);
     const offset =
-      quiet || job || !campBeat
-        ? [0, 0]
-        : campsites[(campBeat + i) % campsites.length];
+      job || !campBeat ? [0, 0] : campsites[(campBeat + i) % campsites.length];
     actor.style.left = agent.x + (job ? 2 : offset[0]) + "%";
     actor.style.top = agent.y + offset[1] + "%";
     actor.querySelector("span").innerHTML =
@@ -479,8 +474,7 @@ function drawActors() {
       "</strong>" +
       (job
         ? safe(job.groups[job.step].find((s) => s.role === i).label)
-        : !quiet &&
-            campBeat > 0 &&
+        : campBeat > 0 &&
             campBeat % 3 === 1 &&
             i === campBeat % project.crew.length
           ? remarks[i % remarks.length]
@@ -835,7 +829,6 @@ function drawMemory() {
 }
 function drawContext() {
   $("#project-name").textContent = project.name;
-  $("#session-name").textContent = current.name;
   $("#workspace-open").title = "프로젝트 폴더 선택 · " + project.name;
   const waiting = project.sessions
     .filter((s) => s !== current)
@@ -845,8 +838,10 @@ function drawContext() {
     );
   $("#session-waiting").textContent = waiting ? "대기 " + waiting : "";
   $("#session-waiting").hidden = !waiting;
-  $("#session-open").title = "세션 목록 · " + current.name;
-  $("#session-open").setAttribute("aria-label", "세션 목록 · " + current.name);
+  $("#session-open").setAttribute(
+    "aria-label",
+    waiting ? "세션 목록 · 답변 대기 " + waiting + "건" : "세션 목록",
+  );
   $("#approval-name").textContent = "승인 " + project.approval;
 }
 function render() {
@@ -863,16 +858,19 @@ function openTab(name) {
   tab = name;
   for (const el of document.querySelectorAll("[data-tab]"))
     el.setAttribute("aria-current", String(el.dataset.tab === tab));
-  ["chat", "log", "memory"].forEach(
+  ["chat", "log", "memory", "flow"].forEach(
     (key) => ($("#" + key).hidden = key !== tab),
   );
   document.body.classList.remove("camp-visible");
+  $("main").classList.toggle("editing-flow", name === "flow");
   $("#mobile-switch").textContent = "캠프 보기";
   render();
+  if (name === "flow") showWorkflow(project);
 }
 function switchSession(session) {
   current.draft = $("#draft").value;
   current.project.lastSession = current;
+  if (project !== session.project) releaseWorkflow();
   project = session.project;
   current = session;
   $("#draft").value = session.draft;
@@ -1076,7 +1074,6 @@ $("#session-open").onclick = () => {
 $("#detail").addEventListener("close", () =>
   $("#detail").classList.remove("session-drawer", "composer-menu"),
 );
-$("#workflow-edit").onclick = editWorkflow;
 $("#workspace-open").onclick = openProjects;
 $("#approval-open").onclick = () => {
   const descriptions = {
@@ -1111,20 +1108,9 @@ $("#approval-open").onclick = () => {
       }),
   );
 };
-function showMotion() {
-  document.body.classList.toggle("quiet", quiet);
-  $("#motion").setAttribute("aria-pressed", String(quiet));
-  $("#motion").innerHTML =
-    icon("motion") + (quiet ? "모션 줄임" : "모션 줄이기");
-}
-$("#motion").onclick = () => {
-  quiet = !quiet;
-  showMotion();
-  drawActors();
-};
 $("#mobile-switch").onclick = () => {
   const shown = document.body.classList.toggle("camp-visible");
-  $("#mobile-switch").textContent = shown ? "대화 보기" : "캠프 보기";
+  $("#mobile-switch").textContent = shown ? "작업 보기" : "캠프 보기";
 };
 current = newSession();
 current.name = "빈 검색어와 공백 입력 처리";
@@ -1137,11 +1123,10 @@ reply(
   "플랜을 정리했어요. 검색 조건을 수정한 뒤 리뷰·스타일·테스트를 함께 확인할게요.",
 );
 startJob(current, "검색 개선", 1);
-showMotion();
 openTab("chat");
 
 window.setInterval(() => {
-  if (quiet || document.hidden || $("#detail").open) return;
+  if (document.hidden || $("#detail").open) return;
   campBeat++;
   drawActors();
 }, 5000);

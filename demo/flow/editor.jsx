@@ -64,20 +64,21 @@ function logic(graph) {
 }
 function Editor({ config, controls }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(
-    visualNodes(config.graph),
+    visualNodes(config.draft || config.graph),
   );
-  const [edges, setEdges, onEdgesChange] = useEdgesState(config.graph.edges);
-  const [error, setError] = useState(""),
-    [discard, setDiscard] = useState(false);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(
+    (config.draft || config.graph).edges,
+  );
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(config.graph);
+  const [version, setVersion] = useState(config.version);
   const canvas = useRef(null),
     instance = useRef(null);
   const selected = nodes.find((n) => n.selected && n.data.role !== undefined);
   const selectedEdge = edges.find((e) => e.selected);
   const draft = definition(nodes, edges);
-  controls.requestClose = () =>
-    JSON.stringify(draft) === JSON.stringify(config.graph)
-      ? config.exit()
-      : setDiscard(true);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+  controls.getDraft = () => (dirty ? draft : null);
   useEffect(() => {
     setError("");
   }, [nodes, edges]);
@@ -130,40 +131,35 @@ function Editor({ config, controls }) {
       setError(e.message);
       return;
     }
-    config.save(draft, logic(draft) !== logic(config.graph));
-    config.exit();
+    setVersion(config.save(draft, logic(draft) !== logic(saved)));
+    setSaved(draft);
   }
   return (
     <Roles.Provider value={config.roles}>
       <section className="flow-view">
-        <header className="flow-top">
-          <div>
-            <small>
-              {config.projectName} / v{config.version}
-            </small>
-            <h2>워크플로우</h2>
-          </div>
-          <div className="flow-actions">
-            <button onClick={() => controls.requestClose()}>닫기</button>
-            <button className="primary" onClick={save}>
-              저장
-            </button>
-          </div>
-        </header>
         <div className="flow-tools">
-          <button onClick={addStage}>＋ 단계 추가</button>
+          <div className="flow-context" title={config.projectName}>
+            <strong>{config.projectName}</strong>
+            <small>
+              v{version}
+              {dirty ? " · 저장 전" : ""}
+            </small>
+          </div>
+          <button onClick={addStage}>＋ 단계</button>
           <select
             aria-label="워크플로우 예시로 초안 교체"
             value=""
             onChange={(e) => loadPreset(e.target.value)}
           >
             <option value="" disabled>
-              예시 불러오기
+              예시
             </option>
             <option>개발</option>
             <option>조사</option>
           </select>
-          <span>연결점을 끌어 실행 순서를 바꾸세요.</span>
+          <button className="primary" onClick={save} disabled={!dirty}>
+            저장
+          </button>
         </div>
         <div className="flow-layout">
           <div className="flow-space" ref={canvas}>
@@ -283,33 +279,16 @@ function Editor({ config, controls }) {
           {error ||
             "저장한 흐름은 다음 새 업무부터 적용돼요. 노드 위치는 실행 순서에 영향을 주지 않아요."}
         </footer>
-        {discard && (
-          <div className="flow-shade">
-            <div className="flow-prompt">
-              <h3>편집한 내용을 저장할까요?</h3>
-              <div className="flow-actions">
-                <button onClick={() => setDiscard(false)}>계속 편집</button>
-                <button onClick={config.exit}>버리기</button>
-                <button
-                  className="primary"
-                  onClick={() => {
-                    setDiscard(false);
-                    save();
-                  }}
-                >
-                  저장
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </section>
     </Roles.Provider>
   );
 }
 window.mountCrewFlow = (element, config) => {
   const root = createRoot(element),
-    controls = { requestClose: config.exit, dispose: () => root.unmount() };
+    controls = {
+      getDraft: () => config.draft || null,
+      dispose: () => root.unmount(),
+    };
   root.render(<Editor controls={controls} config={config} />);
   return controls;
 };

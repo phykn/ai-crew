@@ -709,16 +709,6 @@ dialog p {
 .mobile-switch {
   display: none;
 }
-.quiet * {
-  animation: none !important;
-  transition: none !important;
-}
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none !important;
-    transition: none !important;
-  }
-}
 @media (max-width: 760px) {
   .bar {
     padding: 0 12px;
@@ -734,14 +724,6 @@ dialog p {
   }
   .bar-end {
     gap: 8px;
-  }
-  .mobile-switch {
-    display: flex;
-    position: fixed;
-    top: 12px;
-    left: 112px;
-    z-index: 4;
-    height: 28px;
   }
   main {
     display: block;
@@ -810,16 +792,8 @@ dialog p {
     width: 20px;
   }
   .mobile-switch {
-    top: auto;
-    left: auto;
-    bottom: 13px;
-    right: 15px;
-  }
-  .panel {
-    padding-bottom: 36px;
-  }
-  .scene-foot {
-    bottom: 50px;
+    display: flex;
+    min-height: 32px;
   }
 }
 .workspace-actions,
@@ -946,7 +920,7 @@ dialog p {
   height: 15px;
 }
 
-/* App navigation, conversation history and message controls have distinct scopes. */
+/* Tabs stay in the same place when the workspace changes width. */
 .bar {
   display: flex;
   align-items: center;
@@ -954,36 +928,29 @@ dialog p {
   padding: 0 20px;
   height: 54px;
 }
-#workflow-edit {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
 main {
   height: calc(100dvh - 54px);
 }
-.panel nav {
+.bar nav {
   display: flex;
+  gap: 16px;
+  height: 100%;
   align-items: center;
-  gap: 12px;
+  padding: 0;
+  border: 0;
+}
+.bar nav [data-tab] {
+  align-self: stretch;
+  padding-block: 0;
+  white-space: nowrap;
 }
 #session-open {
   margin-left: auto;
-  min-width: 32px;
-  max-width: 42%;
-  flex: 1;
-  justify-content: flex-end;
-  gap: 6px;
-}
-#session-open strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 500;
-}
-#session-open svg {
-  flex: none;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 5px;
+  border-radius: 6px;
+  gap: 5px;
 }
 .compose-bottom {
   display: flex;
@@ -1045,18 +1012,19 @@ main {
 }
 @media (max-width: 760px) {
   .bar {
-    height: 46px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 44px 42px;
+    gap: 0;
+    height: 86px;
     padding: 0 12px;
   }
-  .bar .brand {
-    display: flex;
+  .bar nav {
+    grid-column: 1 / -1;
+    gap: 9px;
   }
   main {
-    height: calc(100dvh - 46px);
-  }
-  .panel nav {
-    gap: 7px;
-    padding: 0 12px;
+    height: calc(100dvh - 86px);
   }
   #project-name {
     max-width: 12ch;
@@ -1098,4 +1066,30 @@ main {
 }
 .chip.pending {
   border: 1px solid #90784e;
+}
+
+@media (min-width: 761px) {
+  main.editing-flow {
+    grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.6fr);
+  }
+  .editing-flow .land {
+    background-size: cover;
+  }
+  .editing-flow .roster {
+    top: 12px;
+    left: 12px;
+    width: min(330px, calc(100% - 24px));
+  }
+  .editing-flow .actor {
+    height: clamp(72px, 13vh, 125px);
+  }
+}
+@media (max-width: 420px) {
+  .bar nav [data-tab] {
+    font-size: 13px;
+    padding-inline: 4px;
+  }
+  .bar nav [data-tab] > span[data-icon] {
+    display: none;
+  }
 }

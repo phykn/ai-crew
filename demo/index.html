@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>AI Crew · 잿불 야영지</title>
-    <link rel="stylesheet" href="tokens.css?v=workspace" />
-    <link rel="stylesheet" href="camp.css?v=workspace" />
-    <link rel="stylesheet" href="assets/flow-editor.css?v=workspace" />
-    <script defer src="assets/flow-editor.js?v=workspace"></script>
-    <script defer src="workflow.js?v=workspace"></script>
-    <script defer src="camp.js?v=workspace"></script>
+    <link rel="stylesheet" href="tokens.css?v=review" />
+    <link rel="stylesheet" href="camp.css?v=review" />
+    <link rel="stylesheet" href="assets/flow-editor.css?v=review" />
+    <script defer src="assets/flow-editor.js?v=review"></script>
+    <script defer src="workflow.js?v=review"></script>
+    <script defer src="camp.js?v=review"></script>
   </head>
   <body>
     <header class="bar">
@@ -77,7 +77,8 @@
               <button
                 type="button"
                 id="workspace-open"
-                aria-haspopup="dialog"
+                aria-controls="composer-menu"
+                aria-expanded="false"
                 title="프로젝트 폴더 선택"
               >
                 <span data-icon="folder"></span><span id="project-name"></span
@@ -86,7 +87,8 @@
               <button
                 type="button"
                 id="approval-open"
-                aria-haspopup="dialog"
+                aria-controls="composer-menu"
+                aria-expanded="false"
                 title="승인 모드 선택"
               >
                 <span data-icon="shield"></span><span id="approval-name"></span>
@@ -100,6 +102,7 @@
         <div id="flow" class="pane" hidden><div id="flow-root"></div></div>
       </section>
     </main>
+    <div id="composer-menu" popover="auto" role="region"></div>
     <dialog id="detail" aria-labelledby="detail-title">
       <header>
         <h2 id="detail-title"></h2>

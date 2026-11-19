@@ -952,22 +952,24 @@ main {
   }
 }
 
-#detail.composer-menu {
+#composer-menu {
   position: fixed;
   inset: auto auto var(--menu-bottom) var(--menu-left);
   margin: 0;
   width: min(325px, calc(100vw - 16px));
   max-height: min(62dvh, 440px);
-  padding: 14px;
+  padding: var(--space-3);
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-surface);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 8px 20px #0006;
 }
-#detail.composer-menu::backdrop {
-  background: #1111;
-}
-#detail.composer-menu header {
-  margin-bottom: 10px;
-}
-#detail.composer-menu .session-row:last-of-type {
+#composer-menu .session-row:last-of-type {
   margin-bottom: 0;
+}
+#folder-status:empty {
+  display: none;
 }
 #session-waiting {
   font-size: 10px;
@@ -1122,4 +1124,36 @@ main {
 #messages::before {
   content: "";
   margin-top: auto;
+}
+
+.chat-start {
+  width: 100%;
+  align-self: center;
+  margin: auto 0;
+  padding: var(--space-4);
+  text-align: center;
+}
+.chat-start h2 {
+  margin: 0 0 var(--space-3);
+  font-size: 22px;
+}
+#messages:has(.chat-start)::before {
+  display: none;
+}
+.wiki-article h2 {
+  margin: var(--space-3) 0 var(--space-1);
+}
+.wiki-article small,
+.log-evidence {
+  color: var(--dim);
+  font-size: var(--font-detail);
+}
+.log-evidence summary {
+  cursor: pointer;
+}
+
+#decision .decision-scope {
+  color: var(--dim);
+  font-size: var(--font-detail);
+  margin-bottom: var(--space-3);
 }

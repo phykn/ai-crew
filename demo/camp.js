@@ -130,6 +130,8 @@ const exampleMemories = [
     links: [],
   },
 ];
+const exampleRequest =
+  "빈 검색어와 공백 입력에서 전체 목록이 보이는지 확인해줘.";
 const projects = [];
 function makeProject(name, handle = null) {
   const entry = {
@@ -188,11 +190,12 @@ function newSession(owner = project) {
   owner.sessions.push(session);
   return session;
 }
-function record(session, role, text, job) {
+function record(session, role, text, job, details) {
   session.events.unshift({
     role,
     text,
     jobId: job?.id,
+    details,
     time: new Date().toLocaleTimeString("ko-KR", {
       hour: "2-digit",
       minute: "2-digit",
@@ -200,9 +203,11 @@ function record(session, role, text, job) {
     }),
   });
 }
+const activeStates = ["run", "stopping", "approval", "queued"];
+
 function activeJob(session) {
   const running = session.jobs.filter((job) =>
-    ["run", "stopping"].includes(job.state),
+    ["run", "stopping", "queued"].includes(job.state),
   );
   return (
     running.find((job) => job.id === session.selected) ||
@@ -244,7 +249,18 @@ function enterStage(session, job) {
   ) {
     job.state = "approval";
     const question = {
-      text: stageLabel(job) + " 단계에 " + scope + " 권한을 허용할까요?",
+      text: scope + " 권한을 허용할까요?",
+      detail:
+        group
+          .map(
+            (stage) =>
+              session.project.crew[stage.role].name +
+              " · " +
+              session.project.crew[stage.role].role,
+          )
+          .join(" / ") +
+        " — " +
+        session.project.name,
       approvalId: job.id,
     };
     session.messages.push(question);
@@ -265,7 +281,7 @@ function enterStage(session, job) {
 function decide(job, allow) {
   if (job?.state !== "approval") return;
   job.question.answer = allow ? "허용" : "거절";
-  job.state = allow ? "run" : "denied";
+  if (!allow) job.state = "denied";
   record(
     current,
     "사용자",
@@ -286,12 +302,28 @@ function decide(job, allow) {
 function schedule(session, job) {
   clearTimeout(job.timer);
   const group = job.groups[job.step];
+  const busy = session.jobs.some(
+    (other) =>
+      other !== job &&
+      ["run", "stopping"].includes(other.state) &&
+      other.groups[other.step].some((stage) =>
+        group.some((next) => next.role === stage.role),
+      ),
+  );
+  if (busy) {
+    if (job.state !== "queued")
+      record(session, "비서", "앞 업무의 같은 담당자 종료 대기", job);
+    job.state = "queued";
+    return;
+  }
+  job.state = "run";
   for (const stage of group)
     record(
       session,
       session.project.crew[stage.role].role,
-      stage.label + " 시작 · " + stage.criterion,
+      stage.label + " 시작",
       job,
+      stage.criterion,
     );
   job.timer = setTimeout(() => {
     if (job.state !== "run") return;
@@ -299,8 +331,9 @@ function schedule(session, job) {
       record(
         session,
         session.project.crew[stage.role].role,
-        stage.label + " · 모의 확인 완료 · " + stage.criterion,
+        stage.label + " 확인 완료",
         job,
+        "모의 완료 조건 · " + stage.criterion,
       );
     if (job.step + 1 < job.groups.length) {
       job.step++;
@@ -323,12 +356,22 @@ function schedule(session, job) {
         links: [],
       });
     }
+    startQueuedJobs(session);
     if (session === current) render();
-    else if (session.project === project) drawContext();
+    else if (session.project === project) {
+      drawContext();
+      drawActors();
+    }
   }, 9000);
 }
+function startQueuedJobs(session) {
+  for (const job of session.jobs) {
+    if (job.state === "queued") schedule(session, job);
+  }
+}
+
 function stopJob(session, job) {
-  if (!["run", "approval"].includes(job.state)) return;
+  if (!["run", "approval", "queued"].includes(job.state)) return;
   if (job.state === "approval") job.question.answer = "중단";
   clearTimeout(job.timer);
   job.state = "stopping";
@@ -343,8 +386,12 @@ function stopJob(session, job) {
       job.id,
       true,
     );
+    startQueuedJobs(session);
     if (session === current) render();
-    else if (session.project === project) drawContext();
+    else if (session.project === project) {
+      drawContext();
+      drawActors();
+    }
   }, 700);
 }
 function resume(job) {
@@ -467,13 +514,20 @@ function drawRoster() {
 function drawActors() {
   const land = $("#land");
   project.crew.forEach((agent, i) => {
-    const assigned = current.jobs.filter(
-      (job) =>
-        ["run", "approval"].includes(job.state) &&
-        job.groups[job.step].some((stage) => stage.role === i),
+    const assigned = project.sessions.flatMap((session) =>
+      session.jobs
+        .filter(
+          (job) =>
+            ["run", "approval"].includes(job.state) &&
+            job.groups[job.step].some((stage) => stage.role === i),
+        )
+        .map((job) => ({ session, job })),
     );
-    const job =
-      assigned.find((job) => job.id === current.selected) || assigned[0];
+    const assignment =
+      assigned.find(({ job }) => job.id === current.selected) ||
+      assigned.find(({ job }) => job.state === "run") ||
+      assigned[0];
+    const job = assignment?.job;
     let actor = land.querySelector('[data-actor="' + i + '"]');
     if (!actor) {
       actor = document.createElement("button");
@@ -504,7 +558,17 @@ function drawActors() {
             i === campBeat % project.crew.length
           ? remarks[i % remarks.length]
           : "");
-    actor.onclick = () => (job ? jobDetail(job) : agentDetail(i));
+    actor.onclick = () => {
+      if (!job) return agentDetail(i);
+      if (current !== assignment.session) switchSession(assignment.session);
+      if (job.state === "approval") {
+        current.approvalFocus = job.id;
+        openTab("chat");
+        $("#decision [data-allow]").focus();
+      } else {
+        jobDetail(job);
+      }
+    };
   });
 }
 function jobDetail(job) {
@@ -540,7 +604,7 @@ function jobDetail(job) {
     $("#detail").close();
     openJobLog(job.id);
   };
-  $("#job-steer").disabled = !["approval", "run"].includes(job.state);
+  $("#job-steer").disabled = !["approval", "run", "queued"].includes(job.state);
   $("#job-steer").onclick = () => {
     $("#detail").close();
     current.selected = job.id;
@@ -548,7 +612,7 @@ function jobDetail(job) {
     openTab("chat");
     $("#draft").focus();
   };
-  $("#job-stop").disabled = !["approval", "run"].includes(job.state);
+  $("#job-stop").disabled = !["approval", "run", "queued"].includes(job.state);
   $("#job-stop").onclick = () => {
     $("#detail").close();
     stopJob(current, job);
@@ -557,7 +621,7 @@ function jobDetail(job) {
 function drawTasks() {
   const target = $("#tasks");
   target.innerHTML = current.jobs
-    .filter((job) => ["run", "stopping", "approval"].includes(job.state))
+    .filter((job) => activeStates.includes(job.state))
     .map(
       (job) =>
         '<article class="task"><button class="task-title" data-job="' +
@@ -565,7 +629,13 @@ function drawTasks() {
         '">' +
         safe(job.title) +
         '</button><span class="task-phase">' +
-        safe(job.state === "stopping" ? "중단 중" : stageLabel(job)) +
+        safe(
+          job.state === "stopping"
+            ? "중단 중"
+            : job.state === "queued"
+              ? "앞 업무 대기"
+              : stageLabel(job),
+        ) +
         "</span>" +
         (job.state === "approval"
           ? '<button class="chip pending" data-question="' +
@@ -604,6 +674,12 @@ function drawDecision() {
   const waiting = current.jobs.filter((job) => job.state === "approval");
   const job =
     waiting.find((job) => job.id === current.approvalFocus) || waiting[0];
+  const focused = box.contains(document.activeElement)
+    ? document.activeElement
+    : null;
+  const focusedAction = focused?.hasAttribute("data-allow")
+    ? "[data-allow]"
+    : "[data-deny]";
   box.hidden = !job;
   if (!job) {
     box.replaceChildren();
@@ -614,6 +690,8 @@ function drawDecision() {
     safe(job.title) +
     "</small><p>" +
     safe(job.question.text) +
+    '</p><p class="decision-scope">' +
+    safe(job.question.detail) +
     '</p><div class="decision-actions">' +
     '<button class="primary" data-allow="' +
     job.id +
@@ -623,6 +701,11 @@ function drawDecision() {
     '">거절</button></div></section>';
   box.querySelector("[data-allow]").onclick = () => decide(job, true);
   box.querySelector("[data-deny]").onclick = () => decide(job, false);
+  if (
+    focused?.dataset.allow === String(job.id) ||
+    focused?.dataset.deny === String(job.id)
+  )
+    box.querySelector(focusedAction).focus();
 }
 
 function openJobLog(id) {
@@ -632,6 +715,23 @@ function openJobLog(id) {
 
 function drawMessages() {
   const space = $("#messages");
+  if (!current.messages.length) {
+    space.innerHTML =
+      '<div class="chat-start"><h2>무엇을 맡길까요?</h2>' +
+      (project === exampleProject
+        ? '<button class="secondary" id="example-request">빈 검색어 처리 점검</button>'
+        : "") +
+      "</div>";
+    const example = $("#example-request");
+    if (example)
+      example.onclick = () => {
+        $("#draft").value = exampleRequest;
+        current.draft = $("#draft").value;
+        drawComposer();
+        $("#draft").focus();
+      };
+    return;
+  }
   const atBottom =
     space.scrollHeight - space.scrollTop - space.clientHeight < 36;
   const latestStopByJob = new Map(
@@ -700,7 +800,8 @@ function drawComposer() {
     $("#draft").value.trim() === "/clear";
   const directed = current.jobs.find(
     (item) =>
-      item.id === current.steerJob && ["run", "approval"].includes(item.state),
+      item.id === current.steerJob &&
+      ["run", "approval", "queued"].includes(item.state),
   );
   const target = $("#target");
   target.replaceChildren();
@@ -744,27 +845,41 @@ function drawComposer() {
     };
 }
 function drawLog() {
-  const job = current.jobs.find((j) => j.id === logJob);
-  const events = current.events.filter((e) => !job || e.jobId === job.id);
-  $("#log").innerHTML =
+  const panel = $("#log");
+  const job = current.jobs.find((item) => item.id === logJob);
+  const events = current.events.filter(
+    (event) => !job || event.jobId === job.id,
+  );
+  const fromFilter = job
+    ? '<button class="text-action" id="all-log">← 전체 기록</button>'
+    : "";
+  panel.innerHTML =
+    fromFilter +
     "<h2>" +
     (job ? safe(job.title) : "업무 기록") +
     "</h2>" +
-    (job ? '<button class="text-action" id="all-log">전체 기록</button>' : "") +
     (events.length
       ? events
-          .map(
-            (e) =>
+          .map((event) => {
+            const evidence = event.details
+              ? '<details class="log-evidence"><summary>완료 조건</summary><p>' +
+                safe(event.details) +
+                "</p></details>"
+              : "";
+            return (
               '<div class="logrow"><time>' +
-              safe(e.time) +
+              safe(event.time) +
               "</time><div><strong>" +
-              safe(e.role) +
+              safe(event.role) +
               "</strong><p>" +
-              safe(e.text) +
-              "</p></div></div>",
-          )
+              safe(event.text) +
+              "</p>" +
+              evidence +
+              "</div></div>"
+            );
+          })
           .join("")
-      : '<p class="empty">아직 기록된 활동이 없어요.</p>');
+      : '<p class="empty">업무가 시작되면 여기에 기록돼요.</p>');
   if (job)
     $("#all-log").onclick = () => {
       logJob = null;
@@ -846,6 +961,50 @@ function drawMemory() {
     return;
   }
 
+  const article = project.memories.find(
+    (item) => item.id === project.wikiArticle,
+  );
+  if (article) {
+    panel.insertAdjacentHTML(
+      "beforeend",
+      '<article class="wiki-article"><button class="text-action" id="wiki-back">← 위키 돌아가기</button><h2>' +
+        safe(article.title) +
+        "</h2><small>" +
+        safe(article.by) +
+        " · " +
+        safe(article.source) +
+        "</small><p>" +
+        safe(article.body) +
+        "</p>" +
+        (article.links || [])
+          .map((id) => project.memories.find((item) => item.id === id))
+          .filter(Boolean)
+          .map(
+            (item) =>
+              '<button class="text-action" data-linked="' +
+              safe(item.id) +
+              '">→ ' +
+              safe(item.title) +
+              "</button>",
+          )
+          .join("") +
+        "</article>",
+    );
+    $("#wiki-back").onclick = () => {
+      project.wikiArticle = null;
+      drawMemory();
+      const noteIndex = project.memories.indexOf(article);
+      panel.querySelector('[data-memory="' + noteIndex + '"]')?.focus();
+    };
+    panel
+      .querySelectorAll("[data-linked]")
+      .forEach(
+        (button) =>
+          (button.onclick = () => openWikiArticle(button.dataset.linked)),
+      );
+    return;
+  }
+
   panel.insertAdjacentHTML(
     "beforeend",
     '<div class="wiki-heading"><div aria-label="위키 보기">' +
@@ -886,50 +1045,22 @@ function drawMemory() {
         drawMemory();
       }),
   );
-  document.querySelectorAll("[data-memory]").forEach(
-    (el) =>
-      (el.onclick = () => {
-        const entry = project.memories[+el.dataset.memory];
-        modal(
-          entry.title,
-          "<p>" +
-            safe(entry.body) +
-            "</p><small>작성 · " +
-            safe(entry.by) +
-            "　출처 · " +
-            safe(entry.source) +
-            "</small>" +
-            (entry.links || [])
-              .map((id) => project.memories.find((x) => x.id === id))
-              .filter(Boolean)
-              .map(
-                (x) =>
-                  '<button class="text-action" data-linked="' +
-                  safe(x.id) +
-                  '">→ ' +
-                  safe(x.title) +
-                  "</button>",
-              )
-              .join(""),
-        );
-        document
-          .querySelectorAll("[data-linked]")
-          .forEach(
-            (b) =>
-              (b.onclick = () =>
-                document
-                  .querySelector(
-                    '[data-memory="' +
-                      project.memories.findIndex(
-                        (x) => x.id === b.dataset.linked,
-                      ) +
-                      '"]',
-                  )
-                  .click()),
-          );
-      }),
-  );
+  panel
+    .querySelectorAll("[data-memory]")
+    .forEach(
+      (button) =>
+        (button.onclick = () =>
+          openWikiArticle(project.memories[Number(button.dataset.memory)].id)),
+    );
 }
+
+function openWikiArticle(id) {
+  project.wikiArticle = id;
+  drawMemory();
+  $("#memory").scrollTop = 0;
+  $("#wiki-back").focus();
+}
+
 function drawContext() {
   $("#project-name").textContent = project.name;
   $("#workspace-open").title = "프로젝트 폴더 선택 · " + project.name;
@@ -960,6 +1091,7 @@ function render() {
 }
 function openTab(name) {
   closeSessionList();
+  if (composerMenu.matches(":popover-open")) composerMenu.hidePopover();
   tab = name;
   for (const el of document.querySelectorAll("[data-tab]"))
     el.setAttribute("aria-current", String(el.dataset.tab === tab));
@@ -992,7 +1124,10 @@ function submit() {
     return;
   }
   if (!current.messages.some((message) => message.user))
-    current.name = text.replace(/\s+/g, " ").trim().slice(0, 70);
+    current.name =
+      text === exampleRequest
+        ? "빈 검색어 처리 점검"
+        : text.replace(/\s+/g, " ").trim().slice(0, 70);
   current.messages.push({ text, user: true });
   respondToRequest(text);
   render();
@@ -1000,9 +1135,7 @@ function submit() {
 }
 
 function respondToRequest(text) {
-  const jobs = current.jobs.filter((job) =>
-    ["run", "approval", "stopping"].includes(job.state),
-  );
+  const jobs = current.jobs.filter((job) => activeStates.includes(job.state));
   if (text.includes("/clear")) {
     reply(
       current,
@@ -1017,7 +1150,7 @@ function respondToRequest(text) {
     const statusJobs = /프로젝트/.test(text)
       ? project.sessions
           .flatMap((session) => session.jobs)
-          .filter((job) => ["run", "approval", "stopping"].includes(job.state))
+          .filter((job) => activeStates.includes(job.state))
       : jobs;
     reply(
       current,
@@ -1032,11 +1165,36 @@ function respondToRequest(text) {
                   ? " 승인 대기"
                   : job.state === "stopping"
                     ? " 중단 중"
-                    : " 진행 중"),
+                    : job.state === "queued"
+                      ? " 앞 업무 대기"
+                      : " 진행 중"),
             )
             .join("\n")
-        : "이 대화에서 진행 중인 업무가 없어요.",
+        : (/프로젝트/.test(text) ? "이 프로젝트에" : "이 대화에서") +
+            " 진행 중인 업무가 없어요.",
     );
+    return;
+  }
+  const asking = /요약|보여|알려|뭐가|무엇/.test(text);
+  if (asking && /기억|메모리/.test(text) && !/위키/.test(text)) {
+    const agentIndex = project.crew.findIndex(
+      (agent) =>
+        text.includes(agent.name) || text.includes(agent.role + " 담당"),
+    );
+    if (agentIndex === -1) {
+      reply(
+        current,
+        "어느 담당자의 기억을 볼까요? 범례에서 담당자의 기억을 바로 열 수 있어요.",
+      );
+    } else {
+      const notes = project.personalMemory[agentIndex] || [];
+      reply(
+        current,
+        notes.length
+          ? notes.join("\n")
+          : project.crew[agentIndex].name + "이 남긴 기억이 없어요.",
+      );
+    }
     return;
   }
   if (/위키|메모리|메모/.test(text) && /요약|보여|알려|뭐가|무엇/.test(text)) {
@@ -1070,8 +1228,10 @@ function respondToRequest(text) {
     return;
   }
   current.steerJob = null;
-  const title = text.length > 26 ? text.slice(0, 25) + "…" : text;
-  reply(current, "「" + title + "」을 시작할게요.");
+  const title =
+    text === exampleRequest
+      ? "빈 검색어 처리 점검"
+      : text.replace(/\s+/g, " ").trim().slice(0, 70);
   startJob(current, title);
 }
 $("#composer").onsubmit = (e) => {
@@ -1113,17 +1273,19 @@ document.querySelectorAll("[data-tab]").forEach(
     }),
 );
 function selectProject(entry) {
-  $("#detail").close();
+  $("#composer-menu").hidePopover();
   if (entry !== project) switchSession(entry.lastSession || newSession(entry));
 }
 
 function sessionSummary(session) {
   const pending = session.jobs.filter((j) => j.state === "approval").length;
   const running = session.jobs.filter((j) => j.state === "run").length;
+  const queued = session.jobs.filter((j) => j.state === "queued").length;
   return [
     session === current ? "현재" : "",
     pending ? "내 답변 대기 " + pending + "건" : "",
     running ? "진행 " + running + "건" : "",
+    queued ? "앞 업무 대기 " + queued + "건" : "",
     session.events[0]?.time || "",
     session.draft ? "작성 중" : "",
     !session.messages.length ? "첫 요청 대기" : "",
@@ -1131,24 +1293,46 @@ function sessionSummary(session) {
     .filter(Boolean)
     .join(" · ");
 }
-function anchorMenu(button) {
-  const dialog = $("#detail");
-  dialog.classList.add("composer-menu");
-  const rect = button.getBoundingClientRect();
-  dialog.style.setProperty(
+const composerMenu = $("#composer-menu");
+let composerMenuSource;
+function openComposerMenu(button, label, content) {
+  if (composerMenuSource === button && composerMenu.matches(":popover-open")) {
+    composerMenu.hidePopover();
+    return false;
+  }
+  composerMenuSource?.setAttribute("aria-expanded", "false");
+  composerMenuSource = button;
+  composerMenu.setAttribute("aria-label", label);
+  composerMenu.innerHTML = content;
+  composerMenu.showPopover({ source: button });
+  button.setAttribute("aria-expanded", "true");
+  positionComposerMenu();
+  composerMenu.querySelector("button")?.focus();
+  return true;
+}
+function positionComposerMenu() {
+  if (!composerMenu.matches(":popover-open")) return;
+  const rect = composerMenuSource.getBoundingClientRect();
+  composerMenu.style.setProperty(
     "--menu-left",
     Math.max(
       8,
-      Math.min(rect.left, window.innerWidth - dialog.offsetWidth - 8),
+      Math.min(rect.left, window.innerWidth - composerMenu.offsetWidth - 8),
     ) + "px",
   );
-  dialog.style.setProperty(
+  composerMenu.style.setProperty(
     "--menu-bottom",
     Math.max(8, window.innerHeight - rect.top + 6) + "px",
   );
 }
+window.addEventListener("resize", positionComposerMenu);
+composerMenu.addEventListener("toggle", () => {
+  if (!composerMenu.matches(":popover-open"))
+    composerMenuSource?.setAttribute("aria-expanded", "false");
+});
 function openProjects() {
-  modal(
+  const opened = openComposerMenu(
+    $("#workspace-open"),
     "프로젝트 폴더",
     '<button id="choose-folder" class="secondary">폴더 열기…</button><input id="directory" type="file" webkitdirectory hidden><p id="folder-status" role="status"></p>' +
       projects
@@ -1166,7 +1350,7 @@ function openProjects() {
         )
         .join(""),
   );
-  anchorMenu($("#workspace-open"));
+  if (!opened) return;
   document
     .querySelectorAll("[data-project]")
     .forEach(
@@ -1265,9 +1449,6 @@ document.addEventListener("keydown", (event) => {
     sessionToggle.focus();
   }
 });
-$("#detail").addEventListener("close", () =>
-  $("#detail").classList.remove("composer-menu"),
-);
 $("#workspace-open").onclick = openProjects;
 $("#approval-open").onclick = () => {
   const descriptions = {
@@ -1275,7 +1456,8 @@ $("#approval-open").onclick = () => {
     자동: "비서가 업무 목적과 범위에 따라 판단합니다. 목업에서는 프로젝트 안의 조회·수정은 허용하고 외부 전달은 사용자에게 묻습니다.",
     항상: "이 프로젝트에서 요청하는 모든 앱 권한을 자동 승인합니다.",
   };
-  modal(
+  const opened = openComposerMenu(
+    $("#approval-open"),
     "승인 모드 · " + project.name,
     Object.entries(descriptions)
       .map(
@@ -1291,13 +1473,14 @@ $("#approval-open").onclick = () => {
       )
       .join("") + "<small>다음 권한 요청부터 적용됩니다.</small>",
   );
-  anchorMenu($("#approval-open"));
+  if (!opened) return;
   document.querySelectorAll("[data-mode]").forEach(
     (b) =>
       (b.onclick = () => {
         project.approval = b.dataset.mode;
         record(current, "사용자", "프로젝트 승인 모드 · " + project.approval);
-        $("#detail").close();
+        composerMenu.hidePopover();
+        $("#approval-open").focus();
         render();
       }),
   );
@@ -1307,16 +1490,6 @@ $("#mobile-switch").onclick = () => {
   $("#mobile-switch").textContent = shown ? "작업 보기" : "캠프 보기";
 };
 current = newSession();
-current.name = "빈 검색어와 공백 입력 처리";
-current.messages.push({
-  text: "검색창에 공백만 입력해도 전체 목록이 보이게 해줘.",
-  user: true,
-});
-reply(
-  current,
-  "플랜을 정리했어요. 검색 조건을 수정한 뒤 리뷰·스타일·테스트를 함께 확인할게요.",
-);
-startJob(current, "검색 개선", 1);
 openTab("chat");
 
 window.setInterval(() => {

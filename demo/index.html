@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>AI Crew · 잿불 야영지</title>
-    <link rel="stylesheet" href="tokens.css?v=review2" />
-    <link rel="stylesheet" href="camp.css?v=review2" />
-    <link rel="stylesheet" href="assets/flow-editor.css?v=review2" />
-    <script defer src="assets/flow-editor.js?v=review2"></script>
-    <script defer src="workflow.js?v=review2"></script>
-    <script defer src="camp.js?v=review2"></script>
+    <link rel="stylesheet" href="tokens.css?v=camp" />
+    <link rel="stylesheet" href="camp.css?v=camp" />
+    <link rel="stylesheet" href="assets/flow-editor.css?v=camp" />
+    <script defer src="assets/flow-editor.js?v=camp"></script>
+    <script defer src="workflow.js?v=camp"></script>
+    <script defer src="camp.js?v=camp"></script>
   </head>
   <body>
     <header class="bar">
@@ -42,15 +42,19 @@
       <section class="camp" aria-label="잿불 야영지">
         <div class="land" id="land"><div class="fireglow"></div></div>
         <div class="roster">
-          <button class="roster-head" id="roster-head" aria-expanded="true">
+          <button
+            class="roster-head"
+            id="roster-head"
+            aria-expanded="false"
+            aria-controls="roster-body"
+          >
             <span data-icon="users"></span><strong>크루</strong
             ><small id="crew-count"></small><span data-icon="down"></span>
           </button>
-          <div id="roster-body"></div>
+          <div id="roster-body" hidden></div>
         </div>
         <footer class="scene-foot">
           <div class="camp-name">
-            <span data-icon="compass"></span>
             <h1>잿불 야영지</h1>
           </div>
         </footer>

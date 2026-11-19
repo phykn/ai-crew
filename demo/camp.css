@@ -66,8 +66,7 @@ span[data-icon] {
   align-items: center;
   padding: 0 24px;
   gap: 22px;
-  background: #191a1a;
-  border-bottom: 1px solid var(--line);
+  background: var(--bg);
 }
 .brand,
 .crumb,
@@ -92,15 +91,15 @@ nav button,
   gap: 10px;
   color: #f4e4c8;
   font:
-    600 25px/1 Georgia,
+    600 24px/1 Georgia,
     serif;
-  letter-spacing: -1.2px;
+  letter-spacing: -0.8px;
 }
 .brand svg {
   height: 29px;
   width: 29px;
   color: var(--warm);
-  fill: #825322;
+  fill: #695232;
 }
 .crumb {
   gap: 10px;
@@ -156,7 +155,9 @@ main {
 .land {
   position: absolute;
   inset: 0;
-  background: url(assets/camp.webp) center center/100% 100%;
+  background:
+    linear-gradient(180deg, #151b2260, #161c1a20 46%, #11171018),
+    url(assets/camp.webp) center center / cover;
   overflow: hidden;
 }
 .land:after {
@@ -164,13 +165,13 @@ main {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    #161b231c,
-    transparent 28%,
-    transparent 78%,
-    #13130fd6
-  );
+  background:
+    radial-gradient(
+      ellipse at 43% 59%,
+      transparent 25%,
+      var(--camera-light) 91%
+    ),
+    linear-gradient(180deg, #151a2238, transparent 25% 72%, #0b110dd9);
 }
 .fireglow {
   position: absolute;
@@ -179,7 +180,7 @@ main {
   width: 10%;
   height: 13%;
   border-radius: 50%;
-  background: #ff9b1155;
+  background: #ffc07339;
   filter: blur(16px);
   transform: translate(-50%, -50%);
   animation: glow 1.4s ease-in-out infinite alternate;
@@ -195,16 +196,17 @@ main {
   top: 20px;
   left: 20px;
   width: min(330px, calc(100% - 40px));
-  border: 1px solid #cbb27660;
-  border-radius: 9px;
-  background: linear-gradient(125deg, #191c1cec, #242321ed);
+  border: 1px solid #9ca79765;
+  border-radius: var(--radius-surface);
+  background: #1d241ee8;
   box-shadow: 0 6px 20px #0005;
   backdrop-filter: blur(10px);
   z-index: 3;
 }
 .roster-head {
   width: 100%;
-  padding: 11px 14px;
+  min-height: 38px;
+  padding: 8px 12px;
   text-align: left;
   gap: 8px;
 }
@@ -220,6 +222,10 @@ main {
 .roster-head > span:last-child {
   margin-left: auto;
   color: #aea99c;
+}
+.roster:has(.roster-head[aria-expanded="false"]) {
+  width: auto;
+  border-radius: var(--radius-control);
 }
 .roster-head[aria-expanded="false"] > span:last-child {
   transform: rotate(-90deg);
@@ -317,16 +323,16 @@ main {
   left: 50%;
   transform: translateX(-50%);
   white-space: nowrap;
-  color: #fff;
-  font-weight: 650;
-  font-size: clamp(11px, 1.05vw, 16px);
+  color: var(--text);
+  font-weight: 600;
+  font-size: clamp(11px, 0.9vw, 14px);
   text-shadow:
     0 2px 3px #000,
     1px 0 3px #000,
     -1px 0 3px #000;
-  background: #16130f99;
+  background: #142016cf;
   border-radius: 4px;
-  padding: 1px 6px;
+  padding: 2px 7px;
 }
 .actor-label strong {
   color: var(--agent);
@@ -346,13 +352,9 @@ main {
 .camp-name {
   gap: 8px;
 }
-.camp-name svg {
-  width: 22px;
-  height: 22px;
-}
 .camp-name h1 {
-  font-size: 17px;
-  letter-spacing: 0.05em;
+  font-size: 20px;
+  letter-spacing: -0.015em;
   font-weight: 650;
   margin: 0;
 }
@@ -370,8 +372,7 @@ main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  border-left: 1px solid #504a3d;
+  background: var(--panel);
 }
 nav {
   display: flex;
@@ -429,7 +430,7 @@ nav button[aria-current="true"] {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 22px 19px 12px;
+  padding: 22px var(--pane-inset) 12px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -439,7 +440,7 @@ nav button[aria-current="true"] {
   max-width: 88%;
   padding: 11px 14px;
   border-radius: 12px 12px 12px 3px;
-  background: #292a29;
+  background: var(--card);
   font-size: 14px;
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -447,8 +448,8 @@ nav button[aria-current="true"] {
 }
 .bubble.user {
   align-self: flex-end;
-  background: #40382b;
-  color: #f1dcc0;
+  background: #3c392c;
+  color: var(--text);
   border-radius: 12px 12px 3px 12px;
 }
 .bubble button,
@@ -461,12 +462,12 @@ nav button[aria-current="true"] {
   text-underline-offset: 3px;
 }
 #composer {
-  margin: 10px 16px 16px;
-  padding: 11px 12px 9px;
+  margin: 10px var(--pane-inset) var(--pane-inset);
+  padding: 13px 12px 10px;
   position: relative;
-  background: #242524;
-  border: 1px solid #49473f;
-  border-radius: 10px;
+  background: var(--surface-composer);
+  border: 1px solid var(--line-composer);
+  border-radius: 14px;
 }
 #composer:focus-within {
   border-color: #b49a6c;
@@ -857,7 +858,7 @@ dialog p {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 var(--workspace-inset);
   height: var(--app-bar-height);
 }
 main {
@@ -1065,7 +1066,7 @@ main {
   color: var(--warm);
 }
 #decision {
-  margin: 0 var(--space-4) var(--space-2);
+  margin: 0 var(--pane-inset) var(--space-2);
   flex-shrink: 0;
 }
 #decision section {
@@ -1126,19 +1127,41 @@ main {
   margin-top: auto;
 }
 
-.chat-start {
-  width: 100%;
-  align-self: center;
-  margin: auto 0;
-  padding: var(--space-4);
-  text-align: center;
+#chat:has(.chat-start) {
+  justify-content: center;
 }
-.chat-start h2 {
-  margin: 0 0 var(--space-3);
-  font-size: 22px;
+#messages:has(.chat-start) {
+  flex: 0 1 auto;
+  padding-bottom: 0;
 }
 #messages:has(.chat-start)::before {
   display: none;
+}
+.chat-start {
+  width: 100%;
+}
+.chat-start h2 {
+  margin: 0 0 var(--space-2);
+  font-size: clamp(23px, 2.4vw, 34px);
+  font-weight: 660;
+  letter-spacing: -0.055em;
+}
+#example-request {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) 0;
+  font-size: 13px;
+  color: var(--dim);
+}
+#example-request span {
+  color: var(--warm);
+}
+#example-request:hover {
+  color: var(--text);
+}
+#chat:has(.chat-start) #composer {
+  margin-bottom: clamp(16px, 6vh, 56px);
 }
 .wiki-article h2 {
   margin: var(--space-3) 0 var(--space-1);
@@ -1160,4 +1183,17 @@ main {
 
 #target.target-unavailable {
   color: var(--warm);
+}
+
+@media (min-width: 761px) {
+  main {
+    padding: 0 var(--workspace-inset) var(--workspace-inset);
+    gap: var(--workspace-gap);
+  }
+  .camp,
+  .panel {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-workspace);
+    overflow: hidden;
+  }
 }

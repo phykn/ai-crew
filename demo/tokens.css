@@ -1,11 +1,19 @@
 :root {
   color-scheme: dark;
-  --bg: #18191a;
-  --card: #222323;
-  --line: #383836;
-  --warm: #efc784;
-  --text: #eeeae3;
-  --dim: #aaa79f;
+  --bg: #141713;
+  --panel: #1a1e19;
+  --card: #252a22;
+  --line: #373d32;
+  --warm: #edcf99;
+  --text: #eeeae0;
+  --dim: #b1b4a7;
+  --workspace-inset: 16px;
+  --workspace-gap: 12px;
+  --pane-inset: clamp(16px, 2.25vw, 32px);
+  --radius-workspace: 16px;
+  --surface-composer: #242a22;
+  --line-composer: #4c5647;
+  --camera-light: #191d1760;
   --surface-control: #302f2a;
   --line-control: #585348;
   --on-warm: #241f17;
@@ -22,7 +30,7 @@
   --app-bar-height: 54px;
   --mobile-brand-height: 44px;
   --mobile-tabs-height: 42px;
-  --workspace-columns: minmax(0, 1.62fr) minmax(365px, 1fr);
+  --workspace-columns: minmax(0, 1.22fr) minmax(365px, 1fr);
   --flow-node-width: 128px;
   --flow-column-gap: 12px;
   --flow-row-step: 104px;

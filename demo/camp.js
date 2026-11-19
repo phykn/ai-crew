@@ -10,7 +10,6 @@ const paths = {
   down: "m6 9 6 6 6-6",
   users:
     "M16 21v-2a5 5 0 0 0-10 0v2M11 5a3.5 3.5 0 1 0 .1 0M18 8a3 3 0 0 1 0 6m1 2c2 1 3 3 3 5",
-  compass: "M12 2a10 10 0 1 0 .1 0m3 6-2 6-5 2 2-6Z",
   chat: "M3 4h18v13H9l-5 4v-4H3Z",
   list: "M8 6h13M8 12h13M8 18h13M3 6h1m-1 6h1m-1 6h1",
   book: "M12 5c-3-2-6-2-10-1v15c4-1 7-1 10 1 3-2 6-2 10-1V4c-4-1-7-1-10 1Zm0 1v13",
@@ -721,7 +720,7 @@ function drawMessages() {
     space.innerHTML =
       '<div class="chat-start"><h2>무엇을 맡길까요?</h2>' +
       (project === exampleProject
-        ? '<button class="secondary" id="example-request">빈 검색어 처리 점검</button>'
+        ? '<button id="example-request">빈 검색어 처리 점검해줘 <span aria-hidden="true">↗</span></button>'
         : "") +
       "</div>";
     const example = $("#example-request");

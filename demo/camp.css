@@ -773,3 +773,52 @@ dialog p {
     margin: 12px 14px 0;
   }
 }
+
+#project-open {
+  min-width: 0;
+}
+#project-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 28vw;
+}
+.project-label {
+  color: var(--dim);
+}
+@media (max-width: 760px) {
+  .bar {
+    gap: 6px;
+  }
+  .bar-end {
+    flex-shrink: 0;
+  }
+  #project-open {
+    margin-left: auto;
+  }
+  .bar-end {
+    margin-left: 0;
+  }
+  .project-label {
+    display: none;
+  }
+  .brand {
+    font-size: 18px;
+    gap: 3px;
+  }
+  .brand svg {
+    width: 20px;
+  }
+  .mobile-switch {
+    top: auto;
+    left: auto;
+    bottom: 13px;
+    right: 15px;
+  }
+  .panel {
+    padding-bottom: 36px;
+  }
+  .scene-foot {
+    bottom: 50px;
+  }
+}

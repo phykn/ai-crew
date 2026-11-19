@@ -40,7 +40,7 @@ document
   .querySelectorAll("[data-icon]")
   .forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
 
-const crew = [
+const defaultCrew = [
   {
     role: "비서",
     name: "여울",
@@ -88,8 +88,7 @@ const steps = [
   { label: "코드 리뷰", role: 3 },
   { label: "테스트 중", role: 2 },
 ];
-const sessions = [];
-const memories = [
+const exampleMemories = [
   {
     title: "검색 입력 처리",
     body: "검색어 양끝의 공백을 제거한 뒤 검색 조건을 적용한다.",
@@ -97,6 +96,22 @@ const memories = [
     source: "검색 개선",
   },
 ];
+const projects = [];
+function makeProject(name, handle = null) {
+  const entry = {
+    name,
+    handle,
+    sessions: [],
+    memories: [],
+    crew: defaultCrew.map((agent) => ({ ...agent })),
+    lastSession: null,
+  };
+  projects.push(entry);
+  return entry;
+}
+const exampleProject = makeProject("ai-crew");
+exampleProject.memories = exampleMemories;
+let project = exampleProject;
 const campsites = [
   [0, 0],
   [-2, 1],
@@ -117,16 +132,17 @@ let current,
 let quiet = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const reply = (session, text, jobId, stopped = false) =>
   session.messages.push({ text, jobId, stopped });
-function newSession() {
+function newSession(owner = project) {
   const session = {
-    name: "세션 " + String(sessions.length + 1).padStart(2, "0"),
+    project: owner,
+    name: "세션 " + String(owner.sessions.length + 1).padStart(2, "0"),
     messages: [],
     jobs: [],
     events: [],
     selected: null,
     draft: "",
   };
-  sessions.push(session);
+  owner.sessions.push(session);
   return session;
 }
 function record(session, role, text, job) {
@@ -169,8 +185,8 @@ function schedule(session, job) {
           "」의 리뷰와 테스트가 끝났어요. 로그에서 단계별 기록을 볼 수 있어요.",
         job.id,
       );
-      if (!memories.some((item) => item.source === job.title))
-        memories.push({
+      if (!session.project.memories.some((item) => item.source === job.title))
+        session.project.memories.push({
           title: job.title + " 검증 기록",
           body: "코드 리뷰와 테스트 단계를 거쳐 완료했다.",
           by: "테스트",
@@ -180,7 +196,7 @@ function schedule(session, job) {
       job.step++;
       record(
         session,
-        crew[steps[job.step].role].role,
+        session.project.crew[steps[job.step].role].role,
         steps[job.step].label,
         job,
       );
@@ -225,7 +241,7 @@ $("#detail").onclick = (e) => {
   if (e.target === $("#detail")) $("#detail").close();
 };
 function agentDetail(index) {
-  const agent = crew[index];
+  const agent = project.crew[index];
   modal(
     agent.role + " · " + agent.name,
     "<p>" +
@@ -246,7 +262,7 @@ function agentDetail(index) {
   };
 }
 function renameAgent(index) {
-  const agent = crew[index];
+  const agent = project.crew[index];
   const button = document.querySelector('[data-name="' + index + '"]');
   const input = document.createElement("input");
   input.value = agent.name;
@@ -276,8 +292,8 @@ function drawRoster() {
     document.activeElement?.tagName === "INPUT"
   )
     return;
-  $("#crew-count").textContent = crew.length;
-  $("#roster-body").innerHTML = crew
+  $("#crew-count").textContent = project.crew.length;
+  $("#roster-body").innerHTML = project.crew
     .map(
       (agent, i) =>
         '<div class="crew-row" style="--agent:' +
@@ -314,7 +330,7 @@ function drawRoster() {
 }
 function drawActors() {
   const land = $("#land");
-  crew.forEach((agent, i) => {
+  project.crew.forEach((agent, i) => {
     const job = current.jobs.find(
       (j) => j.state === "run" && steps[j.step].role === i,
     );
@@ -345,7 +361,7 @@ function drawActors() {
         : !quiet &&
             campBeat > 0 &&
             campBeat % 3 === 1 &&
-            i === campBeat % crew.length
+            i === campBeat % project.crew.length
           ? remarks[i]
           : "");
     actor.onclick = () => (job ? jobDetail(job) : agentDetail(i));
@@ -357,7 +373,7 @@ function jobDetail(job) {
     "<p>" +
       safe(steps[job.step].label) +
       " · " +
-      safe(crew[steps[job.step].role].name) +
+      safe(project.crew[steps[job.step].role].name) +
       '</p><div class="dialog-actions"><button id="job-log" class="secondary">업무 로그</button><button id="job-steer" class="secondary">추가 지시</button><button id="job-stop" class="secondary">멈춤</button></div>',
   );
   $("#job-log").onclick = () => {
@@ -519,7 +535,7 @@ function drawLog() {
 function drawMemory() {
   $("#memory").innerHTML =
     "<h2>프로젝트 위키</h2>" +
-    memories
+    project.memories
       .map(
         (item, i) =>
           '<button class="memory-card" data-memory="' +
@@ -534,7 +550,7 @@ function drawMemory() {
       )
       .join("") +
     "<h3>에이전트별 메모리</h3>" +
-    crew
+    project.crew
       .map(
         (agent, i) =>
           '<button class="session-row" data-note="' +
@@ -549,7 +565,7 @@ function drawMemory() {
   document.querySelectorAll("[data-memory]").forEach(
     (el) =>
       (el.onclick = () => {
-        const entry = memories[+el.dataset.memory];
+        const entry = project.memories[+el.dataset.memory];
         modal(
           entry.title,
           "<p>" +
@@ -565,12 +581,12 @@ function drawMemory() {
   document.querySelectorAll("[data-note]").forEach(
     (el) =>
       (el.onclick = () => {
-        const agent = crew[+el.dataset.note];
+        const agent = project.crew[+el.dataset.note];
         modal(
           agent.name + "의 기억",
           "<p>" +
             safe(
-              agent.role === "개발"
+              project === exampleProject && agent.role === "개발"
                 ? "검색 조건을 바꾸기 전에 기존 공백 처리 규칙을 확인한다."
                 : "아직 남긴 기억이 없어요.",
             ) +
@@ -580,6 +596,7 @@ function drawMemory() {
   );
 }
 function render() {
+  $("#project-name").textContent = project.name;
   $("#session-name").textContent = current.name;
   drawRoster();
   drawActors();
@@ -602,6 +619,8 @@ function openTab(name) {
 }
 function switchSession(session) {
   current.draft = $("#draft").value;
+  current.project.lastSession = current;
+  project = session.project;
   current = session;
   $("#draft").value = session.draft;
   logJob = null;
@@ -675,10 +694,72 @@ document.querySelectorAll("[data-tab]").forEach(
       openTab(el.dataset.tab);
     }),
 );
+function selectProject(entry) {
+  $("#detail").close();
+  if (entry !== project) switchSession(entry.lastSession || newSession(entry));
+}
+
+function openProjects() {
+  modal(
+    "프로젝트 폴더",
+    projects
+      .map(
+        (entry, index) =>
+          '<button class="session-row" data-project="' +
+          index +
+          '"><strong>' +
+          safe(entry.name) +
+          (entry === project ? " · 현재" : "") +
+          "</strong><small>" +
+          (entry === exampleProject ? "예시 프로젝트 · " : "") +
+          "세션 " +
+          entry.sessions.length +
+          "개</small></button>",
+      )
+      .join("") +
+      '<button id="choose-folder" class="primary">프로젝트 폴더 열기…</button><input id="directory" type="file" webkitdirectory hidden><p id="folder-status" role="status"></p>',
+  );
+  document.querySelectorAll("[data-project]").forEach((button) => {
+    button.onclick = () =>
+      selectProject(projects[Number(button.dataset.project)]);
+  });
+  const input = $("#directory");
+  input.onchange = () => {
+    const name = input.files[0]?.webkitRelativePath.split("/")[0];
+    if (name) selectProject(makeProject(name));
+    else
+      $("#folder-status").textContent =
+        "이 브라우저에서는 파일이 있는 폴더를 선택해 주세요.";
+  };
+  $("#choose-folder").onclick = async () => {
+    if (!window.showDirectoryPicker) {
+      $("#folder-status").textContent =
+        "파일이 있는 폴더를 선택해 주세요. 목업은 폴더 이름만 사용합니다.";
+      input.click();
+      return;
+    }
+    try {
+      const handle = await window.showDirectoryPicker({ mode: "read" });
+      for (const entry of projects) {
+        if (entry.handle && (await handle.isSameEntry(entry.handle))) {
+          selectProject(entry);
+          return;
+        }
+      }
+      selectProject(makeProject(handle.name, handle));
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      $("#folder-status").textContent =
+        "브라우저가 폴더 접근을 제한했어요. 파일이 있는 폴더를 다시 선택해 주세요.";
+      $("#choose-folder").onclick = () => input.click();
+    }
+  };
+}
+$("#project-open").onclick = openProjects;
 $("#session-open").onclick = () => {
   modal(
     "세션",
-    sessions
+    project.sessions
       .map(
         (session, i) =>
           '<button class="session-row" data-session="' +
@@ -696,7 +777,7 @@ $("#session-open").onclick = () => {
     (el) =>
       (el.onclick = () => {
         $("#detail").close();
-        switchSession(sessions[+el.dataset.session]);
+        switchSession(project.sessions[+el.dataset.session]);
       }),
   );
   $("#new-session").onclick = () => {

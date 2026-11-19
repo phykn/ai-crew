@@ -141,6 +141,9 @@ function makeProject(name, handle = null) {
     version: 1,
     approval: "수동",
     wikiView: "목록",
+    memoryView: "wiki",
+    agentMemory: null,
+    personalMemory: {},
     crew: defaultCrew.map((agent) => ({ ...agent })),
     lastSession: null,
   };
@@ -149,6 +152,9 @@ function makeProject(name, handle = null) {
 }
 const exampleProject = makeProject("ai-crew");
 exampleProject.memories = exampleMemories;
+exampleProject.personalMemory[1] = [
+  "검색 조건을 바꾸기 전에 기존 공백 처리 규칙을 확인한다.",
+];
 let project = exampleProject;
 const campsites = [
   [0, 0],
@@ -195,9 +201,12 @@ function record(session, role, text, job) {
   });
 }
 function activeJob(session) {
-  return session.jobs.find(
-    (job) =>
-      job.id === session.selected && ["run", "stopping"].includes(job.state),
+  const running = session.jobs.filter((job) =>
+    ["run", "stopping"].includes(job.state),
+  );
+  return (
+    running.find((job) => job.id === session.selected) ||
+    (running.length === 1 ? running[0] : undefined)
   );
 }
 function stageLabel(job) {
@@ -268,8 +277,11 @@ function decide(job, allow) {
     job,
   );
   if (allow) schedule(current, job);
-  else reply(current, "권한이 거절되어 「" + job.title + "」을 멈췄어요.");
+  else
+    reply(current, "권한이 거절되어 「" + job.title + "」을 멈췄어요.", job.id);
+  current.approvalFocus = null;
   render();
+  $("#draft").focus();
 }
 function schedule(session, job) {
   clearTimeout(job.timer);
@@ -299,11 +311,7 @@ function schedule(session, job) {
       record(session, "비서", "결과 취합 · " + evidence, job);
       reply(
         session,
-        "「" +
-          job.title +
-          "」의 " +
-          evidence +
-          " 확인을 마쳤어요. 로그에서 완료 조건별 모의 결과를 볼 수 있어요.",
+        "「" + job.title + "」의 " + evidence + " 확인을 마쳤어요.",
         job.id,
       );
       session.project.memories.push({
@@ -366,6 +374,16 @@ function agentDetail(index) {
       safe(agent.skill) +
       "</span></div>",
   );
+  const memory = document.createElement("button");
+  memory.className = "text-action";
+  memory.textContent = "에이전트 기억 보기";
+  memory.onclick = () => {
+    $("#detail").close();
+    project.memoryView = "agents";
+    project.agentMemory = index;
+    openTab("memory");
+  };
+  $("#detail-body").append(memory);
   $("#model").value = agent.model;
   $("#model").onchange = (e) => {
     agent.model = e.target.value;
@@ -449,9 +467,13 @@ function drawRoster() {
 function drawActors() {
   const land = $("#land");
   project.crew.forEach((agent, i) => {
-    const job = current.jobs.find(
-      (j) => j.state === "run" && j.groups[j.step].some((s) => s.role === i),
+    const assigned = current.jobs.filter(
+      (job) =>
+        ["run", "approval"].includes(job.state) &&
+        job.groups[job.step].some((stage) => stage.role === i),
     );
+    const job =
+      assigned.find((job) => job.id === current.selected) || assigned[0];
     let actor = land.querySelector('[data-actor="' + i + '"]');
     if (!actor) {
       actor = document.createElement("button");
@@ -462,7 +484,8 @@ function drawActors() {
         '.webp">';
       land.append(actor);
     }
-    actor.className = "actor" + (job ? " work" : "");
+    actor.className =
+      "actor" + (job?.state === "run" ? " work" : job ? " waiting" : "");
     actor.style.setProperty("--agent", agent.color);
     const offset =
       job || !campBeat ? [0, 0] : campsites[(campBeat + i) % campsites.length];
@@ -473,7 +496,9 @@ function drawActors() {
       safe(agent.name) +
       "</strong>" +
       (job
-        ? safe(job.groups[job.step].find((s) => s.role === i).label)
+        ? job.state === "approval"
+          ? "승인 대기"
+          : safe(job.groups[job.step].find((s) => s.role === i).label)
         : campBeat > 0 &&
             campBeat % 3 === 1 &&
             i === campBeat % project.crew.length
@@ -513,12 +538,13 @@ function jobDetail(job) {
   );
   $("#job-log").onclick = () => {
     $("#detail").close();
-    logJob = job.id;
-    openTab("log");
+    openJobLog(job.id);
   };
+  $("#job-steer").disabled = !["approval", "run"].includes(job.state);
   $("#job-steer").onclick = () => {
     $("#detail").close();
     current.selected = job.id;
+    current.steerJob = job.id;
     openTab("chat");
     $("#draft").focus();
   };
@@ -529,107 +555,119 @@ function jobDetail(job) {
   };
 }
 function drawTasks() {
-  $("#tasks").innerHTML = current.jobs
-    .filter((j) => ["run", "stopping", "approval"].includes(j.state))
-    .map((job) => {
-      const phase =
-        job.state === "approval"
-          ? "내 답변 대기"
-          : job.state === "stopping"
-            ? "중단 중"
-            : stageLabel(job);
-      return (
-        '<article class="task"><div class="task-head">' +
-        icon("pin") +
-        '진행 중인 업무</div><div class="task-main"><button class="task-title" data-job="' +
+  const target = $("#tasks");
+  target.innerHTML = current.jobs
+    .filter((job) => ["run", "stopping", "approval"].includes(job.state))
+    .map(
+      (job) =>
+        '<article class="task"><button class="task-title" data-job="' +
         job.id +
-        '"><span>' +
+        '">' +
         safe(job.title) +
-        "</span></button>" +
+        '</button><span class="task-phase">' +
+        safe(job.state === "stopping" ? "중단 중" : stageLabel(job)) +
+        "</span>" +
         (job.state === "approval"
           ? '<button class="chip pending" data-question="' +
             job.id +
-            '" title="승인 질문으로 이동"><i class="dot"></i>내 답변 대기</button>'
-          : '<span class="chip"><i class="dot"></i>' +
-            safe(phase) +
-            "</span>") +
-        '</div><div class="route" aria-hidden="true">' +
-        job.groups
-          .map(
-            (_, i) =>
-              '<i class="' +
-              (i === job.step ? "now" : i < job.step ? "passed" : "") +
-              '"></i>',
-          )
-          .join("") +
-        '</div><div class="route-caption">플로우 v' +
-        job.version +
-        " · " +
-        (job.step + 1) +
-        "/" +
-        job.groups.length +
-        "단계 · " +
-        job.groups[job.step].map((s) => safe(s.label)).join(" / ") +
-        "</div></article>"
-      );
-    })
+            '" aria-label="' +
+            safe(job.title) +
+            ' 승인 질문으로 이동">승인 대기</button>'
+          : "") +
+        "</article>",
+    )
     .join("");
-  document.querySelectorAll("[data-job]").forEach(
-    (el) =>
-      (el.onclick = () => {
-        const job = current.jobs.find((j) => j.id === +el.dataset.job);
+  target.querySelectorAll("[data-job]").forEach(
+    (button) =>
+      (button.onclick = () => {
+        const job = current.jobs.find(
+          (job) => job.id === Number(button.dataset.job),
+        );
         current.selected = job.id;
+        drawActors();
         drawComposer();
         jobDetail(job);
       }),
   );
-  $("#tasks")
-    .querySelectorAll("[data-question]")
-    .forEach((button) => {
-      button.onclick = () => {
-        const question = $("#messages").querySelector(
-          '[data-allow="' + button.dataset.question + '"]',
-        );
-        question?.focus();
-        question?.scrollIntoView({ block: "nearest" });
-      };
-    });
+  target.querySelectorAll("[data-question]").forEach(
+    (button) =>
+      (button.onclick = () => {
+        current.approvalFocus = Number(button.dataset.question);
+        drawDecision();
+        $("#decision [data-allow]").focus();
+      }),
+  );
 }
+
+function drawDecision() {
+  const box = $("#decision");
+  const waiting = current.jobs.filter((job) => job.state === "approval");
+  const job =
+    waiting.find((job) => job.id === current.approvalFocus) || waiting[0];
+  box.hidden = !job;
+  if (!job) {
+    box.replaceChildren();
+    return;
+  }
+  box.innerHTML =
+    '<section aria-label="승인 요청"><small>' +
+    safe(job.title) +
+    "</small><p>" +
+    safe(job.question.text) +
+    '</p><div class="decision-actions">' +
+    '<button class="primary" data-allow="' +
+    job.id +
+    '">허용</button>' +
+    '<button class="secondary" data-deny="' +
+    job.id +
+    '">거절</button></div></section>';
+  box.querySelector("[data-allow]").onclick = () => decide(job, true);
+  box.querySelector("[data-deny]").onclick = () => decide(job, false);
+}
+
+function openJobLog(id) {
+  logJob = id;
+  openTab("log");
+}
+
 function drawMessages() {
   const space = $("#messages");
   const atBottom =
     space.scrollHeight - space.scrollTop - space.clientHeight < 36;
+  const latestStopByJob = new Map(
+    current.messages
+      .filter((message) => message.stopped)
+      .map((message) => [message.jobId, message]),
+  );
   space.innerHTML = current.messages
-    .map((m) => {
-      const job = current.jobs.find((j) => j.id === m.jobId);
-      const latestStop =
-        m.stopped &&
-        !current.messages
-          .slice(current.messages.indexOf(m) + 1)
-          .some((later) => later.stopped && later.jobId === m.jobId);
-      const action =
-        latestStop && job?.state === "stopped"
-          ? '<button data-resume="' +
-            job.id +
-            '">마지막 단계에서 이어가기</button>'
-          : "";
+    .filter((message) => !message.approvalId || message.answer)
+    .map((message) => {
+      const job = current.jobs.find((item) => item.id === message.jobId);
+      const resume =
+        job?.state === "stopped" && latestStopByJob.get(job.id) === message;
+      const result =
+        job &&
+        !message.user &&
+        !message.stopped &&
+        ["done", "denied"].includes(job.state);
       return (
         '<div class="bubble' +
-        (m.user ? " user" : "") +
+        (message.user ? " user" : "") +
         '" aria-label="' +
-        (m.user ? "나" : "비서") +
+        (message.user ? "나" : "비서") +
         '">' +
-        safe(m.text) +
-        (m.approvalId
-          ? m.answer
-            ? '<small class="answered">' + safe(m.answer) + "</small>"
-            : '<div class="choices"><button data-allow="' +
-              m.approvalId +
-              '">허용</button><button data-deny="' +
-              m.approvalId +
-              '">거절</button></div>'
+        safe(message.text) +
+        (message.answer
+          ? '<small class="answered">' + safe(message.answer) + "</small>"
           : "") +
-        action +
+        (resume
+          ? '<button data-resume="' + job.id + '">이어가기</button>'
+          : "") +
+        (result
+          ? '<button data-job-result="' +
+            job.id +
+            '">이 업무 기록 보기</button>'
+          : "") +
         "</div>"
       );
     })
@@ -637,33 +675,51 @@ function drawMessages() {
   space
     .querySelectorAll("[data-resume]")
     .forEach(
-      (el) =>
-        (el.onclick = () =>
-          resume(current.jobs.find((j) => j.id === +el.dataset.resume))),
+      (button) =>
+        (button.onclick = () =>
+          resume(
+            current.jobs.find(
+              (job) => job.id === Number(button.dataset.resume),
+            ),
+          )),
     );
-  space.querySelectorAll("[data-allow],[data-deny]").forEach(
-    (button) =>
-      (button.onclick = () =>
-        decide(
-          current.jobs.find(
-            (j) => j.id === Number(button.dataset.allow || button.dataset.deny),
-          ),
-          !!button.dataset.allow,
-        )),
-  );
+  space
+    .querySelectorAll("[data-job-result]")
+    .forEach(
+      (button) =>
+        (button.onclick = () => openJobLog(Number(button.dataset.jobResult))),
+    );
   if (atBottom) space.scrollTop = space.scrollHeight;
 }
+
 function drawComposer() {
   const job = activeJob(current);
   const hasDraft = !!$("#draft").value.trim();
   $("#commands").hidden =
     !/^\/c?l?e?a?r?$/.test($("#draft").value.trim()) ||
     $("#draft").value.trim() === "/clear";
-  $("#target").textContent = job
-    ? job.title +
-      " · " +
-      (job.state === "stopping" ? "중단 중" : stageLabel(job))
-    : "";
+  const directed = current.jobs.find(
+    (item) =>
+      item.id === current.steerJob && ["run", "approval"].includes(item.state),
+  );
+  const target = $("#target");
+  target.replaceChildren();
+  if (directed) {
+    target.append("추가 지시 · " + directed.title + " ");
+    const clear = document.createElement("button");
+    clear.type = "button";
+    clear.ariaLabel = "추가 지시 대상 해제";
+    clear.textContent = "×";
+    clear.onclick = () => {
+      current.steerJob = null;
+      drawComposer();
+      $("#draft").focus();
+    };
+    target.append(clear);
+  } else if (job) {
+    target.textContent =
+      (job.state === "stopping" ? "중단 중 · " : "멈춤 대상 · ") + job.title;
+  }
   const send =
     '<button class="iconbtn send" type="submit" title="보내기" aria-label="보내기" ' +
     (hasDraft ? "" : "disabled") +
@@ -716,50 +772,113 @@ function drawLog() {
     };
 }
 function drawMemory() {
-  $("#memory").innerHTML =
-    '<div class="wiki-heading"><h2>프로젝트 위키</h2><div>' +
-    ["목록", "노드"]
+  const panel = $("#memory");
+  const navigation =
+    '<div class="memory-navigation" aria-label="메모리 범위">' +
+    [
+      ["wiki", "프로젝트 위키"],
+      ["agents", "에이전트 기억"],
+    ]
       .map(
-        (view) =>
-          '<button data-view="' +
-          view +
+        ([value, label]) =>
+          '<button data-memory-view="' +
+          value +
           '" aria-pressed="' +
-          (project.wikiView === view) +
+          (project.memoryView === value) +
           '">' +
-          view +
+          label +
           "</button>",
       )
       .join("") +
-    "</div></div>" +
-    (project.wikiView === "노드"
-      ? wikiGraph(project.memories)
-      : project.memories
-          .map(
-            (item, i) =>
-              '<button class="memory-card" data-memory="' +
-              i +
-              '"><strong>' +
-              safe(item.title) +
-              "</strong><small>" +
-              safe(item.by) +
-              " · " +
-              safe(item.source) +
-              "</small></button>",
-          )
-          .join("") || '<p class="empty">아직 문서가 없어요.</p>') +
-    "<h3>에이전트별 메모리</h3>" +
-    project.crew
-      .map(
-        (agent, i) =>
-          '<button class="session-row" data-note="' +
-          i +
-          '">' +
-          safe(agent.role) +
-          " · " +
-          safe(agent.name) +
-          "</button>",
-      )
-      .join("");
+    "</div>";
+  panel.innerHTML = navigation;
+  panel.querySelectorAll("[data-memory-view]").forEach(
+    (button) =>
+      (button.onclick = () => {
+        project.memoryView = button.dataset.memoryView;
+        panel.scrollTop = 0;
+        drawMemory();
+        panel
+          .querySelector('[data-memory-view="' + project.memoryView + '"]')
+          .focus();
+      }),
+  );
+  if (project.memoryView === "agents") {
+    panel.insertAdjacentHTML(
+      "beforeend",
+      project.crew
+        .map((agent, index) => {
+          const notes = project.personalMemory[index] || [];
+          const expanded = project.agentMemory === index;
+          return (
+            '<section class="agent-memory"><button class="memory-card" data-note="' +
+            index +
+            '" aria-expanded="' +
+            expanded +
+            '"><strong>' +
+            safe(agent.role) +
+            " · " +
+            safe(agent.name) +
+            "</strong><small>" +
+            notes.length +
+            "개</small></button>" +
+            (expanded
+              ? '<div class="memory-note">' +
+                (notes.length
+                  ? notes.map((note) => "<p>" + safe(note) + "</p>").join("")
+                  : '<p class="empty">아직 남긴 기억이 없어요.</p>') +
+                "</div>"
+              : "") +
+            "</section>"
+          );
+        })
+        .join(""),
+    );
+    panel.querySelectorAll("[data-note]").forEach(
+      (button) =>
+        (button.onclick = () => {
+          const index = Number(button.dataset.note);
+          project.agentMemory = project.agentMemory === index ? null : index;
+          drawMemory();
+          panel.querySelector('[data-note="' + index + '"]').focus();
+        }),
+    );
+    return;
+  }
+
+  panel.insertAdjacentHTML(
+    "beforeend",
+    '<div class="wiki-heading"><div aria-label="위키 보기">' +
+      ["목록", "노드"]
+        .map(
+          (view) =>
+            '<button data-view="' +
+            view +
+            '" aria-pressed="' +
+            (project.wikiView === view) +
+            '">' +
+            view +
+            "</button>",
+        )
+        .join("") +
+      "</div></div>" +
+      (project.wikiView === "노드"
+        ? wikiGraph(project.memories)
+        : project.memories
+            .map(
+              (item, index) =>
+                '<button class="memory-card" data-memory="' +
+                index +
+                '"><strong>' +
+                safe(item.title) +
+                "</strong><small>" +
+                safe(item.by) +
+                " · " +
+                safe(item.source) +
+                "</small></button>",
+            )
+            .join("") || '<p class="empty">아직 문서가 없어요.</p>'),
+  );
   document.querySelectorAll("[data-view]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -810,22 +929,6 @@ function drawMemory() {
           );
       }),
   );
-  document.querySelectorAll("[data-note]").forEach(
-    (el) =>
-      (el.onclick = () => {
-        const agent = project.crew[+el.dataset.note];
-        modal(
-          agent.name + "의 기억",
-          "<p>" +
-            safe(
-              project === exampleProject && agent.role === "개발"
-                ? "검색 조건을 바꾸기 전에 기존 공백 처리 규칙을 확인한다."
-                : "아직 남긴 기억이 없어요.",
-            ) +
-            "</p>",
-        );
-      }),
-  );
 }
 function drawContext() {
   $("#project-name").textContent = project.name;
@@ -850,6 +953,7 @@ function render() {
   drawActors();
   drawTasks();
   drawMessages();
+  drawDecision();
   drawComposer();
   drawLog();
   drawMemory();
@@ -887,28 +991,88 @@ function submit() {
     switchSession(newSession());
     return;
   }
-  if (!current.messages.some((m) => m.user))
+  if (!current.messages.some((message) => message.user))
     current.name = text.replace(/\s+/g, " ").trim().slice(0, 70);
   current.messages.push({ text, user: true });
-  const job = current.jobs.find(
-    (j) => j.id === current.selected && ["run", "approval"].includes(j.state),
+  respondToRequest(text);
+  render();
+  $("#messages").scrollTop = $("#messages").scrollHeight;
+}
+
+function respondToRequest(text) {
+  const jobs = current.jobs.filter((job) =>
+    ["run", "approval", "stopping"].includes(job.state),
   );
-  if (text.includes("/clear"))
+  if (text.includes("/clear")) {
     reply(
       current,
       "/clear만 보내면 같은 크루 설정으로 빈 세션을 시작해요. 기존 업무는 원래 세션에서 이어져요.",
     );
-  else if (job) {
-    record(current, "비서", "추가 지시 · " + text, job);
-    reply(current, "「" + job.title + "」에 추가 지시를 전달했어요.");
-    if (job.state === "run") schedule(current, job);
-  } else {
-    const title = text.length > 26 ? text.slice(0, 25) + "…" : text;
-    reply(current, "현재 프로젝트의 워크플로우로 시작할게요.");
-    startJob(current, title);
+    return;
   }
-  render();
-  $("#messages").scrollTop = $("#messages").scrollHeight;
+  if (
+    /(상태|진행|어디까지|무슨 일|뭐 하고)/.test(text) &&
+    /(알려|보여|하고 있|됐|어때|이야|\?$)/.test(text)
+  ) {
+    const statusJobs = /프로젝트/.test(text)
+      ? project.sessions
+          .flatMap((session) => session.jobs)
+          .filter((job) => ["run", "approval", "stopping"].includes(job.state))
+      : jobs;
+    reply(
+      current,
+      statusJobs.length
+        ? statusJobs
+            .map(
+              (job) =>
+                job.title +
+                " · " +
+                stageLabel(job) +
+                (job.state === "approval"
+                  ? " 승인 대기"
+                  : job.state === "stopping"
+                    ? " 중단 중"
+                    : " 진행 중"),
+            )
+            .join("\n")
+        : "이 대화에서 진행 중인 업무가 없어요.",
+    );
+    return;
+  }
+  if (/위키|메모리|메모/.test(text) && /요약|보여|알려|뭐가|무엇/.test(text)) {
+    const wiki = project.memories;
+    reply(
+      current,
+      wiki.length
+        ? wiki
+            .slice(0, 3)
+            .map((item) => item.title + " · " + item.body)
+            .join("\n")
+        : "이 프로젝트에 등록된 위키 문서가 없어요.",
+    );
+    return;
+  }
+  const directed = jobs.find(
+    (job) => job.state !== "stopping" && job.id === current.steerJob,
+  );
+  const fresh = /새 업무|새 작업|별도 업무|별도 작업/.test(text);
+  if (directed && !fresh) {
+    record(current, "비서", "추가 지시 · " + text, directed);
+    reply(current, "「" + directed.title + "」에 추가 지시를 전달했어요.");
+    current.steerJob = null;
+    return;
+  }
+  if (!fresh && /^(그거|거기에|아까|이어서|추가로)/.test(text)) {
+    reply(
+      current,
+      "어느 업무에 대한 지시인지 알려주세요. 업무명을 열어 ‘추가 지시’를 눌러도 돼요.",
+    );
+    return;
+  }
+  current.steerJob = null;
+  const title = text.length > 26 ? text.slice(0, 25) + "…" : text;
+  reply(current, "「" + title + "」을 시작할게요.");
+  startJob(current, title);
 }
 $("#composer").onsubmit = (e) => {
   e.preventDefault();

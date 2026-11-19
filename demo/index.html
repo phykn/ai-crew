@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>AI Crew · 잿불 야영지</title>
-    <link rel="stylesheet" href="tokens.css?v=flow" />
-    <link rel="stylesheet" href="camp.css?v=flow" />
-    <link rel="stylesheet" href="assets/flow-editor.css?v=flow" />
-    <script defer src="assets/flow-editor.js?v=flow"></script>
-    <script defer src="workflow.js?v=flow"></script>
-    <script defer src="camp.js?v=flow"></script>
+    <link rel="stylesheet" href="tokens.css?v=workspace" />
+    <link rel="stylesheet" href="camp.css?v=workspace" />
+    <link rel="stylesheet" href="assets/flow-editor.css?v=workspace" />
+    <script defer src="assets/flow-editor.js?v=workspace"></script>
+    <script defer src="workflow.js?v=workspace"></script>
+    <script defer src="camp.js?v=workspace"></script>
   </head>
   <body>
     <header class="bar">
@@ -59,6 +59,7 @@
         <div id="chat" class="pane">
           <div id="tasks"></div>
           <div id="messages" aria-label="비서와의 대화"></div>
+          <div id="decision" hidden></div>
           <form id="composer">
             <div id="commands" hidden>
               <button type="button" id="fill-clear">

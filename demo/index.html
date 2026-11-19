@@ -4,115 +4,154 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
-    <title>AI Crew · 잿불 야영지</title>
-    <link rel="stylesheet" href="tokens.css?v=compact" />
-    <link rel="stylesheet" href="camp.css?v=plain-card" />
-    <link rel="stylesheet" href="assets/flow-editor.css?v=compact" />
-    <script defer src="assets/flow-editor.js?v=compact"></script>
-    <script defer src="workflow.js?v=compact"></script>
-    <script defer src="camp.js?v=compact"></script>
+    <title>AI Crew</title>
+    <link rel="stylesheet" href="tokens.css?v=rebuild" />
+    <link rel="stylesheet" href="camp.css?v=rebuild" />
+    <link rel="stylesheet" href="assets/flow-editor.css?v=rebuild" />
+    <script defer src="assets/flow-editor.js?v=rebuild"></script>
+    <script defer src="workflow.js?v=rebuild"></script>
+    <script defer src="model.js?v=rebuild"></script>
+    <script defer src="camp.js?v=rebuild"></script>
   </head>
   <body>
-    <header class="bar">
-      <div class="brand"><span data-icon="fire"></span>AI Crew</div>
-      <button type="button" class="mobile-switch glass" id="mobile-switch">
-        캠프 보기
-      </button>
-      <nav class="toolbar" aria-label="작업 보기">
-        <div class="view-tools">
-          <button data-tab="chat" aria-label="대화" aria-controls="chat">
-            <span data-icon="chat"></span>
-          </button>
-          <button data-tab="log" aria-label="로그" aria-controls="log">
-            <span data-icon="list"></span>
-          </button>
-          <button data-tab="memory" aria-label="메모리" aria-controls="memory">
-            <span data-icon="book"></span>
-          </button>
-          <button data-tab="flow" aria-label="워크플로우" aria-controls="flow">
-            <span data-icon="flow"></span>
-          </button>
-        </div>
-        <button
-          id="session-open"
-          aria-label="세션 목록"
-          aria-expanded="false"
-          aria-controls="session-list"
-        >
-          <small id="session-waiting" aria-hidden="true" hidden></small
-          ><span data-icon="menu"></span>
-        </button>
-      </nav>
-      <ul id="session-list" aria-label="세션 목록" hidden></ul>
-    </header>
-    <main>
+    <main class="workspace">
       <section class="camp" aria-label="잿불 야영지">
-        <div class="land" id="land"><div class="fireglow"></div></div>
-        <div class="roster">
+        <div id="land"><div class="fireglow"></div></div>
+        <div class="camp-tools">
+          <div class="wordmark"><span data-icon="fire"></span>AI Crew</div>
           <button
-            class="roster-head"
             id="roster-head"
             aria-expanded="false"
             aria-controls="roster-body"
           >
-            <span data-icon="users"></span><strong>크루</strong
-            ><small id="crew-count"></small><span data-icon="down"></span>
+            <span data-icon="users"></span>크루
           </button>
           <div id="roster-body" hidden></div>
         </div>
       </section>
       <section class="panel" aria-label="작업 패널">
-        <div id="chat" class="pane">
-          <div id="tasks"></div>
+        <header class="panel-header">
+          <button
+            id="mobile-switch"
+            title="캠프 보기"
+            aria-label="캠프 보기"
+            aria-pressed="false"
+          >
+            <span data-icon="fire"></span>
+          </button>
+          <nav class="toolbar" aria-label="작업 보기">
+            <button data-tab="chat" aria-label="대화" aria-controls="chat">
+              <span data-icon="chat"></span>
+            </button>
+            <button data-tab="log" aria-label="로그" aria-controls="log">
+              <span data-icon="list"></span>
+            </button>
+            <button
+              data-tab="memory"
+              aria-label="메모리"
+              aria-controls="memory"
+            >
+              <span data-icon="book"></span>
+            </button>
+            <button
+              data-tab="flow"
+              aria-label="워크플로우"
+              aria-controls="flow"
+            >
+              <span data-icon="flow"></span>
+            </button>
+            <button
+              id="session-open"
+              aria-label="세션 목록"
+              aria-expanded="false"
+              aria-controls="session-list"
+            >
+              <span data-icon="menu"></span
+              ><small id="session-waiting" aria-hidden="true" hidden></small>
+            </button>
+          </nav>
+          <ul id="session-list" aria-label="세션 목록" hidden></ul>
+        </header>
+        <section class="pane chat" id="chat" aria-label="대화">
+          <div id="tasks" aria-label="진행 중인 업무" hidden></div>
           <div id="messages" aria-label="비서와의 대화"></div>
-          <div id="decision" hidden></div>
-          <form id="composer">
-            <div id="commands" hidden>
-              <button type="button" id="fill-clear">
-                <b>/clear</b><span>현재 설정으로 빈 세션 시작</span>
-              </button>
-            </div>
-            <label class="sr" for="draft">비서에게 메시지</label>
-            <textarea
-              id="draft"
-              rows="2"
-              placeholder="비서에게 메시지 보내기…"
-            ></textarea>
-            <span id="target"></span>
-            <div class="compose-bottom">
-              <button
-                type="button"
-                id="workspace-open"
-                aria-controls="composer-menu"
-                aria-expanded="false"
-                title="프로젝트 폴더 선택"
-              >
-                <span data-icon="folder"></span><span id="project-name"></span
-                ><span data-icon="down"></span>
-              </button>
-              <button
-                type="button"
-                id="approval-open"
-                aria-controls="composer-menu"
-                aria-expanded="false"
-                title="승인 모드 선택"
-              >
-                <span data-icon="shield"></span><span id="approval-name"></span>
-              </button>
-              <div id="actions"></div>
-            </div>
-          </form>
-        </div>
-        <div id="log" class="pane reading" hidden></div>
-        <div id="memory" class="pane reading" hidden></div>
-        <div id="flow" class="pane" hidden><div id="flow-root"></div></div>
+          <div class="chat-footer">
+            <div id="decision" hidden></div>
+            <form id="composer">
+              <div id="commands" hidden>
+                <button type="button" id="fill-clear">
+                  <b>/clear</b> <span>새 대화</span>
+                </button>
+              </div>
+              <div id="target" hidden></div>
+              <label class="sr" for="draft">비서에게 메시지</label>
+              <textarea
+                id="draft"
+                rows="2"
+                placeholder="비서에게 메시지 보내기…"
+              ></textarea>
+              <div class="compose-tools">
+                <button
+                  type="button"
+                  id="workspace-open"
+                  aria-expanded="false"
+                  aria-controls="composer-menu"
+                  title="프로젝트 폴더 선택"
+                >
+                  <span data-icon="folder"></span><span id="project-name"></span
+                  ><span data-icon="down"></span>
+                </button>
+                <button
+                  type="button"
+                  id="approval-open"
+                  aria-expanded="false"
+                  aria-controls="composer-menu"
+                  title="승인 모드 선택"
+                >
+                  <span data-icon="shield"></span
+                  ><span id="approval-name"></span>
+                </button>
+                <div class="compose-actions">
+                  <button type="button" class="icon-button" id="stop" hidden>
+                    <span data-icon="stop"></span>
+                  </button>
+                  <button
+                    type="submit"
+                    class="icon-button"
+                    id="send"
+                    title="보내기"
+                    aria-label="보내기"
+                    disabled
+                  >
+                    <span data-icon="send"></span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </section>
+        <section
+          class="pane reading"
+          id="log"
+          aria-label="로그"
+          hidden
+        ></section>
+        <section
+          class="pane reading"
+          id="memory"
+          aria-label="메모리"
+          hidden
+        ></section>
+        <section class="pane" id="flow" aria-label="워크플로우" hidden>
+          <div id="flow-root"></div>
+        </section>
       </section>
     </main>
     <div id="composer-menu" popover="auto" role="region"></div>
     <dialog id="detail" aria-labelledby="detail-title">
       <header>
         <h2 id="detail-title"></h2>
-        <button class="iconbtn" id="close" aria-label="닫기">
+        <button class="icon-button" id="close" aria-label="닫기">
           <span data-icon="close"></span>
         </button>
       </header>

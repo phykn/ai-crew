@@ -86,42 +86,9 @@ function groupStages(graph) {
   }
   return groups;
 }
-let flowEditor;
-
-function showWorkflow(owner) {
-  if (flowEditor) return;
-  flowEditor = window.mountCrewFlow($("#flow-root"), {
-    graph: owner.workflow,
-    draft: owner.workflowDraft,
-    roles: owner.crew,
-    projectName: owner.name,
-    version: owner.version,
-    validate: groupStages,
-    save(graph, logicChanged) {
-      owner.workflow = graph;
-      if (logicChanged) {
-        owner.version++;
-        record(
-          current,
-          "비서",
-          "워크플로우 v" + owner.version + " 저장 · 다음 새 업무부터 적용",
-        );
-      }
-      render();
-      return owner.version;
-    },
-  });
-}
-
-function releaseWorkflow() {
-  if (!flowEditor) return;
-  project.workflowDraft = flowEditor.getDraft();
-  flowEditor.dispose();
-  flowEditor = null;
-}
-
 function wikiGraph(entries) {
-  if (!entries.length) return '<p class="empty">아직 연결할 문서가 없어요.</p>';
+  if (!entries.length)
+    return '<p class="subtle">아직 연결할 문서가 없어요.</p>';
   const width = 360,
     height = Math.max(140, Math.ceil(entries.length / 2) * 80 + 40);
   const coords = entries.map((_, i) => [

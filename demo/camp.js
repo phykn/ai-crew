@@ -2,11 +2,10 @@
 
 const $ = (selector) => document.querySelector(selector);
 const paths = {
-  fire: "M13 2c1 6-4 7-2 11 2-1 3-3 3-6 4 3 6 6 5 10-1 4-5 6-9 5-5-1-7-5-6-9 1-2 2-4 5-7-1 5 0 6 1 6-1-4 4-6 3-10Z",
+  fire: "M13 2c1 6-4 7-2 11 2-1 3-3 3-6 4 3 6 6 5 10-1 4-5 6-9 5-5-1-7-5-6-9 1-2 2-4 4-6 3-10Z",
   flow: "M3 9h5v5H3z M16 2h5v5h-5z M16 17h5v5h-5z M8 11.5h4V4.5h4m-4 7v8h4",
   menu: "M3 6h18M3 12h18M3 18h18",
   folder: "M3 7V5h6l2 2h10v12H3Z",
-  layers: "m3 8 9-5 9 5-9 5-9-5m0 5 9 5 9-5",
   down: "m6 9 6 6 6-6",
   users:
     "M16 21v-2a5 5 0 0 0-10 0v2M11 5a3.5 3.5 0 1 0 .1 0M18 8a3 3 0 0 1 0 6m1 2c2 1 3 3 3 5",
@@ -14,19 +13,15 @@ const paths = {
   list: "M8 6h13M8 12h13M8 18h13M3 6h1m-1 6h1m-1 6h1",
   book: "M12 5c-3-2-6-2-10-1v15c4-1 7-1 10 1 3-2 6-2 10-1V4c-4-1-7-1-10 1Zm0 1v13",
   close: "m6 6 12 12m0-12L6 18",
-  pin: "m9 3 9 3-2 2-1 5 2 3-12-4 4-1 2-5Zm1 11-4 7",
   send: "m3 11 18-8-7 18-3-8-8-2Zm8 2 10-10",
   stop: "M5 5h14v14H5Z",
   pen: "m4 16 12-12 4 4L8 20l-5 1Z",
   code: "m7 7-5 5 5 5m10-10 5 5-5 5m-3-15-4 20",
   shield: "m12 2 8 4v6c0 4-4 8-8 10-4-2-8-6-8-10V6Zm-4 10 3 3 5-6",
   check: "m3 12 5 5L21 4",
-  play: "m7 4 13 8-13 8Z",
 };
 const icon = (name) =>
-  '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="' +
-  paths[name] +
-  '"/></svg>';
+  `<span data-icon="${name}"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="${paths[name]}"/></svg></span>`;
 const safe = (value) =>
   String(value).replace(
     /[&<>"']/g,
@@ -35,129 +30,479 @@ const safe = (value) =>
         char
       ],
   );
-document
-  .querySelectorAll("[data-icon]")
-  .forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
-
-const defaultCrew = [
-  {
-    role: "비서",
-    name: "여울",
-    color: "#f1c47f",
-    model: "Codex",
-    skill: "업무 조율",
-    icon: "pen",
-    x: 30,
-    y: 61,
-  },
-  {
-    role: "개발",
-    name: "모루",
-    color: "#b4d59d",
-    model: "Codex",
-    skill: "코드 작성",
-    icon: "code",
-    x: 64,
-    y: 77,
-  },
-  {
-    role: "테스트",
-    name: "솔잎",
-    color: "#a9c7f0",
-    model: "로컬 LLM",
-    skill: "테스트 실행",
-    icon: "shield",
-    x: 78,
-    y: 65,
-  },
-  {
-    role: "리뷰",
-    name: "새벽",
-    color: "#d6a8d3",
-    model: "Codex",
-    skill: "변경 검토",
-    icon: "book",
-    x: 24,
-    y: 83,
-  },
-  {
-    role: "플랜",
-    name: "가람",
-    color: "#bce0da",
-    model: "Codex",
-    skill: "범위·완료 조건",
-    icon: "pen",
-    sprite: 2,
-    x: 48,
-    y: 51,
-  },
-  {
-    role: "스타일",
-    name: "단풍",
-    color: "#f6aa8a",
-    model: "Codex",
-    skill: "코딩 스타일 확인",
-    icon: "code",
-    sprite: 0,
-    x: 86,
-    y: 84,
-  },
-];
-const exampleMemories = [
-  {
-    id: "guide",
-    title: "프로젝트 작업 지침",
-    body: "현재 요청과 프로젝트 지침을 우선한다. 플랜에는 관련 문서만 읽고 확인한 근거를 연결한다.",
-    by: "플랜",
-    source: "프로젝트 위키",
-    links: ["search", "checks"],
-  },
-  {
-    id: "search",
-    title: "검색 입력 처리",
-    body: "앞뒤 공백을 제거하고 빈 검색어면 전체 목록을 반환한다.",
-    by: "개발",
-    source: "검색 개선",
-    links: ["checks"],
-  },
-  {
-    id: "checks",
-    title: "변경 검증",
-    body: "리뷰·스타일·테스트 결과를 같은 변경 버전에 연결하고 미확인 항목을 기록한다.",
-    by: "테스트",
-    source: "개발 워크플로우",
-    links: [],
-  },
-];
-const exampleRequest =
-  "빈 검색어와 공백 입력에서 전체 목록이 보이는지 확인해줘.";
-const projects = [];
-function makeProject(name, handle = null) {
-  const entry = {
-    name,
-    handle,
-    sessions: [],
-    memories: [],
-    workflow: makeStages(),
-    version: 1,
-    approval: "수동",
-    wikiView: "목록",
-    memoryView: "wiki",
-    agentMemory: null,
-    personalMemory: {},
-    crew: defaultCrew.map((agent) => ({ ...agent })),
-    lastSession: null,
-  };
-  projects.push(entry);
-  return entry;
+const painted = new WeakMap();
+function paint(element, markup) {
+  if (painted.get(element) === markup) return;
+  element.innerHTML = markup;
+  painted.set(element, markup);
 }
-const exampleProject = makeProject("ai-crew");
-exampleProject.memories = exampleMemories;
-exampleProject.personalMemory[1] = [
-  "검색 조건을 바꾸기 전에 기존 공백 처리 규칙을 확인한다.",
-];
-let project = exampleProject;
-const campsites = [
+
+const draft = $("#draft");
+const messages = $("#messages");
+const tasks = $("#tasks");
+const decision = $("#decision");
+const sessionList = $("#session-list");
+const sessionButton = $("#session-open");
+const roster = $("#roster-body");
+const mobileSwitch = $("#mobile-switch");
+const popover = $("#composer-menu");
+const detail = $("#detail");
+const model = createDemo((session) => {
+  if (session.project === project) render();
+});
+let project = model.example;
+let current = project.lastSession;
+let tab = "chat";
+let logJob = null;
+let editor = null;
+let popoverSource = null;
+let campBeat = 0;
+let stopTarget = null;
+let pressedStopTarget = null;
+
+for (const span of document.querySelectorAll("[data-icon]")) {
+  span.outerHTML = icon(span.dataset.icon);
+}
+
+function showTab(name, job = null) {
+  const previousTab = tab;
+  if (previousTab === "chat" && name !== "chat")
+    current.readPosition = messages.scrollTop;
+  tab = name;
+  logJob = job;
+  sessionList.hidden = true;
+  sessionButton.setAttribute("aria-expanded", "false");
+  if (popover.matches(":popover-open")) popover.hidePopover();
+  toggleCamp(false);
+  for (const button of document.querySelectorAll("[data-tab]")) {
+    const active = name === button.dataset.tab;
+    $("#" + button.dataset.tab).hidden = !active;
+    button.setAttribute("aria-current", String(active));
+  }
+  render();
+  if (name === "chat" && previousTab !== "chat") {
+    messages.scrollTop = current.readPosition ?? messages.scrollHeight;
+  }
+  if (name === "flow" && !editor) {
+    const owner = project;
+    editor = window.mountCrewFlow($("#flow-root"), {
+      graph: owner.workflow,
+      draft: owner.workflowDraft,
+      roles: owner.crew,
+      projectName: owner.name,
+      version: owner.version,
+      validate: groupStages,
+      save(graph, logicChanged) {
+        owner.workflow = graph;
+        if (logicChanged) {
+          owner.version++;
+          model.log(
+            current,
+            "비서",
+            "워크플로우 v" + owner.version + " 저장 · 다음 새 업무부터 적용",
+          );
+        }
+        return owner.version;
+      },
+    });
+  }
+}
+
+function switchSession(session) {
+  if (project !== session.project && editor) {
+    project.workflowDraft = editor.getDraft();
+    editor.dispose();
+    editor = null;
+  }
+  current.readPosition = messages.scrollTop;
+  current = session;
+  project = session.project;
+  project.lastSession = session;
+  draft.value = session.draft;
+  showTab("chat");
+  messages.scrollTop = session.readPosition ?? messages.scrollHeight;
+}
+
+function toggleCamp(shown) {
+  document.body.classList.toggle("camp-visible", shown);
+  mobileSwitch.setAttribute("aria-pressed", String(shown));
+  mobileSwitch.ariaLabel = mobileSwitch.title = shown
+    ? "작업 보기"
+    : "캠프 보기";
+}
+
+function render() {
+  drawSessionList();
+  if (
+    !roster.hidden &&
+    !roster.contains(document.activeElement.closest("input"))
+  )
+    drawRoster();
+  drawActors();
+  if (tab === "chat") drawChat();
+  if (tab === "log") drawLog();
+  if (tab === "memory") drawMemory();
+}
+
+function drawChat() {
+  const activeJobs = current.jobs.filter((job) =>
+    activeStates.includes(job.state),
+  );
+  const waiting = activeJobs.filter((job) => job.state === "approval");
+  const question =
+    waiting.find((job) => job.id === current.approvalFocus) || waiting[0];
+  const topJobs = activeJobs.filter((job) => job !== question);
+  tasks.hidden = !topJobs.length;
+  paint(
+    tasks,
+    topJobs
+      .map(
+        (job) => `<div class="task">
+    <button class="task-title" data-job="${job.id}" title="${safe(job.title)}">${safe(job.title)}</button>
+    ${
+      job.state === "approval"
+        ? `<button class="task-phase" data-question="${job.id}" aria-label="${safe(job.title)} 승인 질문으로 이동">승인 대기</button>`
+        : `<span class="task-phase">${safe(jobStatus(job))}</span>`
+    }
+  </div>`,
+      )
+      .join(""),
+  );
+
+  decision.hidden = !question;
+  paint(
+    decision,
+    question
+      ? `<section aria-label="승인 요청">
+    <button class="task-title decision-title" data-job="${question.id}" title="${safe(question.title)} 업무 상세">${safe(question.title)}</button>
+    <div class="decision-layout">
+      <div><p>${safe(question.question)}</p><small>${jobStage(question)
+        .map((stage) => safe(project.crew[stage.role].name))
+        .join(" · ")} / ${safe(project.name)}</small></div>
+      <div class="decision-actions">
+        <button class="primary" data-allow="${question.id}">허용</button>
+        <button class="secondary" data-deny="${question.id}">거절</button>
+      </div>
+    </div>
+  </section>`
+      : "",
+  );
+
+  const followsLatest =
+    messages.scrollHeight - messages.scrollTop - messages.clientHeight < 32;
+  const lastStops = new Map(
+    current.messages
+      .filter((message) => message.action === "resume")
+      .map((message) => [message.jobId, message]),
+  );
+  const markup = current.messages
+    .map((message) => {
+      const job = current.jobs.find((item) => item.id === message.jobId);
+      const action =
+        message.action === "log"
+          ? `<button class="text-action" data-job-log="${job.id}">업무 기록 보기</button>`
+          : job?.state === "stopped" && lastStops.get(job.id) === message
+            ? `<button class="text-action" data-resume="${job.id}">이어가기</button>`
+            : "";
+      return `<div class="bubble${message.user ? " user" : ""}"><span class="sr">${message.user ? "나" : "비서"} </span>${safe(message.text)}${action}</div>`;
+    })
+    .join("");
+  paint(
+    messages,
+    markup
+      ? `<div class="transcript">${markup}</div>`
+      : `<div class="empty-chat"><h1>무엇을 맡길까요?</h1>
+      ${project === model.example ? '<button id="example-request">빈 검색어 처리 점검 ↗</button>' : ""}
+    </div>`,
+  );
+  if (followsLatest) messages.scrollTop = messages.scrollHeight;
+  drawComposer(activeJobs);
+}
+
+function drawComposer(
+  activeJobs = current.jobs.filter((job) => activeStates.includes(job.state)),
+) {
+  const runnable = activeJobs.filter((job) => job.state !== "approval");
+  stopTarget = runnable.includes(current.selected)
+    ? current.selected
+    : runnable.length === 1
+      ? runnable[0]
+      : null;
+  const text = draft.value.trim();
+  const linked = current.steer;
+  const unavailable = linked && !steerableStates.includes(linked.state);
+  const linkLabel = linked
+    ? (unavailable ? "업무가 끝났어요 · " : "추가 지시 · ") + linked.title
+    : stopTarget && (activeJobs.length > 1 || stopTarget.state === "stopping")
+      ? (stopTarget.state === "stopping" ? "중단 중 · " : "멈춤 대상 · ") +
+        stopTarget.title
+      : "";
+  const target = $("#target");
+  target.hidden = !linkLabel;
+  paint(
+    target,
+    linkLabel
+      ? `<span>${safe(linkLabel)}</span>${linked ? '<button id="unlink" aria-label="추가 지시 대상 해제">×</button>' : ""}`
+      : "",
+  );
+  $("#commands").hidden =
+    !text.startsWith("/") || text === "/clear" || !"/clear".startsWith(text);
+  $("#stop").hidden = !stopTarget;
+  $("#stop").disabled = stopTarget?.state === "stopping";
+  $("#stop").ariaLabel = $("#stop").title = stopTarget
+    ? stopTarget.title + " 멈춤"
+    : "멈춤";
+  $("#send").hidden = !!stopTarget && !text;
+  $("#send").disabled =
+    !text || !!(unavailable && text !== "/clear" && !isNewWork(text));
+  $("#project-name").textContent = project.name;
+  $("#workspace-open").title = "프로젝트 폴더 선택 · " + project.name;
+  $("#approval-name").textContent = "승인 " + project.approval;
+}
+
+function isNewWork(text) {
+  return /새 업무|새 작업|별도 업무|별도 작업/.test(text);
+}
+
+function send() {
+  if ($("#send").disabled) return;
+  const text = draft.value.trim();
+  current.draft = draft.value = "";
+  if (text === "/clear") {
+    switchSession(model.newSession(project));
+  } else {
+    model.submit(current, text, isNewWork(text));
+    render();
+    messages.scrollTop = messages.scrollHeight;
+  }
+  draft.focus();
+}
+
+function drawSessionList() {
+  const waiting = project.sessions
+    .filter((session) => session !== current)
+    .flatMap((session) => session.jobs)
+    .filter((job) => job.state === "approval").length;
+  const indicator = $("#session-waiting");
+  indicator.hidden = !waiting;
+  indicator.textContent = waiting || "";
+  sessionButton.ariaLabel = waiting
+    ? "세션 목록 · 답변 대기 " + waiting + "건"
+    : "세션 목록";
+  if (sessionList.hidden) return;
+  const options = project.sessions
+    .map((session, index) => {
+      const pending = session.jobs.filter(
+        (job) => job.state === "approval",
+      ).length;
+      const activity = pending
+        ? "답변 대기 " + pending + "건"
+        : session.events[0]?.time || "";
+      return `<li><button class="menu-option" data-session="${index}"${session === current ? ' aria-current="true"' : ""}>
+      <strong>${safe(session.name)}</strong>${activity ? `<small>${safe(activity)}</small>` : ""}
+    </button></li>`;
+    })
+    .reverse();
+  paint(
+    sessionList,
+    '<li><button id="new-session" class="menu-option">＋ 새 대화</button></li>' +
+      options.join(""),
+  );
+}
+
+function drawLog() {
+  const view = $("#log");
+  const events = current.events.filter(
+    (event) => !logJob || event.jobId === logJob.id,
+  );
+  const opened = new Set(
+    [...view.querySelectorAll("details[open]")].map((row) => row.dataset.event),
+  );
+  const focused = document.activeElement.closest("[data-event]")?.dataset.event;
+  const anchor =
+    view.scrollTop > 0
+      ? [...view.querySelectorAll(".log-row")].find(
+          (row) =>
+            row.getBoundingClientRect().bottom >
+            view.getBoundingClientRect().top,
+        )
+      : null;
+  const top = anchor?.getBoundingClientRect().top;
+  paint(
+    view,
+    (logJob
+      ? `<button id="all-log" class="text-action">← 전체 기록</button><h2>${safe(logJob.title)}</h2>`
+      : "") +
+      (events
+        .map(
+          (event) => `<article class="log-row" data-event-row="${event.id}">
+      <time>${safe(event.time)}</time><div><strong>${safe(event.role)}</strong><p>${safe(event.text)}</p>
+      ${event.details ? `<details data-event="${event.id}"${opened.has(String(event.id)) ? " open" : ""}><summary>완료 조건</summary><p>${safe(event.details)}</p></details>` : ""}</div>
+    </article>`,
+        )
+        .join("") || '<p class="subtle">업무가 시작되면 여기에 기록돼요.</p>'),
+  );
+  const row =
+    anchor &&
+    view.querySelector('[data-event-row="' + anchor.dataset.eventRow + '"]');
+  if (row) view.scrollTop += row.getBoundingClientRect().top - top;
+  if (focused)
+    view
+      .querySelector('[data-event="' + focused + '"] summary')
+      ?.focus({ preventScroll: true });
+}
+
+function drawMemory() {
+  const view = $("#memory");
+  const wiki = project.memoryView === "wiki";
+  const article =
+    wiki && project.memories.find((entry) => entry.id === project.wikiArticle);
+  const tabBar = `<header class="memory-tools"><div class="memory-tabs" aria-label="메모리 범위">
+    <button data-memory-view="wiki" aria-pressed="${wiki}">프로젝트 위키</button>
+    <button data-memory-view="agents" aria-pressed="${!wiki}">에이전트 기억</button></div>
+    ${
+      wiki && !article
+        ? `<div class="wiki-views" aria-label="위키 보기">
+      <button data-view="list" aria-pressed="${project.wikiView === "list"}">목록</button>
+      <button data-view="graph" aria-pressed="${project.wikiView === "graph"}">노드</button></div>`
+        : ""
+    }
+  </header>`;
+  let content;
+  if (!wiki) {
+    content = project.crew
+      .map((agent, index) => {
+        const notes = project.personalMemory[index] || [];
+        if (agent.temporary && !agent.hired && !notes.length) return "";
+        const expanded = project.agentMemory === index;
+        return `<button class="memory-row" data-note="${index}" aria-expanded="${expanded}">${safe(agent.role)} · ${safe(agent.name)}<small>${notes.length}개</small></button>
+        ${expanded ? notes.map((note, i) => `<div class="memory-note"><p>${safe(note)}</p><button class="text-action" data-delete-note="${i}">삭제</button></div>`).join("") || '<p class="subtle">아직 남긴 기억이 없어요.</p>' : ""}`;
+      })
+      .join("");
+  } else if (article) {
+    const links = article.links
+      .map((id) => project.memories.find((entry) => entry.id === id))
+      .filter(Boolean);
+    content = `<article class="wiki-article">
+      <button class="text-action" id="wiki-back">← 위키 목록</button>
+      <h2>${safe(article.title)}</h2>
+      <small>${safe(article.by)} · ${safe(article.source)}</small>
+      <p>${safe(article.body)}</p>
+      ${links.map((entry) => `<button class="text-action" data-linked="${safe(entry.id)}">→ ${safe(entry.title)}</button>`).join("")}
+      <footer><button class="text-action" id="delete-wiki">문서 삭제</button></footer>
+    </article>`;
+  } else if (project.wikiView === "graph") {
+    content = wikiGraph(project.memories);
+  } else {
+    content =
+      project.memories
+        .map(
+          (entry, index) =>
+            `<button class="memory-row" data-memory="${index}">${safe(entry.title)}</button>`,
+        )
+        .join("") || '<p class="subtle">아직 문서가 없어요.</p>';
+  }
+  paint(view, tabBar + content);
+}
+
+function openDialog(title, content) {
+  $("#detail-title").textContent = title;
+  paint($("#detail-body"), content);
+  if (!detail.open) detail.showModal();
+}
+
+function openJob(job) {
+  current.selected = job;
+  drawComposer();
+  openDialog(
+    job.title,
+    `<p class="subtle">워크플로우 v${job.version} · ${safe(jobStatus(job))}</p>
+    <ol class="detail-stages">${job.groups
+      .flatMap((group, step) =>
+        group.map(
+          (stage) => `<li>
+      ${safe(stage.label)} <span class="subtle">· ${safe(project.crew[stage.role].name)} · ${step < job.step ? "완료" : step === job.step ? "현재" : "예정"}</span>
+      <small>${safe(stage.criterion)}</small></li>`,
+        ),
+      )
+      .join("")}</ol>
+    <div class="detail-actions">
+      <button class="secondary" data-job-log="${job.id}">업무 로그</button>
+      ${steerableStates.includes(job.state) ? `<button class="secondary" data-steer="${job.id}">추가 지시</button><button class="secondary" data-stop="${job.id}">멈춤</button>` : ""}
+    </div>`,
+  );
+}
+
+function openAgent(index) {
+  const agent = project.crew[index];
+  openDialog(
+    agent.role + " · " + agent.name,
+    `
+    <label class="field">모델<select id="model" data-agent="${index}">
+      ${["Codex", "로컬 LLM"].map((name) => `<option${name === agent.model ? " selected" : ""}>${name}</option>`).join("")}
+    </select></label>
+    <div class="field"><span>스킬</span><span>${safe(agent.skill)}</span></div>
+    <details class="field"><summary>역할 지침</summary><p>${safe(agent.skill)}를 맡고 확인한 근거를 인계합니다.</p></details>
+    <div class="detail-actions"><button class="secondary" data-agent-memory="${index}">기억 보기</button></div>`,
+  );
+}
+
+function drawRoster() {
+  const content = project.crew
+    .map((agent, index) => {
+      if (agent.temporary && !agent.hired && !agent.leaving) return "";
+      const action = agent.leaving
+        ? "퇴장 예정"
+        : agent.hired
+          ? "해고"
+          : "재고용";
+      return `<div class="crew-row" style="--agent:${agent.color}">
+      <span>${safe(agent.role)}</span>
+      <button class="crew-name" data-name="${index}" title="별명 변경">${safe(agent.name)}</button>
+      <button class="crew-settings" data-agent="${index}" aria-label="${safe(agent.role)} 상세 · ${safe(agent.model)}" title="${safe(agent.skill)}">${safe(agent.model)} ${icon(agent.icon)}</button>
+      <button class="icon-button" data-employ="${index}" title="${action}" aria-label="${safe(agent.role)} ${action}" ${agent.leaving ? "disabled" : ""}>${icon(agent.hired ? "close" : agent.leaving ? "down" : "check")}</button>
+    </div>`;
+    })
+    .join("");
+  paint(
+    roster,
+    content +
+      (project.crew.some(
+        (agent) => agent.temporary && (agent.hired || agent.leaving),
+      )
+        ? ""
+        : '<button id="hire-temp" class="text-action">＋ 알바 고용</button>'),
+  );
+}
+
+function renameAgent(button, index) {
+  const agent = project.crew[index];
+  const input = document.createElement("input");
+  input.maxLength = 12;
+  input.ariaLabel = agent.role + " 별명";
+  input.value = agent.name;
+  button.replaceWith(input);
+  let cancelled = false;
+  input.onkeydown = (event) => {
+    if (event.isComposing) return;
+    if (event.key === "Escape" || event.key === "Enter") {
+      event.preventDefault();
+      cancelled = event.key === "Escape";
+      input.blur();
+      roster.querySelector('[data-name="' + index + '"]')?.focus();
+    }
+  };
+  input.onblur = () => {
+    if (!cancelled && input.value.trim()) agent.name = input.value.trim();
+    input.replaceWith(button);
+    drawRoster();
+    drawActors();
+  };
+  input.focus();
+  input.select();
+}
+
+const campWalk = [
   [0, 0],
   [-2, 1],
   [1, 2],
@@ -165,1395 +510,377 @@ const campsites = [
 ];
 const remarks = [
   "불 옆이 따뜻하네.",
-  "잠깐 숨 좀 돌릴까요?",
+  "잠깐 쉬어 갈까요?",
   "장작이 잘 타네요.",
   "기록을 정리해 둘게요.",
 ];
-let campBeat = 0;
-let nextId = 1;
-let nextEventId = 1;
-let current,
-  tab = "chat",
-  logJob = null;
-const reply = (session, text, jobId, stopped = false) =>
-  session.messages.push({ text, jobId, stopped });
-function newSession(owner = project) {
-  const session = {
-    project: owner,
-    name: "새 대화",
-    messages: [],
-    jobs: [],
-    events: [],
-    selected: null,
-    draft: "",
-  };
-  owner.sessions.push(session);
-  return session;
-}
-function record(session, role, text, job, details) {
-  session.events.unshift({
-    id: nextEventId++,
-    role,
-    text,
-    jobId: job?.id,
-    details,
-    time: new Date().toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }),
-  });
-}
-const activeStates = ["run", "stopping", "approval", "queued"];
-
-function activeJob(session) {
-  const running = session.jobs.filter((job) =>
-    ["run", "stopping", "queued"].includes(job.state),
-  );
-  return (
-    running.find((job) => job.id === session.selected) ||
-    (running.length === 1 ? running[0] : undefined)
-  );
-}
-function stageLabel(job) {
-  return job.groups[job.step].map((s) => s.label).join(" · ");
-}
-function startJob(session, title, step = 0) {
-  const job = {
-    id: nextId++,
-    title,
-    state: "run",
-    step,
-    groups: groupStages(session.project.workflow),
-    version: session.project.version,
-  };
-  session.jobs.push(job);
-  session.selected = job.id;
-  record(session, "비서", title + " · 워크플로우 v" + job.version, job);
-  for (const earlier of job.groups.slice(0, step).flat())
-    record(
-      session,
-      session.project.crew[earlier.role].role,
-      earlier.label + " 인계 · " + earlier.criterion,
-      job,
-    );
-  enterStage(session, job);
-  return job;
-}
-function enterStage(session, job) {
-  const group = job.groups[job.step];
-  const mode = session.project.approval;
-  const scope = [...new Set(group.map((s) => s.access))].join(" · ");
-  if (
-    mode === "수동" ||
-    (mode === "자동" && group.some((s) => s.access === "외부 전달"))
-  ) {
-    job.state = "approval";
-    const question = {
-      text: scope + " 권한을 허용할까요?",
-      detail:
-        group
-          .map(
-            (stage) =>
-              session.project.crew[stage.role].name +
-              " · " +
-              session.project.crew[stage.role].role,
-          )
-          .join(" / ") +
-        " — " +
-        session.project.name,
-      approvalId: job.id,
-    };
-    session.messages.push(question);
-    job.question = question;
-    record(session, "비서", mode + " · 권한 승인 대기 · " + scope, job);
-    return;
-  }
-  record(
-    session,
-    "비서",
-    mode === "자동"
-      ? "자동 · 비서가 프로젝트 내 작업으로 판단해 승인 · " + scope
-      : "항상 · 모든 요청 권한 승인 · " + scope,
-    job,
-  );
-  schedule(session, job);
-}
-function decide(job, allow) {
-  if (job?.state !== "approval") return;
-  job.question.answer = allow ? "허용" : "거절";
-  if (!allow) job.state = "denied";
-  record(
-    current,
-    "사용자",
-    stageLabel(job) +
-      " · " +
-      job.groups[job.step].map((s) => s.access).join(" / ") +
-      " · " +
-      job.question.answer,
-    job,
-  );
-  if (allow) schedule(current, job);
-  else
-    reply(current, "권한이 거절되어 「" + job.title + "」을 멈췄어요.", job.id);
-  current.approvalFocus = null;
-  render();
-  $("#draft").focus();
-}
-function schedule(session, job) {
-  clearTimeout(job.timer);
-  const group = job.groups[job.step];
-  const busy = session.jobs.some(
-    (other) =>
-      other !== job &&
-      ["run", "stopping"].includes(other.state) &&
-      other.groups[other.step].some((stage) =>
-        group.some((next) => next.role === stage.role),
-      ),
-  );
-  if (busy) {
-    if (job.state !== "queued")
-      record(session, "비서", "앞 업무의 같은 담당자 종료 대기", job);
-    job.state = "queued";
-    return;
-  }
-  job.state = "run";
-  for (const stage of group)
-    record(
-      session,
-      session.project.crew[stage.role].role,
-      stage.label + " 시작",
-      job,
-      stage.criterion,
-    );
-  job.timer = setTimeout(() => {
-    if (job.state !== "run") return;
-    for (const stage of group)
-      record(
-        session,
-        session.project.crew[stage.role].role,
-        stage.label + " 확인 완료",
-        job,
-        "모의 완료 조건 · " + stage.criterion,
-      );
-    if (job.step + 1 < job.groups.length) {
-      job.step++;
-      enterStage(session, job);
-    } else {
-      job.state = "done";
-      const evidence = group.map((s) => s.label).join(", ");
-      record(session, "비서", "결과 취합 · " + evidence, job);
-      reply(
-        session,
-        "「" + job.title + "」의 " + evidence + " 확인을 마쳤어요.",
-        job.id,
-      );
-      session.project.memories.push({
-        id: "job-" + job.id,
-        title: job.title + " 결과",
-        body: evidence + " 확인 완료 (모의 실행).",
-        by: "비서",
-        source: job.title,
-        links: [],
-      });
-    }
-    startQueuedJobs(session);
-    if (session === current) render();
-    else if (session.project === project) {
-      drawContext();
-      drawActors();
-    }
-  }, 9000);
-}
-function startQueuedJobs(session) {
-  for (const job of session.jobs) {
-    if (job.state === "queued") schedule(session, job);
-  }
-}
-
-function stopJob(session, job) {
-  if (!["run", "approval", "queued"].includes(job.state)) return;
-  if (job.state === "approval") job.question.answer = "중단";
-  clearTimeout(job.timer);
-  job.state = "stopping";
-  record(session, "비서", "중단 요청 접수", job);
-  render();
-  job.timer = setTimeout(() => {
-    job.state = "stopped";
-    record(session, "비서", "실행 정지 확인", job);
-    reply(
-      session,
-      "「" + job.title + "」을 멈췄어요. 지금까지의 단계는 남겨뒀어요.",
-      job.id,
-      true,
-    );
-    startQueuedJobs(session);
-    if (session === current) render();
-    else if (session.project === project) {
-      drawContext();
-      drawActors();
-    }
-  }, 700);
-}
-function resume(job) {
-  if (job.state !== "stopped") return;
-  job.state = "run";
-  current.selected = job.id;
-  record(current, "비서", "마지막 단계에서 이어가기", job);
-  enterStage(current, job);
-  render();
-}
-function modal(title, html) {
-  $("#detail-title").textContent = title;
-  $("#detail-body").innerHTML = html;
-  if (!$("#detail").open) $("#detail").showModal();
-}
-$("#close").onclick = () => $("#detail").close();
-$("#detail").onclick = (e) => {
-  if (e.target === $("#detail")) $("#detail").close();
-};
-function agentDetail(index) {
-  const agent = project.crew[index];
-  modal(
-    agent.role + " · " + agent.name,
-    "<p>" +
-      safe(agent.skill) +
-      ' 담당</p><label class="field">모델<select id="model"><option>Codex</option><option>로컬 LLM</option></select></label><div class="field">스킬<span class="model">' +
-      safe(agent.skill) +
-      "</span></div>",
-  );
-  const memory = document.createElement("button");
-  memory.className = "text-action";
-  memory.textContent = "에이전트 기억 보기";
-  memory.onclick = () => {
-    $("#detail").close();
-    project.memoryView = "agents";
-    project.agentMemory = index;
-    openTab("memory");
-  };
-  $("#detail-body").append(memory);
-  $("#model").value = agent.model;
-  $("#model").onchange = (e) => {
-    agent.model = e.target.value;
-    record(
-      current,
-      "비서",
-      agent.role + " 모델을 " + agent.model + "으로 변경",
-    );
-    render();
-  };
-}
-function renameAgent(index) {
-  const agent = project.crew[index];
-  const button = document.querySelector('[data-name="' + index + '"]');
-  const input = document.createElement("input");
-  input.value = agent.name;
-  input.maxLength = 12;
-  input.setAttribute("aria-label", agent.role + " 별명");
-  button.replaceWith(input);
-  input.focus();
-  input.select();
-  let cancelled = false;
-  input.onkeydown = (e) => {
-    if (e.isComposing) return;
-    if (e.key === "Escape") {
-      cancelled = true;
-      input.blur();
-    }
-    if (e.key === "Enter") input.blur();
-  };
-  input.onblur = () => {
-    if (!cancelled && input.value.trim()) agent.name = input.value.trim();
-    drawRoster();
-    drawActors();
-  };
-}
-function drawRoster() {
-  if (
-    $("#roster-body input") === document.activeElement &&
-    document.activeElement?.tagName === "INPUT"
-  )
-    return;
-  $("#crew-count").textContent = project.crew.length;
-  $("#roster-body").innerHTML = project.crew
-    .map(
-      (agent, i) =>
-        '<div class="crew-row" style="--agent:' +
-        agent.color +
-        '"><span class="portrait" style="background-image:url(assets/crew-' +
-        (agent.sprite ?? i) +
-        '.webp)"></span><small>' +
-        agent.role +
-        '</small><button class="crew-name" data-name="' +
-        i +
-        '" title="별명 변경">' +
-        safe(agent.name) +
-        '</button><button class="crew-info" data-detail="' +
-        i +
-        '" aria-label="' +
-        agent.role +
-        " 상세 · " +
-        agent.model +
-        " · " +
-        agent.skill +
-        '" title="' +
-        agent.skill +
-        '"><span>' +
-        agent.model +
-        "</span>" +
-        icon(agent.icon) +
-        "</button></div>",
-    )
-    .join("");
-  document
-    .querySelectorAll("[data-name]")
-    .forEach((el) => (el.onclick = () => renameAgent(+el.dataset.name)));
-  document
-    .querySelectorAll("[data-detail]")
-    .forEach((el) => (el.onclick = () => agentDetail(+el.dataset.detail)));
-}
 function drawActors() {
   const land = $("#land");
-  project.crew.forEach((agent, i) => {
-    const assigned = project.sessions.flatMap((session) =>
-      session.jobs
-        .filter(
-          (job) =>
-            ["run", "approval"].includes(job.state) &&
-            job.groups[job.step].some((stage) => stage.role === i),
-        )
-        .map((job) => ({ session, job })),
+  const jobs = model.jobsIn(project);
+  for (const actor of land.querySelectorAll("[data-actor]")) {
+    if (!project.crew[Number(actor.dataset.actor)]) actor.remove();
+  }
+  project.crew.forEach((agent, index) => {
+    const available = agent.hired || agent.leaving;
+    const assignments = jobs.filter(
+      (job) =>
+        ["approval", "run", "stopping"].includes(job.state) &&
+        jobStage(job).some((stage) => stage.role === index),
     );
-    const assignment =
-      assigned.find(({ job }) => job.id === current.selected) ||
-      assigned.find(({ job }) => job.state === "run") ||
-      assigned[0];
-    const job = assignment?.job;
-    let actor = land.querySelector('[data-actor="' + i + '"]');
+    const job =
+      assignments.find((item) => item.state === "run") ||
+      assignments.find((item) => item === current.selected) ||
+      assignments[0];
+    let actor = land.querySelector('[data-actor="' + index + '"]');
     if (!actor) {
       actor = document.createElement("button");
-      actor.dataset.actor = i;
-      actor.innerHTML =
-        '<span class="actor-label"></span><img alt="" src="assets/crew-' +
-        (agent.sprite ?? i) +
-        '.webp">';
+      actor.className = "actor";
+      actor.dataset.actor = index;
+      actor.innerHTML = `<span class="actor-label"></span><img alt="" src="assets/crew-${agent.sprite}.webp">`;
       land.append(actor);
-    }
-    actor.className =
-      "actor" + (job?.state === "run" ? " work" : job ? " waiting" : "");
-    actor.style.setProperty("--agent", agent.color);
-    const offset =
-      job || !campBeat ? [0, 0] : campsites[(campBeat + i) % campsites.length];
-    actor.style.left = agent.x + (job ? 2 : offset[0]) + "%";
-    actor.style.top = agent.y + offset[1] + "%";
-    actor.querySelector("span").innerHTML =
-      "<strong>" +
-      safe(agent.name) +
-      "</strong>" +
-      (job
-        ? job.state === "approval"
-          ? "승인 대기"
-          : safe(job.groups[job.step].find((s) => s.role === i).label)
-        : campBeat > 0 &&
-            campBeat % 3 === 1 &&
-            i === campBeat % project.crew.length
-          ? remarks[i % remarks.length]
-          : "");
-    actor.onclick = () => {
-      if (!job) return agentDetail(i);
-      if (current !== assignment.session) switchSession(assignment.session);
-      if (job.state === "approval") {
-        current.approvalFocus = job.id;
-        openTab("chat");
-        $("#decision [data-allow]").focus();
-      } else {
-        jobDetail(job);
+      if (agent.temporary) {
+        actor.style.left = "108%";
+        actor.getBoundingClientRect();
       }
+    }
+    actor.inert = !available;
+    actor.classList.toggle(
+      "work",
+      job?.state === "run" || (job?.state === "stopping" && job.holdsRoles),
+    );
+    actor.style.setProperty("--agent", agent.color);
+    const [dx, dy] = job
+      ? [2, 0]
+      : campWalk[(campBeat + index) % campWalk.length];
+    actor.style.left =
+      (available ? agent.x + dx : agent.x < 50 ? -15 : 115) + "%";
+    actor.style.top = agent.y + dy + "%";
+    const stage = job && jobStage(job).find((item) => item.role === index);
+    const status = job
+      ? job.state === "run"
+        ? stage.label
+        : jobStatus(job)
+      : campBeat > 0 &&
+          campBeat % 3 === 1 &&
+          index === campBeat % project.crew.length
+        ? remarks[index % remarks.length]
+        : "";
+    paint(
+      actor.querySelector(".actor-label"),
+      `<strong>${safe(agent.name)}</strong>${status ? " · " + safe(status) : ""}`,
+    );
+    actor.onclick = () => {
+      if (!job) return openAgent(index);
+      if (current !== job.session) switchSession(job.session);
+      if (job.state === "approval") return showApproval(job);
+      openJob(job);
     };
   });
 }
-function jobDetail(job) {
-  modal(
-    job.title,
-    "<p>워크플로우 v" +
-      job.version +
-      " · " +
-      (job.step + 1) +
-      "/" +
-      job.groups.length +
-      '단계</p><ul class="stage-facts">' +
-      job.groups
-        .flatMap((group, i) =>
-          group.map(
-            (s) =>
-              "<li>" +
-              safe(s.label) +
-              " · " +
-              safe(project.crew[s.role].name) +
-              "<small>" +
-              (i < job.step ? "완료" : i === job.step ? "현재" : "예정") +
-              " · " +
-              safe(s.criterion) +
-              "</small></li>",
-          ),
-        )
-        .join("") +
-      "</ul>" +
-      '<div class="dialog-actions"><button id="job-log" class="secondary">업무 로그</button><button id="job-steer" class="secondary">추가 지시</button><button id="job-stop" class="secondary">멈춤</button></div>',
-  );
-  $("#job-log").onclick = () => {
-    $("#detail").close();
-    openJobLog(job.id);
-  };
-  $("#job-steer").disabled = !["approval", "run", "queued"].includes(job.state);
-  $("#job-steer").onclick = () => {
-    $("#detail").close();
-    current.selected = job.id;
-    current.steerJob = job.id;
-    openTab("chat");
-    $("#draft").focus();
-  };
-  $("#job-stop").disabled = !["approval", "run", "queued"].includes(job.state);
-  $("#job-stop").onclick = () => {
-    $("#detail").close();
-    stopJob(current, job);
-  };
-}
-function findApproval() {
-  const waiting = current.jobs.filter((job) => job.state === "approval");
-  return waiting.find((job) => job.id === current.approvalFocus) || waiting[0];
+
+function showApproval(job) {
+  current.approvalFocus = job.id;
+  showTab("chat");
+  decision.querySelector("[data-allow]")?.focus();
 }
 
-function openTask(job) {
-  current.selected = job.id;
-  drawActors();
-  drawComposer();
-  jobDetail(job);
-}
-
-function drawTasks() {
-  const target = $("#tasks");
-  const approval = findApproval();
-  target.innerHTML = current.jobs
-    .filter((job) => job !== approval && activeStates.includes(job.state))
-    .map(
-      (job) =>
-        '<article class="task"><button class="task-title" data-job="' +
-        job.id +
-        '">' +
-        safe(job.title) +
-        "</button>" +
-        (job.state === "approval"
-          ? '<button class="task-phase chip pending" data-question="' +
-            job.id +
-            '" aria-label="' +
-            safe(job.title) +
-            ' 승인 질문으로 이동">승인 대기</button>'
-          : '<span class="task-phase">' +
-            safe(
-              job.state === "stopping"
-                ? "중단 중"
-                : job.state === "queued"
-                  ? "앞 업무 대기"
-                  : stageLabel(job),
-            ) +
-            "</span>") +
-        "</article>",
-    )
-    .join("");
-  target
-    .querySelectorAll("[data-job]")
-    .forEach(
-      (button) =>
-        (button.onclick = () =>
-          openTask(
-            current.jobs.find((job) => job.id === Number(button.dataset.job)),
-          )),
-    );
-  target.querySelectorAll("[data-question]").forEach(
-    (button) =>
-      (button.onclick = () => {
-        current.approvalFocus = Number(button.dataset.question);
-        drawTasks();
-        drawDecision();
-        $("#decision [data-allow]").focus();
-      }),
-  );
-}
-
-function drawDecision() {
-  const box = $("#decision");
-  const job = findApproval();
-  const focused = document.activeElement;
-  const focusedAction = ["data-approval-job", "data-allow", "data-deny"].find(
-    (action) =>
-      box.contains(focused) && focused.getAttribute(action) === String(job?.id),
-  );
-  box.hidden = !job;
-  if (!job) {
-    box.replaceChildren();
+function openMenu(button, label, content) {
+  if (popoverSource === button && popover.matches(":popover-open")) {
+    popover.hidePopover();
+    button.focus();
     return;
   }
-  box.innerHTML =
-    '<section aria-label="승인 요청"><button class="task-title" data-approval-job="' +
-    job.id +
-    '">' +
-    safe(job.title) +
-    "</button><p>" +
-    safe(job.question.text) +
-    '</p><p class="decision-scope">' +
-    safe(job.question.detail) +
-    '</p><div class="decision-actions">' +
-    '<button class="primary" data-allow="' +
-    job.id +
-    '">허용</button>' +
-    '<button class="secondary" data-deny="' +
-    job.id +
-    '">거절</button></div></section>';
-  box.querySelector("[data-allow]").onclick = () => decide(job, true);
-  box.querySelector("[data-deny]").onclick = () => decide(job, false);
-  box.querySelector("[data-approval-job]").onclick = () => openTask(job);
-  if (focusedAction) box.querySelector("[" + focusedAction + "]").focus();
-}
-
-function openJobLog(id) {
-  logJob = id;
-  openTab("log");
-}
-
-function drawMessages() {
-  const space = $("#messages");
-  if (!current.messages.length) {
-    space.innerHTML =
-      '<div class="chat-start"><h2>무엇을 맡길까요?</h2>' +
-      (project === exampleProject
-        ? '<button id="example-request">빈 검색어 처리 점검해줘 <span aria-hidden="true">↗</span></button>'
-        : "") +
-      "</div>";
-    const example = $("#example-request");
-    if (example)
-      example.onclick = () => {
-        $("#draft").value = exampleRequest;
-        current.draft = $("#draft").value;
-        drawComposer();
-        $("#draft").focus();
-      };
-    return;
-  }
-  const atBottom =
-    space.scrollHeight - space.scrollTop - space.clientHeight < 36;
-  const latestStopByJob = new Map(
-    current.messages
-      .filter((message) => message.stopped)
-      .map((message) => [message.jobId, message]),
-  );
-  space.innerHTML = current.messages
-    .filter((message) => !message.approvalId || message.answer)
-    .map((message) => {
-      const job = current.jobs.find((item) => item.id === message.jobId);
-      const resume =
-        job?.state === "stopped" && latestStopByJob.get(job.id) === message;
-      const result =
-        job &&
-        !message.user &&
-        !message.stopped &&
-        ["done", "denied"].includes(job.state);
-      return (
-        '<div class="bubble' +
-        (message.user ? " user" : "") +
-        '" aria-label="' +
-        (message.user ? "나" : "비서") +
-        '">' +
-        safe(message.text) +
-        (message.answer
-          ? '<small class="answered">' + safe(message.answer) + "</small>"
-          : "") +
-        (resume
-          ? '<button data-resume="' + job.id + '">이어가기</button>'
-          : "") +
-        (result
-          ? '<button data-job-result="' +
-            job.id +
-            '">이 업무 기록 보기</button>'
-          : "") +
-        "</div>"
-      );
-    })
-    .join("");
-  space
-    .querySelectorAll("[data-resume]")
-    .forEach(
-      (button) =>
-        (button.onclick = () =>
-          resume(
-            current.jobs.find(
-              (job) => job.id === Number(button.dataset.resume),
-            ),
-          )),
-    );
-  space
-    .querySelectorAll("[data-job-result]")
-    .forEach(
-      (button) =>
-        (button.onclick = () => openJobLog(Number(button.dataset.jobResult))),
-    );
-  if (atBottom) space.scrollTop = space.scrollHeight;
-}
-
-function isSteerBlocked(text) {
-  if (
-    !current.steerJob ||
-    text === "/clear" ||
-    /새 업무|새 작업|별도 업무|별도 작업/.test(text)
-  )
-    return false;
-  const job = current.jobs.find((item) => item.id === current.steerJob);
-  return !job || !["run", "approval", "queued"].includes(job.state);
-}
-
-function drawComposer() {
-  const job = activeJob(current);
-  const hasDraft = !!$("#draft").value.trim();
-  $("#commands").hidden =
-    !/^\/c?l?e?a?r?$/.test($("#draft").value.trim()) ||
-    $("#draft").value.trim() === "/clear";
-  const directed = current.jobs.find((item) => item.id === current.steerJob);
-  const target = $("#target");
-  target.replaceChildren();
-  target.classList.remove("target-unavailable");
-  if (directed) {
-    const unavailable = !["run", "approval", "queued"].includes(directed.state);
-    target.append(
-      (unavailable ? "추가 지시를 보낼 수 없는 업무 · " : "추가 지시 · ") +
-        directed.title +
-        " ",
-    );
-    if (unavailable) target.classList.add("target-unavailable");
-
-    const clear = document.createElement("button");
-    clear.type = "button";
-    clear.ariaLabel = "추가 지시 대상 해제";
-    clear.textContent = "×";
-    clear.onclick = () => {
-      current.steerJob = null;
-      drawComposer();
-      $("#draft").focus();
-    };
-    target.append(clear);
-  } else if (
-    job &&
-    (job.state === "stopping" ||
-      current.jobs.some(
-        (other) => other !== job && activeStates.includes(other.state),
-      ))
-  ) {
-    target.textContent =
-      (job.state === "stopping" ? "중단 중 · " : "멈춤 대상 · ") + job.title;
-  }
-  const send =
-    '<button class="iconbtn send" type="submit" title="보내기" aria-label="보내기" ' +
-    (hasDraft && !isSteerBlocked($("#draft").value.trim()) ? "" : "disabled") +
-    ">" +
-    icon("send") +
-    "</button>";
-  const stop = job
-    ? '<button class="iconbtn stop" id="stop" type="button" title="' +
-      safe(job.title) +
-      ' 멈춤" aria-label="' +
-      safe(job.title) +
-      ' 멈춤" ' +
-      (job.state === "stopping" ? "disabled" : "") +
-      ">" +
-      icon("stop") +
-      "</button>"
-    : "";
-  $("#actions").innerHTML = (hasDraft || !job ? send : "") + stop;
-  if (job)
-    $("#stop").onclick = (e) => {
-      if (e.detail < 2) stopJob(current, job);
-    };
-}
-function drawLog() {
-  const panel = $("#log");
-  const job = current.jobs.find((item) => item.id === logJob);
-  const openRows = new Set(
-    [...panel.querySelectorAll(".log-evidence[open]")].map(
-      (row) => row.closest("[data-event]").dataset.event,
-    ),
-  );
-  const focusedRow = document.activeElement
-    .closest(".log-evidence summary")
-    ?.closest("[data-event]")?.dataset.event;
-  const anchor =
-    panel.scrollTop > 0 && !panel.hidden
-      ? [...panel.querySelectorAll("[data-event]")].find(
-          (row) =>
-            row.getBoundingClientRect().bottom >
-            panel.getBoundingClientRect().top,
-        )
-      : null;
-  const top = anchor?.getBoundingClientRect().top;
-  const events = current.events.filter(
-    (event) => !job || event.jobId === job.id,
-  );
-  const header = job
-    ? '<button class="text-action" id="all-log">← 전체 기록</button><h2>' +
-      safe(job.title) +
-      "</h2>"
-    : "";
-  panel.innerHTML =
-    header +
-    (events.length
-      ? events
-          .map((event) => {
-            const evidence = event.details
-              ? '<details class="log-evidence"' +
-                (openRows.has(String(event.id)) ? " open" : "") +
-                "><summary>완료 조건</summary><p>" +
-                safe(event.details) +
-                "</p></details>"
-              : "";
-            return (
-              '<div class="logrow" data-event="' +
-              event.id +
-              '"><time>' +
-              safe(event.time) +
-              "</time><div><strong>" +
-              safe(event.role) +
-              "</strong><p>" +
-              safe(event.text) +
-              "</p>" +
-              evidence +
-              "</div></div>"
-            );
-          })
-          .join("")
-      : '<p class="empty">업무가 시작되면 여기에 기록돼요.</p>');
-  if (job)
-    $("#all-log").onclick = () => {
-      logJob = null;
-      drawLog();
-    };
-  if (anchor) {
-    const row = panel.querySelector(
-      '[data-event="' + anchor.dataset.event + '"]',
-    );
-    if (row) panel.scrollTop += row.getBoundingClientRect().top - top;
-  }
-  if (focusedRow)
-    panel
-      .querySelector('[data-event="' + focusedRow + '"] summary')
-      ?.focus({ preventScroll: true });
-}
-function drawMemory() {
-  const panel = $("#memory");
-  const article = project.memories.find(
-    (item) => item.id === project.wikiArticle,
-  );
-  const navigation =
-    '<div class="memory-navigation" aria-label="메모리 범위">' +
-    [
-      ["wiki", "프로젝트 위키"],
-      ["agents", "에이전트 기억"],
-    ]
-      .map(
-        ([value, label]) =>
-          '<button data-memory-view="' +
-          value +
-          '" aria-pressed="' +
-          (project.memoryView === value) +
-          '">' +
-          label +
-          "</button>",
-      )
-      .join("") +
-    "</div>";
-  const wikiViews =
-    project.memoryView === "wiki" && !article
-      ? '<div class="wiki-views" aria-label="위키 보기">' +
-        ["목록", "노드"]
-          .map(
-            (view) =>
-              '<button data-view="' +
-              view +
-              '" aria-pressed="' +
-              (project.wikiView === view) +
-              '">' +
-              view +
-              "</button>",
-          )
-          .join("") +
-        "</div>"
-      : "";
-  panel.innerHTML =
-    '<header class="memory-toolbar">' + navigation + wikiViews + "</header>";
-  panel.querySelectorAll("[data-memory-view]").forEach(
-    (button) =>
-      (button.onclick = () => {
-        project.memoryView = button.dataset.memoryView;
-        panel.scrollTop = 0;
-        drawMemory();
-        panel
-          .querySelector('[data-memory-view="' + project.memoryView + '"]')
-          .focus();
-      }),
-  );
-  if (project.memoryView === "agents") {
-    panel.insertAdjacentHTML(
-      "beforeend",
-      project.crew
-        .map((agent, index) => {
-          const notes = project.personalMemory[index] || [];
-          const expanded = project.agentMemory === index;
-          return (
-            '<section class="agent-memory"><button class="memory-card" data-note="' +
-            index +
-            '" aria-expanded="' +
-            expanded +
-            '"><strong>' +
-            safe(agent.role) +
-            " · " +
-            safe(agent.name) +
-            "</strong><small>" +
-            notes.length +
-            "개</small></button>" +
-            (expanded
-              ? '<div class="memory-note">' +
-                (notes.length
-                  ? notes.map((note) => "<p>" + safe(note) + "</p>").join("")
-                  : '<p class="empty">아직 남긴 기억이 없어요.</p>') +
-                "</div>"
-              : "") +
-            "</section>"
-          );
-        })
-        .join(""),
-    );
-    panel.querySelectorAll("[data-note]").forEach(
-      (button) =>
-        (button.onclick = () => {
-          const index = Number(button.dataset.note);
-          project.agentMemory = project.agentMemory === index ? null : index;
-          drawMemory();
-          panel.querySelector('[data-note="' + index + '"]').focus();
-        }),
-    );
-    return;
-  }
-
-  if (article) {
-    panel.insertAdjacentHTML(
-      "beforeend",
-      '<article class="wiki-article"><button class="text-action" id="wiki-back">← 위키 돌아가기</button><h2>' +
-        safe(article.title) +
-        "</h2><small>" +
-        safe(article.by) +
-        " · " +
-        safe(article.source) +
-        "</small><p>" +
-        safe(article.body) +
-        "</p>" +
-        (article.links || [])
-          .map((id) => project.memories.find((item) => item.id === id))
-          .filter(Boolean)
-          .map(
-            (item) =>
-              '<button class="text-action" data-linked="' +
-              safe(item.id) +
-              '">→ ' +
-              safe(item.title) +
-              "</button>",
-          )
-          .join("") +
-        "</article>",
-    );
-    $("#wiki-back").onclick = () => {
-      project.wikiArticle = null;
-      drawMemory();
-      const noteIndex = project.memories.indexOf(article);
-      panel.querySelector('[data-memory="' + noteIndex + '"]')?.focus();
-    };
-    panel
-      .querySelectorAll("[data-linked]")
-      .forEach(
-        (button) =>
-          (button.onclick = () => openWikiArticle(button.dataset.linked)),
-      );
-    return;
-  }
-
-  panel.insertAdjacentHTML(
-    "beforeend",
-    project.wikiView === "노드"
-      ? wikiGraph(project.memories)
-      : project.memories
-          .map(
-            (item, index) =>
-              '<button class="memory-card" data-memory="' +
-              index +
-              '"><strong>' +
-              safe(item.title) +
-              "</strong></button>",
-          )
-          .join("") || '<p class="empty">아직 문서가 없어요.</p>',
-  );
-  panel.querySelectorAll("[data-view]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        project.wikiView = b.dataset.view;
-        drawMemory();
-        panel.querySelector('[data-view="' + project.wikiView + '"]').focus();
-      }),
-  );
-  panel
-    .querySelectorAll("[data-memory]")
-    .forEach(
-      (button) =>
-        (button.onclick = () =>
-          openWikiArticle(project.memories[Number(button.dataset.memory)].id)),
-    );
-}
-
-function openWikiArticle(id) {
-  project.wikiArticle = id;
-  drawMemory();
-  $("#memory").scrollTop = 0;
-  $("#wiki-back").focus();
-}
-
-function drawContext() {
-  $("#project-name").textContent = project.name;
-  $("#workspace-open").title = "프로젝트 폴더 선택 · " + project.name;
-  const waiting = project.sessions
-    .filter((s) => s !== current)
-    .reduce(
-      (n, s) => n + s.jobs.filter((j) => j.state === "approval").length,
-      0,
-    );
-  $("#session-waiting").textContent = waiting ? String(waiting) : "";
-  $("#session-waiting").hidden = !waiting;
-  $("#session-open").setAttribute(
-    "aria-label",
-    waiting ? "세션 목록 · 답변 대기 " + waiting + "건" : "세션 목록",
-  );
-  $("#approval-name").textContent = "승인 " + project.approval;
-}
-function render() {
-  drawContext();
-  drawRoster();
-  drawActors();
-  drawTasks();
-  drawMessages();
-  drawDecision();
-  drawComposer();
-  drawLog();
-  drawMemory();
-}
-function openTab(name) {
-  closeSessionList();
-  if (composerMenu.matches(":popover-open")) composerMenu.hidePopover();
-  tab = name;
-  for (const el of document.querySelectorAll("[data-tab]"))
-    el.setAttribute("aria-current", String(el.dataset.tab === tab));
-  ["chat", "log", "memory", "flow"].forEach(
-    (key) => ($("#" + key).hidden = key !== tab),
-  );
-  document.body.classList.remove("camp-visible");
-  $("#mobile-switch").textContent = "캠프 보기";
-  render();
-  if (name === "flow") showWorkflow(project);
-}
-function switchSession(session) {
-  current.draft = $("#draft").value;
-  current.project.lastSession = current;
-  if (project !== session.project) releaseWorkflow();
-  project = session.project;
-  current = session;
-  $("#draft").value = session.draft;
-  logJob = null;
-  openTab("chat");
-  $("#messages").scrollTop = $("#messages").scrollHeight;
-}
-function submit() {
-  const text = $("#draft").value.trim();
-  if (!text || isSteerBlocked(text)) return;
-  $("#draft").value = "";
-  current.draft = "";
-  if (text === "/clear") {
-    switchSession(newSession());
-    return;
-  }
-  if (!current.messages.some((message) => message.user))
-    current.name =
-      text === exampleRequest
-        ? "빈 검색어 처리 점검"
-        : text.replace(/\s+/g, " ").trim().slice(0, 70);
-  current.messages.push({ text, user: true });
-  respondToRequest(text);
-  render();
-  $("#messages").scrollTop = $("#messages").scrollHeight;
-}
-
-function respondToRequest(text) {
-  const jobs = current.jobs.filter((job) => activeStates.includes(job.state));
-  if (text.includes("/clear")) {
-    reply(
-      current,
-      "/clear만 보내면 같은 크루 설정으로 빈 세션을 시작해요. 기존 업무는 원래 세션에서 이어져요.",
-    );
-    return;
-  }
-  if (
-    /(상태|진행|어디까지|무슨 일|뭐 하고)/.test(text) &&
-    /(알려|보여|하고 있|됐|어때|이야|\?$)/.test(text)
-  ) {
-    const statusJobs = /프로젝트/.test(text)
-      ? project.sessions
-          .flatMap((session) => session.jobs)
-          .filter((job) => activeStates.includes(job.state))
-      : jobs;
-    reply(
-      current,
-      statusJobs.length
-        ? statusJobs
-            .map(
-              (job) =>
-                job.title +
-                " · " +
-                stageLabel(job) +
-                (job.state === "approval"
-                  ? " 승인 대기"
-                  : job.state === "stopping"
-                    ? " 중단 중"
-                    : job.state === "queued"
-                      ? " 앞 업무 대기"
-                      : " 진행 중"),
-            )
-            .join("\n")
-        : (/프로젝트/.test(text) ? "이 프로젝트에" : "이 대화에서") +
-            " 진행 중인 업무가 없어요.",
-    );
-    return;
-  }
-  const asking = /요약|보여|알려|뭐가|무엇/.test(text);
-  if (asking && /기억|메모리/.test(text) && !/위키/.test(text)) {
-    const agentIndex = project.crew.findIndex(
-      (agent) =>
-        text.includes(agent.name) || text.includes(agent.role + " 담당"),
-    );
-    if (agentIndex === -1) {
-      reply(
-        current,
-        "어느 담당자의 기억을 볼까요? 범례에서 담당자의 기억을 바로 열 수 있어요.",
-      );
-    } else {
-      const notes = project.personalMemory[agentIndex] || [];
-      reply(
-        current,
-        notes.length
-          ? notes.join("\n")
-          : project.crew[agentIndex].name + "이 남긴 기억이 없어요.",
-      );
-    }
-    return;
-  }
-  if (/위키|메모리|메모/.test(text) && /요약|보여|알려|뭐가|무엇/.test(text)) {
-    const wiki = project.memories;
-    reply(
-      current,
-      wiki.length
-        ? wiki
-            .slice(0, 3)
-            .map((item) => item.title + " · " + item.body)
-            .join("\n")
-        : "이 프로젝트에 등록된 위키 문서가 없어요.",
-    );
-    return;
-  }
-  const directed = jobs.find(
-    (job) => job.state !== "stopping" && job.id === current.steerJob,
-  );
-  const fresh = /새 업무|새 작업|별도 업무|별도 작업/.test(text);
-  if (directed && !fresh) {
-    record(current, "비서", "추가 지시 · " + text, directed);
-    reply(current, "「" + directed.title + "」에 추가 지시를 전달했어요.");
-    current.steerJob = null;
-    return;
-  }
-  if (!fresh && /^(그거|거기에|아까|이어서|추가로)/.test(text)) {
-    reply(
-      current,
-      "어느 업무에 대한 지시인지 알려주세요. 업무명을 열어 ‘추가 지시’를 눌러도 돼요.",
-    );
-    return;
-  }
-  current.steerJob = null;
-  const title =
-    text === exampleRequest
-      ? "빈 검색어 처리 점검"
-      : text.replace(/\s+/g, " ").trim().slice(0, 70);
-  startJob(current, title);
-}
-$("#composer").onsubmit = (e) => {
-  e.preventDefault();
-  submit();
-};
-$("#draft").oninput = () => {
-  current.draft = $("#draft").value;
-  drawComposer();
-};
-$("#draft").onkeydown = (e) => {
-  if (e.key === "Escape") {
-    $("#commands").hidden = true;
-    return;
-  }
-  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
-    e.preventDefault();
-    if (e.repeat) return;
-    if (!$("#commands").hidden) $("#fill-clear").click();
-    else submit();
-  }
-};
-$("#fill-clear").onclick = () => {
-  $("#draft").value = "/clear";
-  current.draft = "/clear";
-  drawComposer();
-  $("#draft").focus();
-};
-$("#roster-head").onclick = (e) => {
-  const button = e.currentTarget;
-  $("#roster-body").hidden = !$("#roster-body").hidden;
-  button.setAttribute("aria-expanded", String(!$("#roster-body").hidden));
-};
-document.querySelectorAll("[data-tab]").forEach(
-  (el) =>
-    (el.onclick = () => {
-      logJob = null;
-      openTab(el.dataset.tab);
-    }),
-);
-function selectProject(entry) {
-  $("#composer-menu").hidePopover();
-  if (entry !== project) switchSession(entry.lastSession || newSession(entry));
-}
-
-function sessionSummary(session) {
-  const pending = session.jobs.filter((j) => j.state === "approval").length;
-  const running = session.jobs.filter((j) => j.state === "run").length;
-  const queued = session.jobs.filter((j) => j.state === "queued").length;
-  return [
-    session === current ? "현재" : "",
-    pending ? "내 답변 대기 " + pending + "건" : "",
-    running ? "진행 " + running + "건" : "",
-    queued ? "앞 업무 대기 " + queued + "건" : "",
-    session.events[0]?.time || "",
-    session.draft ? "작성 중" : "",
-    !session.messages.length ? "첫 요청 대기" : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-const composerMenu = $("#composer-menu");
-let composerMenuSource;
-function openComposerMenu(button, label, content) {
-  if (composerMenuSource === button && composerMenu.matches(":popover-open")) {
-    composerMenu.hidePopover();
-    return false;
-  }
-  composerMenuSource?.setAttribute("aria-expanded", "false");
-  composerMenuSource = button;
-  composerMenu.setAttribute("aria-label", label);
-  composerMenu.innerHTML = content;
-  composerMenu.showPopover({ source: button });
+  popoverSource?.setAttribute("aria-expanded", "false");
+  popoverSource = button;
+  popover.ariaLabel = label;
+  paint(popover, content);
+  popover.showPopover({ source: button });
   button.setAttribute("aria-expanded", "true");
-  positionComposerMenu();
-  composerMenu.querySelector("button")?.focus();
-  return true;
+  positionMenu();
+  popover.querySelector("button")?.focus();
 }
-function positionComposerMenu() {
-  if (!composerMenu.matches(":popover-open")) return;
-  const rect = composerMenuSource.getBoundingClientRect();
-  composerMenu.style.setProperty(
+
+function positionMenu() {
+  if (!popover.matches(":popover-open")) return;
+  const rect = popoverSource.getBoundingClientRect();
+  popover.style.setProperty(
     "--menu-left",
-    Math.max(
-      8,
-      Math.min(rect.left, window.innerWidth - composerMenu.offsetWidth - 8),
-    ) + "px",
+    Math.max(8, Math.min(rect.left, innerWidth - popover.offsetWidth - 8)) +
+      "px",
   );
-  composerMenu.style.setProperty(
+  popover.style.setProperty(
     "--menu-bottom",
-    Math.max(8, window.innerHeight - rect.top + 6) + "px",
+    Math.max(8, innerHeight - rect.top + 6) + "px",
   );
 }
-window.addEventListener("resize", positionComposerMenu);
-composerMenu.addEventListener("toggle", () => {
-  if (!composerMenu.matches(":popover-open"))
-    composerMenuSource?.setAttribute("aria-expanded", "false");
-});
-function openProjects() {
-  const opened = openComposerMenu(
+
+function openFolders() {
+  openMenu(
     $("#workspace-open"),
     "프로젝트 폴더",
-    '<button id="choose-folder" class="secondary">폴더 열기…</button><input id="directory" type="file" webkitdirectory hidden><p id="folder-status" role="status"></p>' +
-      projects
-        .map(
-          (entry, i) =>
-            '<button class="session-row" data-project="' +
-            i +
-            '"><strong>' +
-            safe(entry.name) +
-            "</strong><small>" +
-            (entry === project ? "현재 폴더 · " : "") +
-            "대화 " +
-            entry.sessions.length +
-            "개</small></button>",
-        )
-        .join(""),
+    `
+    <button id="choose-folder" class="menu-option">폴더 열기…</button>
+    <input id="directory" type="file" webkitdirectory hidden>
+    <p id="folder-status" class="menu-hint" role="status"></p>
+    ${model.projects.map((entry, i) => `<button class="menu-option" data-project="${i}"${entry === project ? ' aria-current="true"' : ""}>${safe(entry.name)}</button>`).join("")}`,
   );
-  if (!opened) return;
-  document
-    .querySelectorAll("[data-project]")
-    .forEach(
-      (b) => (b.onclick = () => selectProject(projects[+b.dataset.project])),
-    );
+}
+
+function selectProject(entry) {
+  popover.hidePopover();
+  if (entry !== project) switchSession(entry.lastSession);
+  $("#workspace-open").focus();
+}
+
+async function pickFolder() {
   const input = $("#directory");
-  input.onchange = () => {
-    const name = input.files[0]?.webkitRelativePath.split("/")[0];
-    if (name) selectProject(makeProject(name));
-    else
+  if (!window.showDirectoryPicker) return input.click();
+  try {
+    const handle = await window.showDirectoryPicker({ mode: "read" });
+    for (const entry of model.projects) {
+      if (entry.handle && (await handle.isSameEntry(entry.handle)))
+        return selectProject(entry);
+    }
+    selectProject(model.createProject(handle.name, handle));
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    if (popover.matches(":popover-open")) {
       $("#folder-status").textContent =
-        "이 브라우저에서는 파일이 있는 폴더를 선택해 주세요.";
-  };
-  $("#choose-folder").onclick = async () => {
-    if (!window.showDirectoryPicker) {
-      $("#folder-status").textContent =
-        "파일이 있는 폴더를 선택해 주세요. 목업은 폴더 이름만 사용합니다.";
+        "브라우저에서 읽을 수 있는 폴더를 골라 주세요.";
       input.click();
-      return;
     }
-    try {
-      const handle = await window.showDirectoryPicker({ mode: "read" });
-      for (const entry of projects) {
-        if (entry.handle && (await handle.isSameEntry(entry.handle))) {
-          selectProject(entry);
-          return;
-        }
-      }
-      selectProject(makeProject(handle.name, handle));
-    } catch (error) {
-      if (error.name === "AbortError") return;
-      $("#folder-status").textContent =
-        "브라우저가 폴더 접근을 제한했어요. 파일이 있는 폴더를 다시 선택해 주세요.";
-      $("#choose-folder").onclick = () => input.click();
-    }
-  };
-}
-const sessionToggle = $("#session-open");
-const sessionList = $("#session-list");
-
-function closeSessionList() {
-  sessionList.hidden = true;
-  sessionToggle.setAttribute("aria-expanded", "false");
-}
-
-sessionToggle.onclick = () => {
-  if (!sessionList.hidden) {
-    closeSessionList();
-    return;
   }
+}
 
-  sessionList.innerHTML =
-    '<li><button class="session-option" id="new-session">＋ 새 대화</button></li>' +
-    project.sessions
+function openModes() {
+  openMenu(
+    $("#approval-open"),
+    "승인 모드 · " + project.name,
+    Object.entries(approvalModes)
       .map(
-        (session, index) =>
-          '<li><button class="session-option" data-session="' +
-          index +
-          '"' +
-          (session === current ? ' aria-current="true"' : "") +
-          "><strong>" +
-          safe(session.name) +
-          "</strong><small>" +
-          safe(sessionSummary(session)) +
-          "</small></button></li>",
+        ([mode, help]) =>
+          `<button class="menu-option" data-mode="${mode}"${project.approval === mode ? ' aria-current="true"' : ""}><strong>${mode}</strong><small>${help}</small></button>`,
       )
-      .reverse()
-      .join("");
+      .join("") + '<p class="menu-hint">다음 권한 요청부터 적용됩니다.</p>',
+  );
+}
 
-  $("#new-session").onclick = () => {
-    closeSessionList();
-    switchSession(newSession());
-    $("#draft").focus();
-  };
-  sessionList.querySelectorAll("[data-session]").forEach((button) => {
-    button.onclick = () => {
-      closeSessionList();
-      switchSession(project.sessions[Number(button.dataset.session)]);
-      sessionToggle.focus();
-    };
-  });
-  sessionList.hidden = false;
-  sessionToggle.setAttribute("aria-expanded", "true");
+document.querySelector(".toolbar").onclick = (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  if (button.dataset.tab) return showTab(button.dataset.tab);
+  sessionList.hidden = !sessionList.hidden;
+  sessionButton.setAttribute("aria-expanded", String(!sessionList.hidden));
+  if (!sessionList.hidden) drawSessionList();
 };
+mobileSwitch.onclick = () =>
+  toggleCamp(!document.body.classList.contains("camp-visible"));
+$("#roster-head").onclick = (event) => {
+  roster.hidden = !roster.hidden;
+  event.currentTarget.setAttribute("aria-expanded", String(!roster.hidden));
+  if (!roster.hidden) drawRoster();
+};
+$("#workspace-open").onclick = openFolders;
+$("#approval-open").onclick = openModes;
+$("#close").onclick = () => detail.close();
+draft.oninput = () => {
+  current.draft = draft.value;
+  drawComposer();
+};
+draft.onkeydown = (event) => {
+  if (event.isComposing || event.keyCode === 229) return;
+  if (event.key === "Escape" && !$("#commands").hidden)
+    $("#commands").hidden = true;
+  if (event.key !== "Enter" || event.shiftKey) return;
+  event.preventDefault();
+  if (event.repeat) return;
+  if (!$("#commands").hidden) {
+    $("#fill-clear").click();
+  } else send();
+};
+$("#composer").onsubmit = (event) => {
+  event.preventDefault();
+  send();
+};
+$("#stop").onpointerdown = () => {
+  pressedStopTarget = stopTarget;
+};
+$("#stop").onclick = (event) => {
+  const clicked = event.detail === 0 ? stopTarget : pressedStopTarget;
+  if (event.detail < 2 && clicked && clicked === stopTarget)
+    model.stop(clicked);
+  pressedStopTarget = null;
+};
+$("#fill-clear").onclick = () => {
+  draft.value = "/clear";
+  draft.oninput();
+  draft.focus();
+};
+window.addEventListener("resize", positionMenu);
+popover.addEventListener("toggle", () => {
+  if (!popover.matches(":popover-open"))
+    popoverSource?.setAttribute("aria-expanded", "false");
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !sessionList.hidden && !detail.open) {
+    sessionList.hidden = true;
+    sessionButton.setAttribute("aria-expanded", "false");
+    sessionButton.focus();
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const field = event.target;
+  if (field.id === "model") {
+    const agent = project.crew[Number(field.dataset.agent)];
+    agent.model = field.value;
+    model.log(current, "사용자", agent.role + " 모델 · " + agent.model);
+    drawRoster();
+  } else if (field.id === "directory") {
+    const name = field.files[0]?.webkitRelativePath.split("/")[0];
+    field.value = "";
+    if (name) selectProject(model.createProject(name));
+  }
+});
 
 document.addEventListener("click", (event) => {
   if (
-    !sessionToggle.contains(event.target) &&
-    !sessionList.contains(event.target)
-  )
-    closeSessionList();
-});
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !sessionList.hidden) {
-    closeSessionList();
-    sessionToggle.focus();
+    !event.target.closest("#session-open, #session-list") &&
+    !sessionList.hidden
+  ) {
+    sessionList.hidden = true;
+    sessionButton.setAttribute("aria-expanded", "false");
+  }
+  const button = event.target.closest("button");
+  if (!button) return;
+  const data = button.dataset;
+  const jobKey =
+    data.job ??
+    data.question ??
+    data.allow ??
+    data.deny ??
+    data.jobLog ??
+    data.resume ??
+    data.steer ??
+    data.stop;
+  const job = jobKey && current.jobs.find((item) => item.id === Number(jobKey));
+
+  if (job) {
+    if (data.job) return openJob(job);
+    if (data.question) return showApproval(job);
+    if (data.allow || data.deny) {
+      model.answer(job, Boolean(data.allow));
+      draft.focus();
+    } else if (data.jobLog) {
+      if (detail.open) detail.close();
+      showTab("log", job);
+    } else if (data.resume) model.resume(job);
+    else if (data.steer) {
+      detail.close();
+      current.steer = current.selected = job;
+      showTab("chat");
+      draft.focus();
+    } else if (data.stop) {
+      detail.close();
+      model.stop(job);
+    }
+    return;
+  }
+
+  if (data.session !== undefined) {
+    switchSession(project.sessions[Number(data.session)]);
+    sessionButton.focus();
+  } else if (data.project !== undefined)
+    selectProject(model.projects[Number(data.project)]);
+  else if (data.mode) {
+    project.approval = data.mode;
+    model.log(current, "사용자", "프로젝트 승인 · " + data.mode);
+    popover.hidePopover();
+    $("#approval-open").focus();
+    drawComposer();
+  } else if (data.name !== undefined) renameAgent(button, Number(data.name));
+  else if (data.agent !== undefined) openAgent(Number(data.agent));
+  else if (data.employ !== undefined) {
+    model.setEmployment(current, Number(data.employ));
+    (
+      roster.querySelector('[data-employ="' + data.employ + '"]') ||
+      $("#hire-temp") ||
+      $("#roster-head")
+    ).focus();
+  } else if (data.agentMemory !== undefined) {
+    detail.close();
+    project.memoryView = "agents";
+    project.agentMemory = Number(data.agentMemory);
+    showTab("memory");
+    $("#memory [data-note='" + data.agentMemory + "']")?.focus();
+  } else if (data.memoryView || data.view || data.note !== undefined) {
+    if (data.memoryView) project.memoryView = data.memoryView;
+    if (data.view) project.wikiView = data.view;
+    if (data.note !== undefined) {
+      const index = Number(data.note);
+      project.agentMemory = project.agentMemory === index ? null : index;
+    }
+    const attribute = button
+      .getAttributeNames()
+      .find((name) => name.startsWith("data-"));
+    drawMemory();
+    $("#memory")
+      .querySelector(
+        "[" + attribute + '="' + button.getAttribute(attribute) + '"]',
+      )
+      ?.focus();
+  } else if (data.memory !== undefined || data.linked) {
+    project.wikiArticle =
+      data.linked ?? project.memories[Number(data.memory)].id;
+    drawMemory();
+    $("#memory").scrollTop = 0;
+    $("#wiki-back").focus();
+  } else if (data.deleteNote !== undefined) {
+    if (window.confirm("이 기억을 삭제할까요?")) {
+      project.personalMemory[project.agentMemory].splice(
+        Number(data.deleteNote),
+        1,
+      );
+      drawMemory();
+      $("#memory [data-note='" + project.agentMemory + "']").focus();
+    }
+  } else if (button.id === "delete-wiki") {
+    if (window.confirm("이 위키 문서를 삭제할까요?")) {
+      project.memories = project.memories.filter(
+        (entry) => entry.id !== project.wikiArticle,
+      );
+      project.wikiArticle = null;
+      drawMemory();
+      $("#memory [data-memory-view=wiki]").focus();
+    }
+  } else if (button.id === "wiki-back") {
+    const index = project.memories.findIndex(
+      (entry) => entry.id === project.wikiArticle,
+    );
+    project.wikiArticle = null;
+    drawMemory();
+    $("#memory [data-memory='" + index + "']")?.focus();
+  } else if (button.id === "all-log") showTab("log");
+  else if (button.id === "hire-temp") model.hireTemp(current);
+  else if (button.id === "choose-folder") pickFolder();
+  else if (button.id === "new-session") {
+    switchSession(model.newSession(project));
+    draft.focus();
+  } else if (button.id === "unlink") {
+    current.steer = null;
+    drawComposer();
+    draft.focus();
+  } else if (button.id === "example-request") {
+    draft.value = exampleRequest;
+    draft.oninput();
+    draft.focus();
   }
 });
-$("#workspace-open").onclick = openProjects;
-$("#approval-open").onclick = () => {
-  const descriptions = {
-    수동: "권한 요청마다 대화에서 직접 허용하거나 거절합니다.",
-    자동: "비서가 업무 목적과 범위에 따라 판단합니다. 목업에서는 프로젝트 안의 조회·수정은 허용하고 외부 전달은 사용자에게 묻습니다.",
-    항상: "이 프로젝트에서 요청하는 모든 앱 권한을 자동 승인합니다.",
-  };
-  const opened = openComposerMenu(
-    $("#approval-open"),
-    "승인 모드 · " + project.name,
-    Object.entries(descriptions)
-      .map(
-        ([mode, help]) =>
-          '<button class="session-row" data-mode="' +
-          mode +
-          '"><strong>' +
-          mode +
-          (project.approval === mode ? " · 현재" : "") +
-          "</strong><small>" +
-          help +
-          "</small></button>",
-      )
-      .join("") + "<small>다음 권한 요청부터 적용됩니다.</small>",
-  );
-  if (!opened) return;
-  document.querySelectorAll("[data-mode]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        project.approval = b.dataset.mode;
-        record(current, "사용자", "프로젝트 승인 모드 · " + project.approval);
-        composerMenu.hidePopover();
-        $("#approval-open").focus();
-        render();
-      }),
-  );
-};
-$("#mobile-switch").onclick = () => {
-  const shown = document.body.classList.toggle("camp-visible");
-  $("#mobile-switch").textContent = shown ? "작업 보기" : "캠프 보기";
-};
-current = newSession();
-openTab("chat");
 
+showTab("chat");
 window.setInterval(() => {
-  if (document.hidden || $("#detail").open) return;
+  if (document.hidden || detail.open) return;
   campBeat++;
   drawActors();
 }, 5000);

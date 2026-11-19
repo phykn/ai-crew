@@ -69,7 +69,7 @@ function Editor({ config, controls }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState(
     (config.draft || config.graph).edges,
   );
-  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [saved, setSaved] = useState(config.graph);
   const [version, setVersion] = useState(config.version);
   const canvas = useRef(null),
@@ -80,11 +80,24 @@ function Editor({ config, controls }) {
   useEffect(() => {
     if (editingId && !details.current.open) details.current.showModal();
   }, [editingId]);
+  useEffect(() => {
+    let previousWidth;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (!width || !height) return;
+      if (previousWidth && Math.abs(width - previousWidth) > 80) {
+        instance.current?.fitView({ padding: "6%" });
+      }
+      previousWidth = width;
+    });
+    observer.observe(canvas.current);
+    return () => observer.disconnect();
+  }, []);
   const draft = definition(nodes, edges);
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   controls.getDraft = () => (dirty ? draft : null);
   useEffect(() => {
-    setError("");
+    setNotice("");
   }, [nodes, edges]);
   function change(key, value) {
     setNodes((list) =>
@@ -125,11 +138,15 @@ function Editor({ config, controls }) {
     try {
       config.validate(draft);
     } catch (e) {
-      setError(e.message);
+      setNotice(e.message);
       return;
     }
-    setVersion(config.save(draft, logic(draft) !== logic(saved)));
+    const logicChanged = logic(draft) !== logic(saved);
+    setVersion(config.save(draft, logicChanged));
     setSaved(draft);
+    setNotice(
+      logicChanged ? "다음 새 업무부터 적용돼요." : "배치를 저장했어요.",
+    );
   }
   return (
     <Roles.Provider value={config.roles}>
@@ -149,6 +166,8 @@ function Editor({ config, controls }) {
         </div>
         <div
           className="flow-space"
+          role="region"
+          aria-label="연결점을 끌어 단계를 잇고, 노드에서 Enter를 눌러 단계 속성을 엽니다."
           ref={canvas}
           onKeyDownCapture={(event) => {
             if (event.key !== "Enter" || event.repeat) return;
@@ -254,9 +273,8 @@ function Editor({ config, controls }) {
             </>
           )}
         </dialog>
-        <footer className="flow-foot" role="status">
-          {error ||
-            "연결점을 끌어 단계를 잇고, 노드를 두 번 눌러 속성을 편집해요."}
+        <footer className="flow-foot" role="status" hidden={!notice}>
+          {notice}
         </footer>
       </section>
     </Roles.Provider>

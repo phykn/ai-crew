@@ -1,19 +1,20 @@
 <h1 align="center">AI Crew</h1>
 
-<p align="center">비서 한 명에게 요청하고, 에이전트 팀의 업무 진행을 픽셀 아트 캠프에서 지켜보는 데스크톱 앱 구상.</p>
+<p align="center">비서 한 명에게 요청하고, 에이전트 팀이 일하는 모습을 픽셀 아트 캠프에서 지켜보는 데스크톱 앱 구상.</p>
 
-![AI Crew 최종 화면 콘셉트 — 픽셀 아트 캠프와 비서 채팅](docs/concept.png)
+![AI Crew 캠프 콘셉트](docs/concept.png)
 
-- 비서는 간단한 질문에 직접 답하고, 협업이 필요한 일은 플랜과 개발을 거쳐 리뷰·코딩 스타일 확인·테스트 담당이 병렬로 검증한 뒤 같은 채팅에서 보고합니다. 프로젝트별로 흐름을 편집할 수 있습니다.
-- 사용자는 에이전트마다 Codex 또는 로컬 LLM을 선택합니다. 프로젝트별 세션에서 기존 맥락을 이어가고, `/clear`로 같은 설정의 빈 세션을 시작합니다.
-- 진행 중인 업무는 대화 상단에 고정하고, 지금 답할 승인 요청은 입력창 위에 표시합니다. 로그에서 업무별 인계와 검증 결과를 열고, 메모리 탭에서 프로젝트 공유 위키의 문서 연결 그래프와 변경 이력과 각 담당자의 기억을 확인합니다.
-- 캠프는 위임, 검증, 고용과 퇴장을 캐릭터 동작으로 보여줍니다. 대사는 역할별 색으로 표시된 별명 옆에 나오며, 범례에서 별명을 눌러 바로 편집할 수 있습니다.
+## 목업 실행
 
-브라우저에서 [UI 목업](demo/index.html)을 로컬로 열면 캠프, 채팅, 업무 멈춤·재개를 체험할 수 있습니다. 보내기 줄에서 프로젝트 폴더와 승인 모드를 고릅니다. 상단 아이콘 줄 오른쪽 ☰에서 세션을 전환하고 워크플로우 탭에서 단계를 끌거나 연결선을 편집합니다. 메모리 탭에서 위키를 노드로 볼 수 있습니다. 첫 화면의 ‘빈 검색어 처리 점검’은 예시 문장을 입력창에 채웁니다. 목업은 모의 실행으로 동작하며 새로고침하면 초기화됩니다.
+```sh
+python3 -m http.server 48723 --bind 127.0.0.1 --directory demo
+```
 
-제품은 구현 전 설계 단계입니다. Electron 앱의 로컬 SQLite에 세션과 업무 기록을 저장하고, 프로젝트별 업무 흐름은 앱 안에서 React Flow로 설계하도록 계획했습니다. [제품 구상](docs/concept.md) · [화면과 동작 명세](docs/interaction.md) · [구현 계획](docs/groove/PLAN.md) · [선행 조사](docs/research.md)
+[브라우저에서 열기](http://127.0.0.1:48723/). 대화에서 예시 요청을 골라 보내면 플랜, 개발, 병렬 리뷰·스타일·테스트를 거쳐 결과를 받습니다. 폴더와 승인 모드는 보내기 줄에서, 세션은 상단 ☰에서 고릅니다. 메모리에서 공유 위키와 담당자 기억을 열고, 워크플로우에서 연결점을 끌어 단계 순서를 편집할 수 있습니다.
+
+목업은 브라우저에서 실행을 모의합니다. 제품은 Electron과 로컬 SQLite로 프로젝트와 세션을 관리하고, 사용자가 고른 Codex와 로컬 LLM으로 실행할 계획입니다. [제품 구상](docs/concept.md) · [화면과 동작 명세](docs/interaction.md) · [구현 계획](docs/groove/PLAN.md) · [선행 조사](docs/research.md)
 
 ## 참고
 
 1. EngChooN, AI Office, 2026. [GitHub](https://github.com/EngChooN/ai-office)
-2. Microsoft Research, Agensh: Scaling Organizational Intelligence to 1,024 Agents, 2026. [논문](https://arxiv.org/abs/2609.26781), [코드](https://github.com/microsoft/Agensh)
+2. Microsoft Research, Agensh: Scaling Organizational Intelligence to 1,024 Agents, 2026. [논문](https://arxiv.org/abs/2609.26781), [코드](https://github.com/microsoft/agensh)

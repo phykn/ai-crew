@@ -1,53 +1,38 @@
 :root {
   color-scheme: dark;
-  --bg: #141713;
-  --panel: #1a1e19;
-  --card: #252a22;
-  --line: #373d32;
-  --warm: #edcf99;
-  --text: #eeeae0;
-  --dim: #b1b4a7;
-  --workspace-inset: 16px;
-  --workspace-gap: 12px;
-  --pane-inset: clamp(16px, 2.25vw, 32px);
-  --radius-workspace: 16px;
-  --surface-composer: #242a22;
-  --line-composer: #4c5647;
-  --camera-light: #191d1760;
-  --surface-control: #302f2a;
-  --surface-selected: #edcf991a;
-  --line-control: #585348;
-  --on-warm: #241f17;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --radius-control: 6px;
-  --radius-surface: 8px;
-  --control-size: 34px;
-  --icon-size: 17px;
-  --font-detail: 12px;
-  --app-bar-height: 54px;
-  --mobile-brand-height: 44px;
-  --mobile-tabs-height: 42px;
-  --workspace-columns: minmax(0, 1.22fr) minmax(365px, 1fr);
-  --flow-node-width: 128px;
-  --flow-column-gap: 12px;
-  --flow-row-step: 104px;
-  --flow-handle-size: 12px;
   font:
     15px/1.55 -apple-system,
     BlinkMacSystemFont,
     "Apple SD Gothic Neo",
     "Malgun Gothic",
     sans-serif;
-}
-
-@media (max-width: 760px) {
-  :root {
-    --app-bar-height: calc(
-      var(--mobile-brand-height) + var(--mobile-tabs-height)
-    );
-  }
+  --bg: #1c1e1a;
+  --panel: var(--bg);
+  --card: #242721;
+  --line: #383c34;
+  --line-control: #50554a;
+  --text: #f0ece2;
+  --dim: #b2b4a8;
+  --warm: #e9c691;
+  --on-warm: #241e16;
+  --selected: #39342b;
+  --surface-control: var(--selected);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --pane-inset: clamp(16px, 2.35vw, 36px);
+  --content-max: 720px;
+  --control-size: 36px;
+  --icon-size: 18px;
+  --font-detail: 13px;
+  --radius-control: 7px;
+  --radius-surface: 10px;
+  --header-height: 58px;
+  --workspace-columns: minmax(0, 1.13fr) minmax(380px, 1fr);
+  --flow-node-width: 128px;
+  --flow-column-gap: 12px;
+  --flow-row-step: 104px;
+  --flow-handle-size: 12px;
 }

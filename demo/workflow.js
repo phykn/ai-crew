@@ -20,106 +20,107 @@ const examples = {
   ],
 };
 function makeStages(template) {
-  return examples[template].map(([order, label, role, criterion]) => ({
-    order,
-    label,
-    role,
-    criterion,
-    access: template === "개발" && role === 1 ? "파일 수정" : "자료 조회",
-  }));
-}
-function groupStages(stages) {
-  const groups = new Map();
-  for (const stage of stages) {
-    if (!groups.has(stage.order)) groups.set(stage.order, []);
-    groups.get(stage.order).push({ ...stage });
+  const groups = Map.groupBy(examples[template], (row) => row[0]);
+  const nodes = [
+    { id: "start", position: { x: 0, y: 140 }, data: { label: "비서 · 요청" } },
+  ];
+  const edges = [];
+  let previous = ["start"];
+  for (const [column, rows] of groups) {
+    const next = [];
+    rows.forEach(([, label, role, criterion], i) => {
+      const id = "stage-" + nodes.length;
+      nodes.push({
+        id,
+        position: {
+          x: column * 220,
+          y: 140 + (i - (rows.length - 1) / 2) * 110,
+        },
+        data: {
+          label,
+          role,
+          criterion,
+          access: template === "개발" && role === 1 ? "파일 수정" : "자료 조회",
+        },
+      });
+      for (const source of previous)
+        edges.push({ id: source + "-" + id, source, target: id });
+      next.push(id);
+    });
+    previous = next;
   }
-  return [...groups.keys()].sort((a, b) => a - b).map((key) => groups.get(key));
+  nodes.push({
+    id: "end",
+    position: { x: (groups.size + 1) * 220, y: 140 },
+    data: { label: "비서 · 보고" },
+  });
+  for (const source of previous)
+    edges.push({ id: source + "-end", source, target: "end" });
+  return { nodes, edges };
+}
+function groupStages(graph) {
+  const stages = graph.nodes.filter((n) => n.id !== "start" && n.id !== "end");
+  if (!stages.length) throw Error("요청과 보고 사이에 실행 단계를 추가하세요.");
+  const done = new Set(["start"]);
+  const groups = [];
+  for (const node of stages) {
+    if (!node.data.label.trim() || !node.data.criterion.trim())
+      throw Error("각 단계의 이름과 완료 조건을 입력하세요.");
+    if (
+      !graph.edges.some((e) => e.target === node.id) ||
+      !graph.edges.some((e) => e.source === node.id)
+    )
+      throw Error(node.data.label + " 단계를 요청부터 보고까지 연결하세요.");
+  }
+  while (done.size < graph.nodes.length - 1) {
+    const ready = stages.filter(
+      (n) =>
+        !done.has(n.id) &&
+        graph.edges
+          .filter((e) => e.target === n.id)
+          .every((e) => done.has(e.source)),
+    );
+    if (!ready.length) throw Error("순환하는 연결선을 수정하세요.");
+    if (new Set(ready.map((n) => n.data.role)).size !== ready.length)
+      throw Error("같은 담당자의 병렬 단계는 순서대로 연결하세요.");
+    groups.push(ready.map((n) => ({ ...n.data })));
+    ready.forEach((n) => done.add(n.id));
+  }
+  return groups;
 }
 function editWorkflow() {
-  let draft = project.workflow.map((stage) => ({ ...stage }));
-  function draw() {
-    modal(
-      "워크플로우 편집",
-      '<p>나 → 비서 → 아래 단계 → 비서 보고<br>같은 순서의 단계는 함께 실행해요.</p><label>시작 예시 <select id="preset"><option value="">현재 설정</option><option>개발</option><option>조사</option></select></label><form id="flow-form">' +
-        draft
-          .map(
-            (stage, i) => `<fieldset class="flow-stage" data-stage="${i}">
-    <label>순서 <input type="number" min="1" max="99" required data-field="order" value="${stage.order}"></label>
-    <label>단계 <input required data-field="label" value="${safe(stage.label)}"></label>
-    <label>담당 <select data-field="role">${project.crew.map((a, k) => `<option value="${k}" ${k === stage.role ? "selected" : ""}>${safe(a.role)}</option>`).join("")}</select></label>
-    <label>권한 <select data-field="access">${["자료 조회", "파일 수정", "외부 전달"].map((x) => `<option ${x === stage.access ? "selected" : ""}>${x}</option>`).join("")}</select></label>
-    <label class="wide">완료 조건 <input required data-field="criterion" value="${safe(stage.criterion)}"></label>
-    <button type="button" data-remove="${i}" class="text-action">단계 제거</button></fieldset>`,
-          )
-          .join("") +
-        '<div class="dialog-actions"><button type="button" class="secondary" id="add-stage">단계 추가</button><button class="primary" type="submit">다음 업무부터 적용</button></div><p role="status" id="flow-status"></p></form>',
-    );
-    $("#preset").onchange = (e) => {
-      if (e.target.value) {
-        draft = makeStages(e.target.value);
-        draw();
+  const screen = $("#flow-screen");
+  screen.showModal();
+  const opener = $("#workflow-edit");
+  const close = window.mountCrewFlow($("#flow-root"), {
+    graph: project.workflow,
+    roles: project.crew,
+    projectName: project.name,
+    version: project.version,
+    makeStages,
+    validate: groupStages,
+    save(graph, logicChanged) {
+      project.workflow = graph;
+      if (logicChanged) {
+        project.version++;
+        record(
+          current,
+          "비서",
+          "워크플로우 v" + project.version + " 저장 · 다음 새 업무부터 적용",
+        );
       }
-    };
-    $("#flow-form").oninput = (e) => {
-      const field = e.target.dataset.field;
-      if (!field) return;
-      draft[Number(e.target.closest("fieldset").dataset.stage)][field] = [
-        "order",
-        "role",
-      ].includes(field)
-        ? Number(e.target.value)
-        : e.target.value;
-    };
-    $("#add-stage").onclick = () => {
-      draft.push({
-        order: Math.max(0, ...draft.map((s) => s.order)) + 1,
-        label: "",
-        role: 4,
-        criterion: "",
-        access: "자료 조회",
-      });
-      draw();
-      $('#flow-form fieldset:last-of-type [data-field="label"]').focus();
-    };
-    document.querySelectorAll("[data-remove]").forEach(
-      (b) =>
-        (b.onclick = () => {
-          draft.splice(+b.dataset.remove, 1);
-          draw();
-        }),
-    );
-    $("#flow-form").onsubmit = (e) => {
-      e.preventDefault();
-      if (
-        !draft.length ||
-        draft.some((s) => !s.label.trim() || !s.criterion.trim())
-      ) {
-        $("#flow-status").textContent =
-          "단계와 완료 조건을 한 개 이상 입력해 주세요.";
-        return;
-      }
-      if (
-        groupStages(draft).some(
-          (group) => new Set(group.map((s) => s.role)).size !== group.length,
-        )
-      ) {
-        $("#flow-status").textContent =
-          "같은 담당자의 단계는 서로 다른 순서에 두세요.";
-        return;
-      }
-      project.workflow = draft;
-      project.version++;
-      record(
-        current,
-        "비서",
-        "워크플로우 v" + project.version + " 저장 · 다음 새 업무부터 적용",
-      );
-      $("#detail").close();
       render();
-    };
-  }
-  draw();
+    },
+    exit() {
+      screen.close();
+      opener.focus();
+    },
+  });
+  screen.oncancel = (e) => {
+    e.preventDefault();
+    close.requestClose();
+  };
+  screen.onclose = () => close.dispose();
 }
 function wikiGraph(entries) {
   if (!entries.length) return '<p class="empty">아직 연결할 문서가 없어요.</p>';

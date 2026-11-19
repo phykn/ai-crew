@@ -3,6 +3,8 @@
 const $ = (selector) => document.querySelector(selector);
 const paths = {
   fire: "M13 2c1 6-4 7-2 11 2-1 3-3 3-6 4 3 6 6 5 10-1 4-5 6-9 5-5-1-7-5-6-9 1-2 2-4 5-7-1 5 0 6 1 6-1-4 4-6 3-10Z",
+  flow: "M3 9h5v5H3z M16 2h5v5h-5z M16 17h5v5h-5z M8 11.5h4V4.5h4m-4 7v8h4",
+  menu: "M3 6h18M3 12h18M3 18h18",
   folder: "M3 7V5h6l2 2h10v12H3Z",
   layers: "m3 8 9-5 9 5-9 5-9-5m0 5 9 5 9-5",
   down: "m6 9 6 6 6-6",
@@ -317,6 +319,7 @@ function schedule(session, job) {
       });
     }
     if (session === current) render();
+    else if (session.project === project) drawContext();
   }, 9000);
 }
 function stopJob(session, job) {
@@ -336,6 +339,7 @@ function stopJob(session, job) {
       true,
     );
     if (session === current) render();
+    else if (session.project === project) drawContext();
   }, 700);
 }
 function resume(job) {
@@ -524,16 +528,6 @@ function jobDetail(job) {
     openTab("chat");
     $("#draft").focus();
   };
-  if (job.state === "approval") {
-    const decision = document.createElement("button");
-    decision.className = "primary";
-    decision.textContent = "질문으로 이동";
-    decision.onclick = () => {
-      $("#detail").close();
-      document.querySelector('[data-allow="' + job.id + '"]')?.focus();
-    };
-    $("#detail-body .dialog-actions").prepend(decision);
-  }
   $("#job-stop").disabled = !["approval", "run"].includes(job.state);
   $("#job-stop").onclick = () => {
     $("#detail").close();
@@ -553,13 +547,19 @@ function drawTasks() {
       return (
         '<article class="task"><div class="task-head">' +
         icon("pin") +
-        '진행 중인 업무</div><button class="task-main" data-job="' +
+        '진행 중인 업무</div><div class="task-main"><button class="task-title" data-job="' +
         job.id +
         '"><span>' +
         safe(job.title) +
-        '</span><span class="chip"><i class="dot"></i>' +
-        safe(phase) +
-        '</span></button><div class="route" aria-hidden="true">' +
+        "</span></button>" +
+        (job.state === "approval"
+          ? '<button class="chip pending" data-question="' +
+            job.id +
+            '" title="승인 질문으로 이동"><i class="dot"></i>내 답변 대기</button>'
+          : '<span class="chip"><i class="dot"></i>' +
+            safe(phase) +
+            "</span>") +
+        '</div><div class="route" aria-hidden="true">' +
         job.groups
           .map(
             (_, i) =>
@@ -589,6 +589,17 @@ function drawTasks() {
         jobDetail(job);
       }),
   );
+  $("#tasks")
+    .querySelectorAll("[data-question]")
+    .forEach((button) => {
+      button.onclick = () => {
+        const question = $("#messages").querySelector(
+          '[data-allow="' + button.dataset.question + '"]',
+        );
+        question?.focus();
+        question?.scrollIntoView({ block: "nearest" });
+      };
+    });
 }
 function drawMessages() {
   const space = $("#messages");
@@ -822,12 +833,24 @@ function drawMemory() {
       }),
   );
 }
-function render() {
+function drawContext() {
   $("#project-name").textContent = project.name;
   $("#session-name").textContent = current.name;
-  $("#workspace-open").title =
-    project.name + " / " + current.name + " · 프로젝트·세션 선택";
+  $("#workspace-open").title = "프로젝트 폴더 선택 · " + project.name;
+  const waiting = project.sessions
+    .filter((s) => s !== current)
+    .reduce(
+      (n, s) => n + s.jobs.filter((j) => j.state === "approval").length,
+      0,
+    );
+  $("#session-waiting").textContent = waiting ? "대기 " + waiting : "";
+  $("#session-waiting").hidden = !waiting;
+  $("#session-open").title = "세션 목록 · " + current.name;
+  $("#session-open").setAttribute("aria-label", "세션 목록 · " + current.name);
   $("#approval-name").textContent = "승인 " + project.approval;
+}
+function render() {
+  drawContext();
   drawRoster();
   drawActors();
   drawTasks();
@@ -946,52 +969,47 @@ function sessionSummary(session) {
     .filter(Boolean)
     .join(" · ");
 }
+function anchorMenu(button) {
+  const dialog = $("#detail");
+  dialog.classList.add("composer-menu");
+  const rect = button.getBoundingClientRect();
+  dialog.style.setProperty(
+    "--menu-left",
+    Math.max(
+      8,
+      Math.min(rect.left, window.innerWidth - dialog.offsetWidth - 8),
+    ) + "px",
+  );
+  dialog.style.setProperty(
+    "--menu-bottom",
+    Math.max(8, window.innerHeight - rect.top + 6) + "px",
+  );
+}
 function openProjects() {
   modal(
-    "프로젝트 · 세션",
-    '<div class="workspace-actions"><button id="choose-folder" class="secondary">폴더 열기…</button><button id="new-session" class="secondary">새 대화</button><button id="workflow-edit" class="text-action">워크플로우 편집</button></div>' +
+    "프로젝트 폴더",
+    '<button id="choose-folder" class="secondary">폴더 열기…</button><input id="directory" type="file" webkitdirectory hidden><p id="folder-status" role="status"></p>' +
       projects
         .map(
-          (entry, index) =>
-            '<details class="project-tree" ' +
-            (entry === project ? "open" : "") +
-            "><summary>" +
-            icon("folder") +
+          (entry, i) =>
+            '<button class="session-row" data-project="' +
+            i +
+            '"><strong>' +
             safe(entry.name) +
-            "</summary>" +
-            entry.sessions
-              .map(
-                (session, k) =>
-                  '<button class="session-row" data-project="' +
-                  index +
-                  '" data-session="' +
-                  k +
-                  '"><strong>' +
-                  safe(session.name) +
-                  "</strong><small>" +
-                  safe(sessionSummary(session)) +
-                  "</small></button>",
-              )
-              .join("") +
-            "</details>",
+            "</strong><small>" +
+            (entry === project ? "현재 폴더 · " : "") +
+            "대화 " +
+            entry.sessions.length +
+            "개</small></button>",
         )
-        .join("") +
-      '<input id="directory" type="file" webkitdirectory hidden><p id="folder-status" role="status"></p>',
+        .join(""),
   );
-  $("#new-session").onclick = () => {
-    $("#detail").close();
-    switchSession(newSession());
-  };
-  $("#workflow-edit").onclick = editWorkflow;
-  document.querySelectorAll("[data-session]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        $("#detail").close();
-        switchSession(
-          projects[+b.dataset.project].sessions[+b.dataset.session],
-        );
-      }),
-  );
+  anchorMenu($("#workspace-open"));
+  document
+    .querySelectorAll("[data-project]")
+    .forEach(
+      (b) => (b.onclick = () => selectProject(projects[+b.dataset.project])),
+    );
   const input = $("#directory");
   input.onchange = () => {
     const name = input.files[0]?.webkitRelativePath.split("/")[0];
@@ -1024,6 +1042,41 @@ function openProjects() {
     }
   };
 }
+$("#session-open").onclick = () => {
+  modal(
+    "세션 · " + project.name,
+    '<button id="new-session" class="secondary">새 대화</button>' +
+      project.sessions
+        .map(
+          (session, i) =>
+            '<button class="session-row" data-session="' +
+            i +
+            '"><strong>' +
+            safe(session.name) +
+            "</strong><small>" +
+            safe(sessionSummary(session)) +
+            "</small></button>",
+        )
+        .reverse()
+        .join(""),
+  );
+  $("#detail").classList.add("session-drawer");
+  $("#new-session").onclick = () => {
+    $("#detail").close();
+    switchSession(newSession());
+  };
+  document.querySelectorAll("[data-session]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        $("#detail").close();
+        switchSession(project.sessions[+b.dataset.session]);
+      }),
+  );
+};
+$("#detail").addEventListener("close", () =>
+  $("#detail").classList.remove("session-drawer", "composer-menu"),
+);
+$("#workflow-edit").onclick = editWorkflow;
 $("#workspace-open").onclick = openProjects;
 $("#approval-open").onclick = () => {
   const descriptions = {
@@ -1047,6 +1100,7 @@ $("#approval-open").onclick = () => {
       )
       .join("") + "<small>다음 권한 요청부터 적용됩니다.</small>",
   );
+  anchorMenu($("#approval-open"));
   document.querySelectorAll("[data-mode]").forEach(
     (b) =>
       (b.onclick = () => {

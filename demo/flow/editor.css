@@ -1,0 +1,186 @@
+#flow-screen {
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  background: #191b1b;
+}
+#flow-root,
+.flow-view {
+  height: 100%;
+}
+.flow-view {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.flow-top,
+.flow-tools,
+.flow-foot {
+  padding: 12px 22px;
+  flex-shrink: 0;
+}
+#flow-screen .flow-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #403c34;
+  margin: 0;
+}
+.flow-top small,
+.flow-foot,
+.flow-tools span {
+  color: #b9b2a6;
+  font-size: 12px;
+}
+.flow-actions,
+.flow-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.flow-view button:not(.react-flow__controls-button),
+.flow-tools select,
+.flow-inspector select,
+.flow-inspector input:not([type="checkbox"]),
+.flow-inspector textarea {
+  background: #302f2a;
+  border: 1px solid #585348;
+  border-radius: 6px;
+  color: #e9e4da;
+  padding: 6px 10px;
+}
+.flow-view .flow-actions .primary {
+  background: #e5c189;
+  color: #241f17;
+}
+.flow-space {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.flow-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+.flow-inspector {
+  width: min(260px, 34%);
+  overflow: auto;
+  padding: 14px;
+  background: #242521;
+}
+.flow-inspector h3,
+.flow-prompt h3 {
+  margin: 0 0 12px;
+}
+.flow-inspector label {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 9px;
+  font-size: 12px;
+  color: #c9c3b6;
+}
+.flow-inspector details label {
+  display: flex;
+  align-items: center;
+}
+.flow-inspector textarea {
+  min-height: 72px;
+}
+.flow-inspector input,
+.flow-inspector select {
+  width: 100%;
+}
+.flow-inspector input[type="checkbox"] {
+  width: auto;
+}
+.flow-inspector details {
+  margin: 10px 0;
+}
+.crew-node {
+  background: #282a28;
+  color: #f3eee4;
+  border: 1px solid #666459;
+  border-left: 3px solid var(--role);
+  border-radius: 7px;
+  min-width: 148px;
+  padding: 10px 14px;
+  box-shadow: 0 2px 7px #0004;
+}
+.crew-node small,
+.crew-node strong {
+  display: block;
+}
+.crew-node small {
+  color: var(--role);
+  font-size: 11px;
+}
+.crew-node.chosen {
+  outline: 2px solid #dcb779;
+}
+.crew-node .react-flow__handle {
+  width: 12px;
+  height: 12px;
+  background: #b7a07c;
+  border: 2px solid #302d25;
+}
+.edge-action {
+  position: absolute;
+  bottom: 12px;
+  right: 15px;
+}
+.flow-shade {
+  position: absolute;
+  inset: 0;
+  background: #0008;
+  display: grid;
+  place-items: center;
+  z-index: 9;
+}
+.flow-prompt {
+  background: #282923;
+  border: 1px solid #74684e;
+  border-radius: 10px;
+  padding: 20px;
+}
+@media (max-width: 620px) {
+  .flow-tools span {
+    display: none;
+  }
+  .flow-layout {
+    flex-direction: column;
+  }
+  .flow-inspector {
+    width: 100%;
+    max-height: 40%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+  }
+  .flow-inspector h3 {
+    grid-column: 1/-1;
+  }
+  .flow-foot {
+    padding: 6px 12px;
+  }
+  .flow-space {
+    min-height: 180px;
+  }
+}
+
+.flow-space .react-flow__controls-button {
+  background: #34352e;
+  color: #eee5d8;
+  border-color: #5a554b;
+}
+.flow-space .react-flow__attribution {
+  background: #252622;
+  color: #aaa;
+}

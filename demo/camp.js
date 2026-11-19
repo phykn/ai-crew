@@ -619,51 +619,62 @@ function jobDetail(job) {
     stopJob(current, job);
   };
 }
+function findApproval() {
+  const waiting = current.jobs.filter((job) => job.state === "approval");
+  return waiting.find((job) => job.id === current.approvalFocus) || waiting[0];
+}
+
+function openTask(job) {
+  current.selected = job.id;
+  drawActors();
+  drawComposer();
+  jobDetail(job);
+}
+
 function drawTasks() {
   const target = $("#tasks");
+  const approval = findApproval();
   target.innerHTML = current.jobs
-    .filter((job) => activeStates.includes(job.state))
+    .filter((job) => job !== approval && activeStates.includes(job.state))
     .map(
       (job) =>
         '<article class="task"><button class="task-title" data-job="' +
         job.id +
         '">' +
         safe(job.title) +
-        '</button><span class="task-phase">' +
-        safe(
-          job.state === "stopping"
-            ? "중단 중"
-            : job.state === "queued"
-              ? "앞 업무 대기"
-              : stageLabel(job),
-        ) +
-        "</span>" +
+        "</button>" +
         (job.state === "approval"
-          ? '<button class="chip pending" data-question="' +
+          ? '<button class="task-phase chip pending" data-question="' +
             job.id +
             '" aria-label="' +
             safe(job.title) +
             ' 승인 질문으로 이동">승인 대기</button>'
-          : "") +
+          : '<span class="task-phase">' +
+            safe(
+              job.state === "stopping"
+                ? "중단 중"
+                : job.state === "queued"
+                  ? "앞 업무 대기"
+                  : stageLabel(job),
+            ) +
+            "</span>") +
         "</article>",
     )
     .join("");
-  target.querySelectorAll("[data-job]").forEach(
-    (button) =>
-      (button.onclick = () => {
-        const job = current.jobs.find(
-          (job) => job.id === Number(button.dataset.job),
-        );
-        current.selected = job.id;
-        drawActors();
-        drawComposer();
-        jobDetail(job);
-      }),
-  );
+  target
+    .querySelectorAll("[data-job]")
+    .forEach(
+      (button) =>
+        (button.onclick = () =>
+          openTask(
+            current.jobs.find((job) => job.id === Number(button.dataset.job)),
+          )),
+    );
   target.querySelectorAll("[data-question]").forEach(
     (button) =>
       (button.onclick = () => {
         current.approvalFocus = Number(button.dataset.question);
+        drawTasks();
         drawDecision();
         $("#decision [data-allow]").focus();
       }),
@@ -672,24 +683,23 @@ function drawTasks() {
 
 function drawDecision() {
   const box = $("#decision");
-  const waiting = current.jobs.filter((job) => job.state === "approval");
-  const job =
-    waiting.find((job) => job.id === current.approvalFocus) || waiting[0];
-  const focused = box.contains(document.activeElement)
-    ? document.activeElement
-    : null;
-  const focusedAction = focused?.hasAttribute("data-allow")
-    ? "[data-allow]"
-    : "[data-deny]";
+  const job = findApproval();
+  const focused = document.activeElement;
+  const focusedAction = ["data-approval-job", "data-allow", "data-deny"].find(
+    (action) =>
+      box.contains(focused) && focused.getAttribute(action) === String(job?.id),
+  );
   box.hidden = !job;
   if (!job) {
     box.replaceChildren();
     return;
   }
   box.innerHTML =
-    '<section aria-label="승인 요청"><small>' +
+    '<section aria-label="승인 요청"><button class="task-title" data-approval-job="' +
+    job.id +
+    '">' +
     safe(job.title) +
-    "</small><p>" +
+    "</button><p>" +
     safe(job.question.text) +
     '</p><p class="decision-scope">' +
     safe(job.question.detail) +
@@ -702,11 +712,8 @@ function drawDecision() {
     '">거절</button></div></section>';
   box.querySelector("[data-allow]").onclick = () => decide(job, true);
   box.querySelector("[data-deny]").onclick = () => decide(job, false);
-  if (
-    focused?.dataset.allow === String(job.id) ||
-    focused?.dataset.deny === String(job.id)
-  )
-    box.querySelector(focusedAction).focus();
+  box.querySelector("[data-approval-job]").onclick = () => openTask(job);
+  if (focusedAction) box.querySelector("[" + focusedAction + "]").focus();
 }
 
 function openJobLog(id) {
@@ -833,7 +840,13 @@ function drawComposer() {
       $("#draft").focus();
     };
     target.append(clear);
-  } else if (job) {
+  } else if (
+    job &&
+    (job.state === "stopping" ||
+      current.jobs.some(
+        (other) => other !== job && activeStates.includes(other.state),
+      ))
+  ) {
     target.textContent =
       (job.state === "stopping" ? "중단 중 · " : "멈춤 대상 · ") + job.title;
   }
@@ -883,14 +896,13 @@ function drawLog() {
   const events = current.events.filter(
     (event) => !job || event.jobId === job.id,
   );
-  const fromFilter = job
-    ? '<button class="text-action" id="all-log">← 전체 기록</button>'
+  const header = job
+    ? '<button class="text-action" id="all-log">← 전체 기록</button><h2>' +
+      safe(job.title) +
+      "</h2>"
     : "";
   panel.innerHTML =
-    fromFilter +
-    "<h2>" +
-    (job ? safe(job.title) : "업무 기록") +
-    "</h2>" +
+    header +
     (events.length
       ? events
           .map((event) => {
@@ -935,6 +947,9 @@ function drawLog() {
 }
 function drawMemory() {
   const panel = $("#memory");
+  const article = project.memories.find(
+    (item) => item.id === project.wikiArticle,
+  );
   const navigation =
     '<div class="memory-navigation" aria-label="메모리 범위">' +
     [
@@ -953,7 +968,25 @@ function drawMemory() {
       )
       .join("") +
     "</div>";
-  panel.innerHTML = navigation;
+  const wikiViews =
+    project.memoryView === "wiki" && !article
+      ? '<div class="wiki-views" aria-label="위키 보기">' +
+        ["목록", "노드"]
+          .map(
+            (view) =>
+              '<button data-view="' +
+              view +
+              '" aria-pressed="' +
+              (project.wikiView === view) +
+              '">' +
+              view +
+              "</button>",
+          )
+          .join("") +
+        "</div>"
+      : "";
+  panel.innerHTML =
+    '<header class="memory-toolbar">' + navigation + wikiViews + "</header>";
   panel.querySelectorAll("[data-memory-view]").forEach(
     (button) =>
       (button.onclick = () => {
@@ -1008,9 +1041,6 @@ function drawMemory() {
     return;
   }
 
-  const article = project.memories.find(
-    (item) => item.id === project.wikiArticle,
-  );
   if (article) {
     panel.insertAdjacentHTML(
       "beforeend",
@@ -1054,42 +1084,25 @@ function drawMemory() {
 
   panel.insertAdjacentHTML(
     "beforeend",
-    '<div class="wiki-heading"><div aria-label="위키 보기">' +
-      ["목록", "노드"]
-        .map(
-          (view) =>
-            '<button data-view="' +
-            view +
-            '" aria-pressed="' +
-            (project.wikiView === view) +
-            '">' +
-            view +
-            "</button>",
-        )
-        .join("") +
-      "</div></div>" +
-      (project.wikiView === "노드"
-        ? wikiGraph(project.memories)
-        : project.memories
-            .map(
-              (item, index) =>
-                '<button class="memory-card" data-memory="' +
-                index +
-                '"><strong>' +
-                safe(item.title) +
-                "</strong><small>" +
-                safe(item.by) +
-                " · " +
-                safe(item.source) +
-                "</small></button>",
-            )
-            .join("") || '<p class="empty">아직 문서가 없어요.</p>'),
+    project.wikiView === "노드"
+      ? wikiGraph(project.memories)
+      : project.memories
+          .map(
+            (item, index) =>
+              '<button class="memory-card" data-memory="' +
+              index +
+              '"><strong>' +
+              safe(item.title) +
+              "</strong></button>",
+          )
+          .join("") || '<p class="empty">아직 문서가 없어요.</p>',
   );
-  document.querySelectorAll("[data-view]").forEach(
+  panel.querySelectorAll("[data-view]").forEach(
     (b) =>
       (b.onclick = () => {
         project.wikiView = b.dataset.view;
         drawMemory();
+        panel.querySelector('[data-view="' + project.wikiView + '"]').focus();
       }),
   );
   panel
@@ -1117,7 +1130,7 @@ function drawContext() {
       (n, s) => n + s.jobs.filter((j) => j.state === "approval").length,
       0,
     );
-  $("#session-waiting").textContent = waiting ? "대기 " + waiting : "";
+  $("#session-waiting").textContent = waiting ? String(waiting) : "";
   $("#session-waiting").hidden = !waiting;
   $("#session-open").setAttribute(
     "aria-label",

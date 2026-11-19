@@ -73,10 +73,8 @@ span[data-icon] {
 .bar-end,
 .subtle,
 .local,
-.camp-name,
 .glass,
 .roster-head,
-nav button,
 .iconbtn,
 .compose-bottom,
 .chip,
@@ -338,26 +336,6 @@ main {
   color: var(--agent);
   margin-right: 4px;
 }
-.scene-foot {
-  position: absolute;
-  z-index: 2;
-  bottom: 16px;
-  left: 22px;
-  right: 18px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: #f5e7c9;
-}
-.camp-name {
-  gap: 8px;
-}
-.camp-name h1 {
-  font-size: 20px;
-  letter-spacing: -0.015em;
-  font-weight: 650;
-  margin: 0;
-}
 .glass {
   gap: 5px;
   border: 1px solid #fff4;
@@ -374,25 +352,6 @@ main {
   flex-direction: column;
   background: var(--panel);
 }
-nav {
-  display: flex;
-  padding: 0 20px;
-  gap: 16px;
-  border-bottom: 1px solid var(--line);
-  flex-shrink: 0;
-}
-nav button {
-  justify-content: center;
-  gap: 7px;
-  padding: 17px 6px 14px;
-  font-weight: 600;
-  color: var(--dim);
-  border-bottom: 2px solid transparent;
-}
-nav button[aria-current="true"] {
-  color: var(--warm);
-  border-color: var(--warm);
-}
 .pane {
   flex: 1;
   min-height: 0;
@@ -406,10 +365,13 @@ nav button[aria-current="true"] {
   overflow: auto;
 }
 .task {
-  margin: 16px 18px 0;
-  padding: 12px 14px;
-  background: linear-gradient(110deg, #302c24, #252525);
-  border: 1px solid #5b503d;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) var(--pane-inset) 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: var(--radius-surface);
 }
 .chip {
@@ -524,7 +486,7 @@ textarea::placeholder {
 }
 .reading {
   overflow: auto;
-  padding: 20px;
+  padding: var(--space-4) var(--pane-inset);
 }
 .reading h2,
 .reading h3 {
@@ -697,9 +659,6 @@ dialog p {
     left: 12px;
     top: 12px;
   }
-  .task {
-    margin: 12px 14px 0;
-  }
 }
 
 #project-open {
@@ -742,9 +701,7 @@ dialog p {
     min-height: 32px;
   }
 }
-.workspace-actions,
-.wiki-heading,
-.wiki-heading > div {
+.workspace-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -774,21 +731,15 @@ dialog p {
   display: block;
   color: var(--warm);
 }
-.wiki-heading {
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-.wiki-heading h2 {
-  margin: 0;
-}
-.wiki-heading button {
+.wiki-views button {
   font-size: var(--font-detail);
-  border-radius: 5px;
-  padding: 3px 8px;
+  border-radius: var(--radius-control);
+  padding: var(--space-1) var(--space-2);
+  color: var(--dim);
 }
-.wiki-heading button[aria-pressed="true"] {
-  background: #51442d;
-  color: #efd09b;
+.wiki-views button[aria-pressed="true"] {
+  background: var(--surface-selected);
+  color: var(--warm);
 }
 .wiki-graph {
   position: relative;
@@ -851,7 +802,6 @@ dialog p {
   height: 15px;
 }
 
-/* Tabs stay in the same place when the workspace changes width. */
 .bar {
   position: relative;
   z-index: 5;
@@ -864,26 +814,49 @@ dialog p {
 main {
   height: calc(100dvh - var(--app-bar-height));
 }
-.bar nav {
+.toolbar,
+.view-tools {
   display: flex;
-  gap: var(--space-4);
-  height: 100%;
   align-items: center;
+  gap: var(--space-1);
+}
+.view-tools {
+  padding-right: var(--space-2);
+  border-right: 1px solid var(--line);
+}
+.toolbar button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--control-size);
+  height: var(--control-size);
   padding: 0;
-  border: 0;
-}
-.bar nav [data-tab] {
-  align-self: stretch;
-  padding-block: 0;
-  white-space: nowrap;
-}
-#session-open {
-  margin-left: auto;
-  min-width: var(--control-size);
-  min-height: var(--control-size);
-  padding: 5px;
   border-radius: var(--radius-control);
-  gap: 5px;
+  color: var(--dim);
+}
+.toolbar button:hover {
+  color: var(--text);
+  background: var(--card);
+}
+.toolbar button[aria-current="true"],
+.toolbar button[aria-expanded="true"] {
+  color: var(--warm);
+  background: var(--surface-selected);
+}
+.toolbar button:is(:hover, :focus-visible):not([aria-expanded="true"])::after {
+  content: attr(aria-label);
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  box-shadow: 0 2px 8px #0006;
+  color: var(--text);
+  font-size: var(--font-detail);
 }
 .compose-bottom {
   display: flex;
@@ -924,8 +897,7 @@ main {
   flex: none;
 }
 #workspace-open:hover,
-#approval-open:hover,
-#session-open:hover {
+#approval-open:hover {
   background: #37362f;
 }
 #actions {
@@ -941,9 +913,9 @@ main {
     height: var(--app-bar-height);
     padding: 0 12px;
   }
-  .bar nav {
+  .toolbar {
     grid-column: 1 / -1;
-    gap: 9px;
+    justify-self: end;
   }
   main {
     height: calc(100dvh - var(--app-bar-height));
@@ -973,33 +945,32 @@ main {
   display: none;
 }
 #session-waiting {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 14px;
+  padding-inline: 2px;
+  border-radius: 10px;
+  background: var(--warm);
   font-size: 10px;
-  color: var(--warm);
-  white-space: nowrap;
+  color: var(--on-warm);
 }
 
 .task-title {
+  display: block;
   min-width: 0;
   padding: 0;
   text-align: left;
   font-weight: inherit;
-  display: flex;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .task-title:hover {
   color: var(--warm);
 }
 .chip.pending {
   border: 1px solid #90784e;
-}
-
-@media (max-width: 420px) {
-  .bar nav [data-tab] {
-    font-size: 13px;
-    padding-inline: 4px;
-  }
-  .bar nav [data-tab] > span[data-icon] {
-    display: none;
-  }
 }
 
 #session-list {
@@ -1043,23 +1014,11 @@ main {
   }
 }
 
-.task {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-}
 .task-phase {
   color: var(--dim);
   font-size: var(--font-detail);
   margin-left: auto;
   text-align: right;
-}
-.task-title {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  display: block;
 }
 .actor.waiting .actor-label {
   border: 1px solid var(--warm);
@@ -1079,9 +1038,10 @@ main {
 #decision p {
   margin: var(--space-1) 0 var(--space-2);
 }
-#decision small {
+#decision .task-title {
   color: var(--warm);
   font-size: var(--font-detail);
+  max-width: 100%;
 }
 .decision-actions {
   display: flex;
@@ -1095,11 +1055,21 @@ main {
   padding: 0 var(--space-1);
   color: var(--warm);
 }
-.memory-navigation {
+.memory-toolbar,
+.memory-navigation,
+.wiki-views {
   display: flex;
-  gap: var(--space-4);
+  align-items: center;
+}
+.memory-toolbar {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 var(--space-2);
   margin-bottom: var(--space-3);
   border-bottom: 1px solid var(--line);
+}
+.memory-navigation {
+  gap: var(--space-4);
 }
 .memory-navigation button {
   color: var(--dim);
@@ -1109,9 +1079,6 @@ main {
 .memory-navigation button[aria-pressed="true"] {
   color: var(--warm);
   border-color: var(--warm);
-}
-.wiki-heading {
-  justify-content: flex-end;
 }
 .memory-note {
   margin: -4px 0 var(--space-3);

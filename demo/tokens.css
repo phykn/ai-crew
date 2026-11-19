@@ -1,0 +1,44 @@
+:root {
+  color-scheme: dark;
+  --bg: #18191a;
+  --card: #222323;
+  --line: #383836;
+  --warm: #efc784;
+  --text: #eeeae3;
+  --dim: #aaa79f;
+  --surface-control: #302f2a;
+  --line-control: #585348;
+  --on-warm: #241f17;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --radius-control: 6px;
+  --radius-surface: 8px;
+  --control-size: 34px;
+  --icon-size: 17px;
+  --font-detail: 12px;
+  --app-bar-height: 54px;
+  --mobile-brand-height: 44px;
+  --mobile-tabs-height: 42px;
+  --workspace-columns: minmax(0, 1.62fr) minmax(365px, 1fr);
+  --flow-node-width: 128px;
+  --flow-column-gap: 12px;
+  --flow-row-step: 104px;
+  --flow-handle-size: 12px;
+  font:
+    15px/1.55 -apple-system,
+    BlinkMacSystemFont,
+    "Apple SD Gothic Neo",
+    "Malgun Gothic",
+    sans-serif;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --app-bar-height: calc(
+      var(--mobile-brand-height) + var(--mobile-tabs-height)
+    );
+  }
+}

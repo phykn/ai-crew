@@ -1,6 +1,6 @@
 #flow {
-  container-type: inline-size;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 #flow-root,
@@ -10,18 +10,17 @@
 .flow-view {
   display: flex;
   flex-direction: column;
-  position: relative;
 }
 .flow-tools,
 .flow-foot {
-  padding: 10px 16px;
+  padding: var(--space-2) var(--space-4);
   flex-shrink: 0;
 }
 .flow-tools {
   display: flex;
   align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid #403c34;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--line);
 }
 .flow-context {
   flex: 1;
@@ -36,133 +35,82 @@
 }
 .flow-context small,
 .flow-foot {
-  color: #b9b2a6;
-  font-size: 12px;
+  color: var(--dim);
+  font-size: var(--font-detail);
 }
-.flow-view button:not(.react-flow__controls-button),
-.flow-tools select,
-.flow-inspector select,
-.flow-inspector input:not([type="checkbox"]),
-.flow-inspector textarea {
-  background: #302f2a;
-  border: 1px solid #585348;
-  border-radius: 6px;
-  color: #e9e4da;
-  padding: 6px 10px;
+.flow-tools button,
+.stage-actions button,
+.stage-details select,
+.stage-details input,
+.stage-details textarea {
+  min-height: var(--control-size);
+  background: var(--surface-control);
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  padding: var(--space-1) var(--space-2);
 }
 .flow-tools .primary {
-  background: #e5c189;
-  color: #241f17;
+  background: var(--warm);
+  color: var(--on-warm);
 }
 .flow-space {
   flex: 1;
   min-width: 0;
   min-height: 0;
 }
-.flow-layout {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  position: relative;
-}
-.flow-inspector {
-  width: min(260px, 34%);
-  overflow: auto;
-  padding: 14px;
-  background: #242521;
-}
-.flow-inspector h3 {
-  margin: 0 0 12px;
-}
-.flow-inspector label {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 9px;
-  font-size: 12px;
-  color: #c9c3b6;
-}
-.flow-inspector details label {
-  display: flex;
-  align-items: center;
-}
-.flow-inspector textarea {
-  min-height: 72px;
-}
-.flow-inspector input,
-.flow-inspector select {
-  width: 100%;
-}
-.flow-inspector input[type="checkbox"] {
-  width: auto;
-}
-.flow-inspector details {
-  margin: 10px 0;
-}
 .crew-node {
-  background: #282a28;
-  color: #f3eee4;
-  border: 1px solid #666459;
+  width: var(--flow-node-width);
+  min-height: 52px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--line-control);
   border-left: 3px solid var(--role);
-  border-radius: 7px;
-  min-width: 148px;
-  padding: 10px 14px;
-  box-shadow: 0 2px 7px #0004;
-}
-.crew-node small,
-.crew-node strong {
-  display: block;
+  border-radius: var(--radius-surface);
+  padding: var(--space-2) var(--space-3);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .crew-node small {
   color: var(--role);
-  font-size: 11px;
+  font-size: var(--font-detail);
+}
+.crew-node strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
 }
 .crew-node.chosen {
-  outline: 2px solid #dcb779;
+  outline: 2px solid var(--warm);
 }
 .crew-node .react-flow__handle {
-  width: 12px;
-  height: 12px;
-  background: #b7a07c;
-  border: 2px solid #302d25;
+  width: var(--flow-handle-size);
+  height: var(--flow-handle-size);
+  background: var(--warm);
+  border: 2px solid var(--card);
 }
-.edge-action {
-  position: absolute;
-  bottom: 12px;
-  right: 15px;
+.stage-details label {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-detail);
+  color: var(--dim);
 }
-@container (max-width: 550px) {
-  .flow-tools {
-    padding: 8px 10px;
-    gap: 5px;
-    font-size: 13px;
-  }
-  .flow-layout {
-    flex-direction: column;
-  }
-  .flow-inspector {
-    width: 100%;
-    max-height: 40%;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px 10px;
-  }
-  .flow-inspector h3 {
-    grid-column: 1/-1;
-  }
-  .flow-foot {
-    padding: 6px 12px;
-  }
-  .flow-space {
-    min-height: 180px;
-  }
+.stage-details textarea {
+  min-height: 72px;
 }
-
+.stage-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
 .flow-space .react-flow__controls-button {
-  background: #34352e;
-  color: #eee5d8;
-  border-color: #5a554b;
+  background: var(--surface-control);
+  color: var(--text);
+  border-color: var(--line-control);
 }
 .flow-space .react-flow__attribution {
-  background: #252622;
-  color: #aaa;
+  background: var(--card);
+  color: var(--dim);
 }

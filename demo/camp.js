@@ -137,7 +137,7 @@ function makeProject(name, handle = null) {
     handle,
     sessions: [],
     memories: [],
-    workflow: makeStages("개발"),
+    workflow: makeStages(),
     version: 1,
     approval: "수동",
     wikiView: "목록",
@@ -855,6 +855,7 @@ function render() {
   drawMemory();
 }
 function openTab(name) {
+  closeSessionList();
   tab = name;
   for (const el of document.querySelectorAll("[data-tab]"))
     el.setAttribute("aria-current", String(el.dataset.tab === tab));
@@ -862,7 +863,6 @@ function openTab(name) {
     (key) => ($("#" + key).hidden = key !== tab),
   );
   document.body.classList.remove("camp-visible");
-  $("main").classList.toggle("editing-flow", name === "flow");
   $("#mobile-switch").textContent = "캠프 보기";
   render();
   if (name === "flow") showWorkflow(project);
@@ -1040,39 +1040,69 @@ function openProjects() {
     }
   };
 }
-$("#session-open").onclick = () => {
-  modal(
-    "세션 · " + project.name,
-    '<button id="new-session" class="secondary">새 대화</button>' +
-      project.sessions
-        .map(
-          (session, i) =>
-            '<button class="session-row" data-session="' +
-            i +
-            '"><strong>' +
-            safe(session.name) +
-            "</strong><small>" +
-            safe(sessionSummary(session)) +
-            "</small></button>",
-        )
-        .reverse()
-        .join(""),
-  );
-  $("#detail").classList.add("session-drawer");
+const sessionToggle = $("#session-open");
+const sessionList = $("#session-list");
+
+function closeSessionList() {
+  sessionList.hidden = true;
+  sessionToggle.setAttribute("aria-expanded", "false");
+}
+
+sessionToggle.onclick = () => {
+  if (!sessionList.hidden) {
+    closeSessionList();
+    return;
+  }
+
+  sessionList.innerHTML =
+    '<li><button class="session-option" id="new-session">＋ 새 대화</button></li>' +
+    project.sessions
+      .map(
+        (session, index) =>
+          '<li><button class="session-option" data-session="' +
+          index +
+          '"' +
+          (session === current ? ' aria-current="true"' : "") +
+          "><strong>" +
+          safe(session.name) +
+          "</strong><small>" +
+          safe(sessionSummary(session)) +
+          "</small></button></li>",
+      )
+      .reverse()
+      .join("");
+
   $("#new-session").onclick = () => {
-    $("#detail").close();
+    closeSessionList();
     switchSession(newSession());
+    $("#draft").focus();
   };
-  document.querySelectorAll("[data-session]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        $("#detail").close();
-        switchSession(project.sessions[+b.dataset.session]);
-      }),
-  );
+  sessionList.querySelectorAll("[data-session]").forEach((button) => {
+    button.onclick = () => {
+      closeSessionList();
+      switchSession(project.sessions[Number(button.dataset.session)]);
+      sessionToggle.focus();
+    };
+  });
+  sessionList.hidden = false;
+  sessionToggle.setAttribute("aria-expanded", "true");
 };
+
+document.addEventListener("click", (event) => {
+  if (
+    !sessionToggle.contains(event.target) &&
+    !sessionList.contains(event.target)
+  )
+    closeSessionList();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !sessionList.hidden) {
+    closeSessionList();
+    sessionToggle.focus();
+  }
+});
 $("#detail").addEventListener("close", () =>
-  $("#detail").classList.remove("session-drawer", "composer-menu"),
+  $("#detail").classList.remove("composer-menu"),
 );
 $("#workspace-open").onclick = openProjects;
 $("#approval-open").onclick = () => {

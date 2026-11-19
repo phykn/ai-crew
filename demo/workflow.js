@@ -1,46 +1,44 @@
 "use strict";
 
-const examples = {
-  개발: [
-    [1, "플랜", 4, "요청 범위와 검증 가능한 완료 조건을 인계한다."],
-    [2, "개발", 1, "기존 코드를 재사용하고 첫 미완료 작업의 변경을 확인한다."],
-    [3, "리뷰", 3, "요구사항과 기존 동작을 변경 근거로 대조한다."],
-    [
-      3,
-      "코딩 스타일 확인",
-      5,
-      "관련 프로젝트 지침으로 이름·중복·가독성을 확인한다.",
-    ],
-    [3, "테스트", 2, "작은 재현부터 실행해 결과와 미확인 범위를 남긴다."],
+const defaultStages = [
+  [1, "플랜", 4, "요청 범위와 검증 가능한 완료 조건을 인계한다."],
+  [2, "개발", 1, "기존 코드를 재사용하고 첫 미완료 작업의 변경을 확인한다."],
+  [3, "리뷰", 3, "요구사항과 기존 동작을 변경 근거로 대조한다."],
+  [
+    3,
+    "코딩 스타일 확인",
+    5,
+    "관련 프로젝트 지침으로 이름·중복·가독성을 확인한다.",
   ],
-  조사: [
-    [1, "질문과 범위 정리", 4, "확인할 질문과 관련 위키 경로를 정한다."],
-    [2, "자료 조사", 1, "각 주장에 출처를 연결한다."],
-    [3, "근거 검토", 3, "출처와 주장이 일치하는지 확인한다."],
-  ],
-};
-function makeStages(template) {
-  const groups = Map.groupBy(examples[template], (row) => row[0]);
+  [3, "테스트", 2, "작은 재현부터 실행해 결과와 미확인 범위를 남긴다."],
+];
+function makeStages() {
+  const tokens = getComputedStyle(document.documentElement);
+  const columnStep =
+    parseFloat(tokens.getPropertyValue("--flow-node-width")) +
+    parseFloat(tokens.getPropertyValue("--flow-column-gap"));
+  const rowStep = parseFloat(tokens.getPropertyValue("--flow-row-step"));
+  const groups = Map.groupBy(defaultStages, (row) => row[0]);
   const nodes = [
-    { id: "start", position: { x: 0, y: 140 }, data: { label: "비서 · 요청" } },
+    { id: "start", position: { x: 0, y: 0 }, data: { label: "비서 · 요청" } },
   ];
   const edges = [];
   let previous = ["start"];
-  for (const [column, rows] of groups) {
+  for (const [row, rows] of groups) {
     const next = [];
     rows.forEach(([, label, role, criterion], i) => {
       const id = "stage-" + nodes.length;
       nodes.push({
         id,
         position: {
-          x: column * 220,
-          y: 140 + (i - (rows.length - 1) / 2) * 110,
+          x: (i - (rows.length - 1) / 2) * columnStep,
+          y: row * rowStep,
         },
         data: {
           label,
           role,
           criterion,
-          access: template === "개발" && role === 1 ? "파일 수정" : "자료 조회",
+          access: role === 1 ? "파일 수정" : "자료 조회",
         },
       });
       for (const source of previous)
@@ -51,7 +49,7 @@ function makeStages(template) {
   }
   nodes.push({
     id: "end",
-    position: { x: (groups.size + 1) * 220, y: 140 },
+    position: { x: 0, y: (groups.size + 1) * rowStep },
     data: { label: "비서 · 보고" },
   });
   for (const source of previous)
@@ -98,7 +96,6 @@ function showWorkflow(owner) {
     roles: owner.crew,
     projectName: owner.name,
     version: owner.version,
-    makeStages,
     validate: groupStages,
     save(graph, logicChanged) {
       owner.workflow = graph;

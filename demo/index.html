@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>AI Crew · 잿불 야영지</title>
-    <link rel="stylesheet" href="camp.css?v=tabs" />
-    <link rel="stylesheet" href="assets/flow-editor.css?v=tabs" />
-    <script defer src="assets/flow-editor.js?v=tabs"></script>
-    <script defer src="workflow.js?v=tabs"></script>
-    <script defer src="camp.js?v=tabs"></script>
+    <link rel="stylesheet" href="tokens.css?v=flow" />
+    <link rel="stylesheet" href="camp.css?v=flow" />
+    <link rel="stylesheet" href="assets/flow-editor.css?v=flow" />
+    <script defer src="assets/flow-editor.js?v=flow"></script>
+    <script defer src="workflow.js?v=flow"></script>
+    <script defer src="camp.js?v=flow"></script>
   </head>
   <body>
     <header class="bar">
@@ -28,12 +29,14 @@
           id="session-open"
           title="세션 목록"
           aria-label="세션 목록"
-          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-controls="session-list"
         >
           <small id="session-waiting" hidden></small
           ><span data-icon="menu"></span>
         </button>
       </nav>
+      <ul id="session-list" aria-label="세션 목록" hidden></ul>
     </header>
     <main>
       <section class="camp" aria-label="잿불 야영지">

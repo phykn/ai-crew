@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   actions,
   type Action,
+  type AppNotification,
+  type Artifact,
   type Snapshot,
   type ToolApproval,
 } from "./actions";
@@ -191,6 +193,9 @@ export class ActionRunner {
       case "job.cleanup":
         await store.cleanupWorkspace(action.jobId);
         break;
+      case "notification.read":
+        store.markNotificationRead(action.sessionId, action.notificationId);
+        break;
       case "chat.send":
         await this.chat(action);
         break;
@@ -288,6 +293,7 @@ const descriptions: Record<string, string> = {
   "job.workspace": "업무 전용 Git 브랜치와 워크트리를 만들어 격리 실행을 준비해요.",
   "job.apply": "검증을 마친 업무 브랜치를 원본에 반영해요.",
   "job.cleanup": "끝난 업무의 워크트리를 정리하고 기록은 남겨요.",
+  "notification.read": "업무 알림을 읽음으로 표시해요.",
   "chat.send": "비서에게 메시지를 보내요.",
   "chat.stop": "응답 생성을 멈춰요.",
   "job.answer": "권한 요청에 허용·거절로 답해요.",
@@ -331,6 +337,8 @@ export type AppRead = {
   session: { id: string; title: string; workflowId: string | null } | null;
   tabs: string[];
   view: Snapshot["view"];
+  artifacts: Artifact[];
+  notifications: AppNotification[];
   jobs: Snapshot["jobs"];
   pendingApprovals: { id: string; jobId: string }[];
   pendingToolApprovals: ToolApproval[];
@@ -374,6 +382,8 @@ export function appRead(store: CrewStore): AppRead {
       : null,
     tabs: ["대화", "로그", "메모리", "워크플로우"],
     view: snapshot.view,
+    artifacts: snapshot.artifacts,
+    notifications: snapshot.notifications,
     jobs: snapshot.jobs,
     pendingApprovals: snapshot.fileApprovals
       .filter(({ decision }) => decision === null)

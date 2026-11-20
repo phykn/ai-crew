@@ -52,6 +52,7 @@ const icons = {
   send: "m3 11 18-8-7 18-3-8-8-2Zm8 2 10-10",
   stop: "M6 6h12v12H6Z",
   flow: "M6 4h12v5H6Zm0 11h5v5H6Zm7 0h5v5h-5Zm-3.5-6v3h6v3",
+  bell: "M12 3a5 5 0 0 0-5 5v4l-2 4h14l-2-4V8a5 5 0 0 0-5-5Zm-2 15a2 2 0 0 0 4 0",
 };
 function Icon({ name }: { name: keyof typeof icons }) {
   return (
@@ -283,7 +284,9 @@ function Workspace() {
     undefined,
   );
   const [flowDraft, setFlowDraft] = useState<FlowDraft | null>(null);
-  const [menu, setMenu] = useState<"projects" | "sessions" | null>(null);
+  const [menu, setMenu] = useState<
+    "projects" | "sessions" | "notifications" | null
+  >(null);
   const [addingMember, setAddingMember] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [settingsMember, setSettingsMember] = useState<string | null>(null);
@@ -352,6 +355,8 @@ function Workspace() {
     ? (data.view.memoryOwnerId ?? undefined)
     : localMemoryOwner;
   const panelWidth = resizing ?? data?.view.panelWidth ?? 380;
+  const unread =
+    data?.notifications.filter(({ readAt }) => readAt === null).length ?? 0;
 
   useEffect(() => {
     const area = messages.current;
@@ -955,6 +960,22 @@ function Workspace() {
             <button
               type="button"
               className="icon-button"
+              aria-label={
+                "알림" +
+                (unread ? " " + unread + "건 읽지 않음" : "")
+              }
+              title="알림"
+              aria-expanded={menu === "notifications"}
+              onClick={() =>
+                setMenu(menu === "notifications" ? null : "notifications")
+              }
+            >
+              <Icon name="bell" />
+              {unread > 0 && <span className="badge">{unread}</span>}
+            </button>
+            <button
+              type="button"
+              className="icon-button"
               aria-label="세션 목록"
               title="세션 목록"
               aria-expanded={menu === "sessions"}
@@ -1000,6 +1021,47 @@ function Workspace() {
                 >
                   프로젝트 폴더 열기…
                 </button>
+              )}
+            </div>
+          )}
+          {menu === "notifications" && data?.session && (
+            <div className="menu notifications" aria-label="알림">
+              {data.notifications.length ? (
+                data.notifications.map((note) => (
+                  <button
+                    type="button"
+                    key={note.id}
+                    aria-current={note.readAt === null}
+                    onClick={() => {
+                      setMenu(null);
+                      if (data.session)
+                        void run({
+                          type: "notification.read",
+                          sessionId: data.session.id,
+                          notificationId: note.id,
+                        });
+                      if (note.approvalId && note.kind === "approval") {
+                        if (note.jobId) setFocusedApprovalId(note.jobId);
+                        setView("chat");
+                      } else if (note.jobId) {
+                        setLogJob(note.jobId);
+                        setView("log");
+                      }
+                    }}
+                  >
+                    {note.kind === "approval"
+                      ? "승인"
+                      : note.kind === "question"
+                        ? "질문"
+                        : note.kind === "report"
+                          ? "보고"
+                          : "중단"}{" "}
+                    · {note.text.slice(0, 60)}
+                    {note.readAt === null && " · 새 알림"}
+                  </button>
+                ))
+              ) : (
+                <small className="muted">아직 알림이 없어요.</small>
               )}
             </div>
           )}
@@ -1111,6 +1173,23 @@ function Workspace() {
               </div>
             )}
             <ModelUsage runs={data?.modelRuns ?? []} jobId={logJob} />
+            {!!data?.artifacts.filter(({ jobId }) => !logJob || jobId === logJob)
+              .length && (
+              <details className="change-log">
+                <summary>산출물</summary>
+                <ul>
+                  {data.artifacts
+                    .filter(({ jobId }) => !logJob || jobId === logJob)
+                    .map((artifact) => (
+                      <li key={artifact.id}>
+                        {artifact.name} · <code>{artifact.path}</code> ·{" "}
+                        <code>{artifact.hash.slice(0, 8)}</code> · 산출물{" "}
+                        <code>{artifact.id.slice(0, 8)}</code>
+                      </li>
+                    ))}
+                </ul>
+              </details>
+            )}
             {selectedLogJob &&
               data?.fileApprovals
                 .filter(({ jobId }) => jobId === selectedLogJob.id)

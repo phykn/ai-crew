@@ -838,3 +838,22 @@ summary:focus-visible {
   gap: var(--space-2);
   font-size: var(--font-detail);
 }
+.icon-button .badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--warm);
+  color: #1c1e1a;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+}
+.menu.notifications {
+  max-width: 320px;
+}
+.menu.notifications button[aria-current="true"] {
+  color: var(--warm);
+}

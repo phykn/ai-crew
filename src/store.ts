@@ -33,6 +33,8 @@ import {
   type Workflow,
   type WorkflowGraph,
   type ViewState,
+  type AppNotification,
+  type Artifact,
 } from "./actions";
 import { skillStates } from "./skill-status";
 import {
@@ -62,7 +64,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 31)
+    if (migration.user_version > 32)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -485,6 +487,26 @@ export class CrewStore {
         ALTER TABLE jobs ADD COLUMN apply_state TEXT NOT NULL DEFAULT 'none';
         ALTER TABLE jobs ADD COLUMN apply_note TEXT;
         PRAGMA user_version = 31;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 32) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE artifacts (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+          job_id TEXT NOT NULL REFERENCES jobs(id), author_id TEXT, change_id TEXT NOT NULL,
+          name TEXT NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL, hash TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX artifacts_by_project ON artifacts(project_id);
+        CREATE TABLE notifications (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+          session_id TEXT NOT NULL REFERENCES sessions(id), job_id TEXT, approval_id TEXT,
+          kind TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL, read_at TEXT
+        );
+        CREATE INDEX notifications_by_session ON notifications(session_id);
+        PRAGMA user_version = 32;
         COMMIT;
       `);
     }
@@ -1297,6 +1319,96 @@ export class CrewStore {
     });
   }
 
+  private notify(
+    job: Job,
+    event: string,
+    kind: AppNotification["kind"],
+    text: string,
+    approvalId: string | null = null,
+  ) {
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO notifications (id, project_id, session_id, job_id, approval_id, kind, text, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        event,
+        job.projectId,
+        job.sessionId,
+        job.id,
+        approvalId,
+        kind,
+        text,
+        new Date().toISOString(),
+      );
+  }
+
+  readNotifications(sessionId: string) {
+    return this.db
+      .prepare(
+        `SELECT id, session_id AS sessionId, job_id AS jobId, approval_id AS approvalId,
+         kind, text, created_at AS createdAt, read_at AS readAt
+         FROM notifications WHERE session_id = ? ORDER BY rowid DESC LIMIT 50`,
+      )
+      .all(sessionId) as AppNotification[];
+  }
+
+  markNotificationRead(sessionId: string, id: string) {
+    const row = this.db
+      .prepare(
+        "UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE id = ? AND session_id = ? RETURNING id",
+      )
+      .get(new Date().toISOString(), id, sessionId);
+    if (!row) throw new Error("이 대화의 알림이 아니에요.");
+  }
+
+  listArtifacts(projectId: string) {
+    return this.db
+      .prepare(
+        `SELECT id, job_id AS jobId, author_id AS authorId, change_id AS changeId,
+         name, kind, path, hash, created_at AS createdAt
+         FROM artifacts WHERE project_id = ? ORDER BY rowid DESC`,
+      )
+      .all(projectId) as Artifact[];
+  }
+
+  getArtifact(projectId: string, id: string) {
+    return this.db
+      .prepare(
+        `SELECT id, job_id AS jobId, author_id AS authorId, change_id AS changeId,
+         name, kind, path, hash, created_at AS createdAt
+         FROM artifacts WHERE project_id = ? AND id = ?`,
+      )
+      .get(projectId, id) as Artifact | undefined;
+  }
+
+  private recordArtifact(job: Job, changeId: string, hash: string) {
+    const change = this.db
+      .prepare(
+        "SELECT path, moved_from AS movedFrom, author_member_id AS authorId FROM work_changes WHERE id = ?",
+      )
+      .get(changeId) as
+      | { path: string; movedFrom: string | null; authorId: string | null }
+      | undefined;
+    if (!change) return;
+    this.db
+      .prepare(
+        `INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, 'file', ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET hash = excluded.hash`,
+      )
+      .run(
+        changeId,
+        job.projectId,
+        job.id,
+        change.authorId,
+        changeId,
+        basename(change.path),
+        change.path,
+        hash,
+        new Date().toISOString(),
+      );
+  }
+
   private logMcpSetting(projectId: string, note: string) {
     const session = this.db
       .prepare("SELECT last_session FROM projects WHERE id = ?")
@@ -1848,15 +1960,17 @@ export class CrewStore {
   }
 
   private insertJobQuestion(job: Job, text: string) {
+    const id = randomUUID();
     this.db
       .prepare("INSERT INTO job_questions VALUES (?, ?, ?)")
-      .run(randomUUID(), job.id, text);
+      .run(id, job.id, text);
     this.db
       .prepare(
         "UPDATE jobs SET state = 'clarification', approval_id = NULL WHERE id = ?",
       )
       .run(job.id);
     this.log(job.sessionId, "비서 · 사용자 확인 요청 · " + text, job.id);
+    this.notify(job, "question:" + id, "question", text, id);
   }
 
   reviseJob(job: Job, requestId: string, text: string, questionId?: string) {
@@ -2022,7 +2136,7 @@ export class CrewStore {
           WHERE id = ? AND job_id = ? AND after_hash = ? AND saved_at IS NULL RETURNING path, moved_from`,
         )
         .get(new Date().toISOString(), changeId, job.id, hash);
-      if (saved)
+      if (saved) {
         this.log(
           job.sessionId,
           "개발 → 비서 · " +
@@ -2032,6 +2146,8 @@ export class CrewStore {
             hash,
           job.id,
         );
+        this.recordArtifact(job, changeId, hash);
+      }
     });
   }
 
@@ -2437,6 +2553,11 @@ export class CrewStore {
           job.id,
         );
       this.log(job.sessionId, note, job.id);
+      if (state === "approval" && approval)
+        this.notify(job, "approval:" + approval, "approval", note, approval);
+      if (state === "complete") this.notify(job, "report:" + job.id, "report", note);
+      if (state === "stopped")
+        this.notify(job, "stopped:" + job.id, "stopped", note);
       if (state === "complete" || state === "denied")
         this.releaseTemporaryMembers(job);
       if (report)
@@ -2665,6 +2786,8 @@ export class CrewStore {
       mcpGrants: current ? this.listMcpGrants(current.id) : [],
       skills: current ? this.listSkills(current.id) : [],
       workflows: current ? this.listWorkflows(current.id) : [],
+      artifacts: current ? this.listArtifacts(current.id) : [],
+      notifications: session ? this.readNotifications(session.id) : [],
       toolApprovals: session ? this.readToolApprovals(session.id) : [],
       skillStates: current
         ? skillStates({

@@ -189,6 +189,11 @@ export const actions = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("job.apply"), jobId: identifier }),
   z.strictObject({ type: z.literal("job.cleanup"), jobId: identifier }),
   z.strictObject({
+    type: z.literal("notification.read"),
+    sessionId: identifier,
+    notificationId: z.string().min(1).max(200),
+  }),
+  z.strictObject({
     type: z.literal("view.set"),
     sessionId: identifier,
     patch: z.strictObject({
@@ -441,6 +446,27 @@ export type Job = {
   applyState: "none" | "applied" | "blocked";
   applyNote: string | null;
 };
+export type AppNotification = {
+  id: string;
+  sessionId: string;
+  jobId: string | null;
+  approvalId: string | null;
+  kind: "approval" | "question" | "report" | "stopped";
+  text: string;
+  createdAt: string;
+  readAt: string | null;
+};
+export type Artifact = {
+  id: string;
+  jobId: string;
+  authorId: string | null;
+  changeId: string;
+  name: string;
+  kind: "file";
+  path: string;
+  hash: string;
+  createdAt: string;
+};
 export type ViewState = {
   tab: "chat" | "log" | "memory" | "workflow";
   camp: boolean;
@@ -486,6 +512,8 @@ export type Snapshot = {
   skillStates: SkillStatus[];
   toolApprovals: ToolApproval[];
   workflows: Workflow[];
+  artifacts: Artifact[];
+  notifications: AppNotification[];
   memories: CrewMemory[];
   wiki: WikiPage[];
   assignees: { jobId: string; memberId: string; roleId: RoleId }[];

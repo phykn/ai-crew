@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.93",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "ai": "7.0.177",
     "react": "19.3.1",
     "react-dom": "19.3.1",

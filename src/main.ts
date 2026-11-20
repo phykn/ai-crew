@@ -2,9 +2,12 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { actions, type ChatEvent, type Completion } from "./actions";
+import { findChatCommand } from "./chat-commands";
 import { CodexConnection } from "./codex";
 import { classifyModelFailure } from "./model-errors";
 import { runLocal } from "./local";
+import { CrewMcp } from "./mcp";
+import { crewInstructions } from "./crew-definition";
 import { CrewStore } from "./store";
 import { CrewWorkflow } from "./workflow";
 
@@ -32,13 +35,14 @@ if (!app.requestSingleInstanceLock()) {
 async function startApp() {
   const store = new CrewStore(join(app.getPath("userData"), "crew.sqlite"));
   const codex = new CodexConnection();
+  const mcp = new CrewMcp(store);
   const runs = new Map<
     string,
     { id: string; request: string; controller: AbortController }
   >();
   let window: BrowserWindow | null;
   let closing = false;
-  const workflow = new CrewWorkflow(store, codex, () => publish(null));
+  const workflow = new CrewWorkflow(store, codex, () => publish(null), mcp);
 
   function publish(event: ChatEvent | null) {
     if (window && !window.isDestroyed())
@@ -53,7 +57,7 @@ async function startApp() {
   ) {
     const session = store.getSession(sessionId);
     const project = store.getProject(session.projectId);
-    const { provider } = store.readMembers(project.id, "assistant")[0];
+    const assistant = store.readMembers(project.id, "assistant")[0];
     const history = store
       .getMessages(sessionId)
       .filter(
@@ -74,7 +78,7 @@ async function startApp() {
     };
 
     try {
-      if (provider === "codex") {
+      if (assistant.provider === "codex") {
         const previous = store.getCodexThread(sessionId);
         const withHistory = () =>
           history.length > 1
@@ -111,6 +115,12 @@ async function startApp() {
             if (!closing) store.log(sessionId, event);
           },
           () => workflow.delegate(sessionId, id, text),
+          mcp.modelTools(
+            { projectId: project.id, sessionId },
+            assistant,
+            controller.signal,
+          ),
+          crewInstructions(assistant, store.listSkills(project.id)),
         );
       }
     } catch (error) {
@@ -186,15 +196,47 @@ async function startApp() {
           action.allow,
         );
         break;
+      case "mcp.connect":
+        await mcp.connect(
+          action.projectId,
+          action.serverId,
+          action.name,
+          action.url,
+        );
+        break;
+      case "mcp.disconnect":
+        store.disconnectMcpEndpoint(action.projectId, action.serverId);
+        break;
+      case "mcp.grant":
+        store.setMcpGrant(
+          action.projectId,
+          action.serverId,
+          action.memberId,
+          action.toolName,
+          action.allow,
+        );
+        break;
+      case "crew.skill.add":
+        store.addSkill(action.projectId, {
+          id: action.skillId,
+          memberId: action.memberId,
+          name: action.name,
+          markdown: action.markdown,
+        });
+        break;
+      case "crew.skill.remove":
+        store.removeSkill(action.projectId, action.memberId, action.skillId);
+        break;
       case "chat.send": {
+        const command = findChatCommand(action.text);
         const current = runs.get(action.sessionId);
         if (
           current &&
           current.request !== action.requestId &&
-          action.text !== "/clear"
+          !command
         )
           throw new Error("이 대화에서 이미 답변을 생성하고 있어요.");
-        if (action.text === "/clear") {
+        if (command === "/clear") {
           store.clearSession(action.sessionId, action.requestId);
           break;
         }

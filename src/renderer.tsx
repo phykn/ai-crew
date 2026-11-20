@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
+import { CrewSettings } from "./crew-settings";
+import { findChatCommand, suggestChatCommands } from "./chat-commands";
 import {
   approvalLabels,
   planFiles,
@@ -86,6 +88,7 @@ function CheckList({ checks }: { checks: WorkCheck[] }) {
 function Workspace() {
   const [data, setData] = useState<Snapshot | null>(null);
   const [draft, setDraft] = useState("");
+  const [commandsDismissed, setCommandsDismissed] = useState(false);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [revision, setRevision] = useState<{
@@ -102,6 +105,7 @@ function Workspace() {
   const [showCamp, setShowCamp] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
+  const [settingsMember, setSettingsMember] = useState<string | null>(null);
   const dataRef = useRef<Snapshot | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const messages = useRef<HTMLDivElement>(null);
@@ -111,6 +115,7 @@ function Workspace() {
     if (next.session?.id !== dataRef.current?.session?.id) setRevision(null);
     if (resetDraft || next.session?.id !== dataRef.current?.session?.id) {
       setDraft(next.session?.draft ?? "");
+      setCommandsDismissed(false);
       following.current = true;
     }
     dataRef.current = next;
@@ -170,6 +175,7 @@ function Workspace() {
     setFocusedApprovalId(null);
     setAddingMember(false);
     setEditingMember(null);
+    setSettingsMember(null);
     if (await run(action)) {
       setView("chat");
       setShowCamp(false);
@@ -193,7 +199,7 @@ function Workspace() {
       !data?.session ||
       !text ||
       sending ||
-      (running && (revision || text !== "/clear"))
+      (running && (revision || !findChatCommand(text)))
     )
       return;
     setSending(true);
@@ -234,8 +240,15 @@ function Workspace() {
   const revisionJob = data?.jobs.find((job) => job.id === revision?.id);
   const firstQuestion = data?.jobs.find((job) => job.clarification);
   const followup = data?.followups[0];
+  const configuredMember = data?.members.find(
+    ({ id }) => id === settingsMember,
+  );
   const composeText = revision?.text ?? draft;
-  const clearing = !revision && composeText.trim() === "/clear";
+  const clearing = !revision && findChatCommand(composeText) === "/clear";
+  const commandSuggestions =
+    revision || commandsDismissed || sending || clearing
+      ? []
+      : suggestChatCommands(composeText);
   const currentJobs =
     data?.jobs.filter((job) => !["complete", "denied"].includes(job.state)) ||
     [];
@@ -409,9 +422,32 @@ function Workspace() {
                               : "쓰기 허용"}
                           </button>
                         )}
+                        <button
+                          className="crew-configure"
+                          type="button"
+                          aria-label={member.name + " 스킬 및 MCP 설정"}
+                          onClick={() => {
+                            setError("");
+                            setSettingsMember(
+                              settingsMember === member.id ? null : member.id,
+                            );
+                          }}
+                        >
+                          설정
+                        </button>
                       </div>
                     );
                   })}
+                {configuredMember && (
+                  <CrewSettings
+                    key={configuredMember.id}
+                    member={configuredMember}
+                    data={data}
+                    run={run}
+                    close={() => setSettingsMember(null)}
+                    error={error}
+                  />
+                )}
                 {addingMember ? (
                   <form
                     className="crew-add"
@@ -1013,6 +1049,22 @@ function Workspace() {
                 </p>
               )}
               <form className="composer" onSubmit={(event) => void send(event)}>
+                {commandSuggestions.length > 0 && (
+                  <div className="command-list" role="group" aria-label="채팅 명령">
+                    {commandSuggestions.map(([command, description]) => (
+                      <button
+                        key={command}
+                        type="button"
+                        onClick={() => {
+                          saveDraft(command);
+                          composer.current?.focus();
+                        }}
+                      >
+                        <code>{command}</code> {description}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {revisionJob && (
                   <div className="revision-target">
                     <span title={revisionJob.plan?.goal ?? revisionJob.request}>
@@ -1046,19 +1098,24 @@ function Workspace() {
                         : "비서에게 메시지 보내기…"
                   }
                   onChange={(event) => {
+                    setCommandsDismissed(false);
                     if (revision)
                       setRevision({ ...revision, text: event.target.value });
                     else saveDraft(event.target.value);
                   }}
                   onKeyDown={(event) => {
-                    if (
-                      event.key === "Enter" &&
-                      !event.shiftKey &&
-                      !event.nativeEvent.isComposing &&
-                      event.keyCode !== 229
-                    ) {
+                    if (event.nativeEvent.isComposing || event.keyCode === 229)
+                      return;
+                    if (event.key === "Escape" && commandSuggestions.length) {
                       event.preventDefault();
-                      if (!event.repeat)
+                      setCommandsDismissed(true);
+                    }
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      if (event.repeat) return;
+                      if (commandSuggestions.length === 1)
+                        saveDraft(commandSuggestions[0][0]);
+                      else
                         event.currentTarget.form?.requestSubmit();
                     }
                   }}

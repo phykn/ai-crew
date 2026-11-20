@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { join, resolve } from "node:path";
 
@@ -24,6 +25,7 @@ await writeFile(projectFile, "Before\n");
 const env = { ...process.env, AI_CREW_DATA_DIR: directory };
 
 let application;
+let fixtureMcp;
 try {
   application = await electron.launch({ executablePath: executable, env });
   await application.evaluate(({ dialog }, folder) => {
@@ -71,12 +73,28 @@ try {
   await send("한 줄에 한 개씩 아주 많은 색 이름과 설명을 써줘.");
   await page.getByRole("button", { name: "응답 멈춤" }).click();
   await expect(page.getByRole("button", { name: "응답 멈춤" })).toHaveCount(0);
-  await send("/clear");
+  const commandList = page.getByRole("group", { name: "채팅 명령" });
+  await expect(commandList).toHaveCount(0);
+  await send("/clear가 뭐야? 현재 대화에서 짧게 답해줘.");
+  await expect(page.locator(".bubble.user").last()).toContainText(
+    "/clear가 뭐야?",
+  );
+  await expect(page.getByRole("button", { name: "응답 멈춤" })).toHaveCount(0);
+  await prompt().fill("/");
+  await expect(commandList.getByRole("button", { name: /\/clear/ })).toBeVisible();
+  await prompt().press("Escape");
+  await expect(commandList).toHaveCount(0);
+  await prompt().fill("/cl");
+  await expect(commandList).toBeVisible();
+  await prompt().press("Enter");
+  await expect(prompt()).toHaveValue("/clear");
+  await expect(page.locator(".bubble.user").first()).toContainText("crew-571");
+  await prompt().press("Enter");
   await expect(page.locator(".bubble")).toHaveCount(0);
   await page.getByRole("button", { name: "세션 목록" }).click();
   await page.getByRole("button", { name: /오늘의 확인 코드는/ }).click();
   await expect(page.locator(".bubble.user").first()).toContainText("crew-571");
-  await page.locator(".roster summary").click();
+  await page.locator(".roster > summary").click();
   const roster = page.locator(".crew-list");
   await roster.getByRole("button", { name: "＋ 팀원" }).click();
   await roster
@@ -99,7 +117,7 @@ try {
   await expect(writePermission).toHaveAttribute("aria-pressed", "true");
   await roster.getByRole("button", { name: "플랜 고용", exact: true }).click();
   await roster.getByRole("button", { name: "개발 고용", exact: true }).click();
-  await page.locator(".roster summary").click();
+  await page.locator(".roster > summary").click();
   await send(
     "프로젝트의 notes.txt 파일을 실제로 수정해줘. 기존 내용 Before를 After로 바꾸고 줄바꿈 한 개를 유지해줘. 수정하기 전에 스타일 담당자에게 마지막 줄바꿈 규칙을 확인해줘.",
   );
@@ -160,14 +178,14 @@ try {
   }
   await expect(completed).toBeVisible({ timeout: 90000 });
   expect(await readFile(projectFile, "utf8")).toBe("After\n");
-  await page.locator(".roster summary").click();
+  await page.locator(".roster > summary").click();
   await expect(
     roster.getByRole("button", { name: "개발 미고용", exact: true }),
   ).toBeVisible();
   await expect(
     roster.getByRole("button", { name: "개발 알바", exact: true }),
   ).toHaveCount(0);
-  await page.locator(".roster summary").click();
+  await page.locator(".roster > summary").click();
   await page.getByRole("button", { name: "추가 지시" }).click();
   await expect(page.locator(".revision-target")).toBeVisible();
   await send(
@@ -299,12 +317,100 @@ try {
     page.getByRole("region", { name: "비서의 확인 질문" }),
   ).toContainText("이 업무에서 어떻게 바꿀까요?");
   expect((await stat(archived)).mtimeMs).toBe(fileBeforeRecovery.mtimeMs);
+  let mcpCalls = 0;
+  fixtureMcp = createServer(async (request, response) => {
+    if (request.method !== "POST") {
+      response.writeHead(405).end();
+      return;
+    }
+    const items = [];
+    for await (const chunk of request) items.push(chunk);
+    const { id, method, params } = JSON.parse(Buffer.concat(items).toString());
+    if (id === undefined) {
+      response.writeHead(202).end();
+      return;
+    }
+    const results = {
+      initialize: {
+        protocolVersion: params?.protocolVersion,
+        capabilities: { tools: {} },
+        serverInfo: { name: "fixture", version: "1" },
+      },
+      "tools/list": {
+        tools: [
+          {
+            name: "read_fixture",
+            description: "Return the current fixture value",
+            inputSchema: { type: "object" },
+            annotations: { readOnlyHint: true },
+          },
+        ],
+      },
+      "tools/call": { content: [{ type: "text", text: "MCP-CREW-729" }] },
+    };
+    if (method === "tools/call") mcpCalls++;
+    response
+      .writeHead(200, { "content-type": "application/json" })
+      .end(JSON.stringify({ jsonrpc: "2.0", id, result: results[method] }));
+  });
+  await new Promise((resolve) => fixtureMcp.listen(0, "127.0.0.1", resolve));
+  await page.locator(".roster > summary").click();
+  await page.getByRole("button", { name: "여울 스킬 및 MCP 설정" }).click();
+  const mcpSettings = page.getByRole("region", { name: "여울 설정" });
+  await mcpSettings.getByText("정의 MD", { exact: true }).click();
+  await expect(mcpSettings.getByText("# 비서", { exact: false })).toBeVisible();
+  await mcpSettings
+    .getByRole("region", { name: "스킬", exact: true })
+    .getByRole("button", { name: "추가", exact: true })
+    .click();
+  await mcpSettings.getByLabel("이름", { exact: true }).fill("응답 규칙");
+  await mcpSettings
+    .getByLabel("스킬 MD")
+    .fill("# 응답 규칙\n도구가 돌려준 값은 있는 그대로 전달한다.");
+  await mcpSettings
+    .locator("form")
+    .getByRole("button", { name: "추가", exact: true })
+    .click();
+  await expect(
+    mcpSettings.getByText("응답 규칙", { exact: true }),
+  ).toBeVisible();
+  await mcpSettings
+    .getByRole("button", { name: "연결 추가", exact: true })
+    .click();
+  await mcpSettings.getByLabel("이름", { exact: true }).fill("확인용 서버");
+  await mcpSettings
+    .getByLabel("서버 주소")
+    .fill("http://127.0.0.1:" + fixtureMcp.address().port + "/mcp");
+  await mcpSettings.getByRole("button", { name: "연결", exact: true }).click();
+  await mcpSettings.getByText("확인용 서버 · 연결됨", { exact: true }).click();
+  await mcpSettings.getByText("read_fixture · 읽기", { exact: true }).click();
+  const mcpGrant = mcpSettings.getByRole("checkbox", { name: "읽기 허용" });
+  await mcpGrant.click();
+  await expect(mcpGrant).toBeChecked();
+  await page.locator(".roster > summary").click();
+  await send(
+    "mcp_1_read_fixture 도구를 실행해서 실제로 반환한 확인 코드를 알려줘.",
+  );
+  await expect(answer()).toContainText("MCP-CREW-729", { timeout: 45000 });
+  expect(mcpCalls).toBeGreaterThan(0);
+  await expect(page.getByRole("button", { name: "응답 멈춤" })).toHaveCount(0);
+  await page.locator(".roster > summary").click();
+  await mcpGrant.click();
+  await expect(mcpGrant).not.toBeChecked();
+  await mcpSettings.getByText("응답 규칙", { exact: true }).click();
+  await mcpSettings
+    .getByRole("button", { name: "스킬 해제", exact: true })
+    .click();
+  await expect(mcpSettings.getByText("응답 규칙", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.locator(".roster > summary").click();
   if (process.env.AI_CREW_TEST_CODEX === "1") {
-    await page.locator(".roster summary").click();
+    await page.locator(".roster > summary").click();
     await page
       .getByRole("combobox", { name: "비서 모델" })
       .selectOption("codex");
-    await page.locator(".roster summary").click();
+    await page.locator(".roster > summary").click();
     await send("/clear");
     await send(
       "이 대화의 확인 코드는 CODEX-571이야. 도구를 쓰지 말고 확인 코드만 답해줘.",
@@ -357,5 +463,9 @@ try {
   );
 } finally {
   await application?.close().catch(() => {});
+  if (fixtureMcp) {
+    fixtureMcp.closeAllConnections();
+    await new Promise((resolve) => fixtureMcp.close(resolve));
+  }
   await rm(directory, { recursive: true, force: true });
 }

@@ -13,7 +13,9 @@ import {
   type WorkPlan,
 } from "./actions";
 import type { CodexConnection } from "./codex";
+import { crewInstructions } from "./crew-definition";
 import { decideLocal } from "./local";
+import { CrewMcp } from "./mcp";
 import { classifyModelFailure, ModelLimitError } from "./model-errors";
 import type { CrewStore } from "./store";
 import {
@@ -228,6 +230,7 @@ export class CrewWorkflow {
     private store: CrewStore,
     private codex: CodexConnection,
     private notify: () => void,
+    private mcp = new CrewMcp(store),
   ) {}
 
   delegate(sessionId: string, responseId: string, text: string) {
@@ -693,6 +696,8 @@ export class CrewWorkflow {
     schema: T,
     signal: AbortSignal,
   ) {
+    system +=
+      "\n\n" + crewInstructions(member, this.store.listSkills(job.projectId));
     const previous = this.store.getAgentContext(job.id, member.id);
     const withPrevious = () =>
       previous?.result && member.roleId !== "test"
@@ -725,7 +730,13 @@ export class CrewWorkflow {
       try {
         let output: z.infer<T>;
         if (member.provider === "local") {
-          output = await decideLocal(system, withPrevious(), schema, signal);
+          output = await decideLocal(
+            system,
+            withPrevious(),
+            schema,
+            signal,
+            this.mcp.modelTools(job, member, signal),
+          );
         } else {
           let raw = "";
           const pending = this.store.readPendingModelTurn(job.id, step);

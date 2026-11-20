@@ -133,6 +133,40 @@ summary:focus-visible {
   color: var(--warm);
   background: var(--selected);
 }
+.crew-configure {
+  color: var(--dim);
+  padding-inline: 0;
+}
+.crew-settings {
+  margin-block: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+}
+.crew-settings header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.crew-settings details,
+.crew-settings section,
+.crew-settings form {
+  margin-block: var(--space-2);
+}
+.crew-settings input:not([type="checkbox"]),
+.crew-settings textarea {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+}
+.crew-settings pre {
+  overflow: auto;
+  max-height: 160px;
+  margin-block: var(--space-1);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .character {
   position: absolute;
   height: clamp(64px, 15vh, 148px);
@@ -406,6 +440,18 @@ summary:focus-visible {
 }
 .composer:focus-within {
   border-color: #928062;
+}
+.command-list {
+  margin-bottom: var(--space-1);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--line-control);
+}
+.command-list button {
+  width: 100%;
+  text-align: left;
+}
+.command-list code {
+  margin-right: var(--space-1);
 }
 .composer textarea {
   display: block;

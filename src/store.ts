@@ -9,6 +9,9 @@ import {
   type ApprovalMode,
   type Completion,
   type CrewMember,
+  type CrewSkill,
+  type McpEndpoint,
+  type McpGrant,
   type Job,
   type JobState,
   type WorkPlan,
@@ -32,7 +35,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 21)
+    if (migration.user_version > 23)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -309,6 +312,34 @@ export class CrewStore {
         COMMIT;
       `);
     }
+    if (migration.user_version < 22) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE mcp_endpoints (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+          name TEXT NOT NULL, url TEXT NOT NULL, enabled INTEGER NOT NULL,
+          tools TEXT NOT NULL
+        );
+        CREATE TABLE mcp_grants (
+          server_id TEXT NOT NULL REFERENCES mcp_endpoints(id),
+          member_id TEXT NOT NULL, tool_name TEXT NOT NULL, fingerprint TEXT NOT NULL,
+          PRIMARY KEY (server_id, member_id, tool_name)
+        );
+        PRAGMA user_version = 22;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 23) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE crew_skills (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+          member_id TEXT NOT NULL, name TEXT NOT NULL, markdown TEXT NOT NULL
+        );
+        PRAGMA user_version = 23;
+        COMMIT;
+      `);
+    }
     this.db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",
     );
@@ -480,6 +511,153 @@ export class CrewStore {
             })),
         ];
       });
+  }
+
+  listMcpEndpoints(projectId: string): McpEndpoint[] {
+    return this.db
+      .prepare(
+        "SELECT id, name, url, enabled, tools FROM mcp_endpoints WHERE project_id = ? ORDER BY rowid",
+      )
+      .all(projectId)
+      .map((item) => ({
+        id: String(item.id),
+        name: String(item.name),
+        url: String(item.url),
+        enabled: Boolean(item.enabled),
+        tools: JSON.parse(String(item.tools)) as McpEndpoint["tools"],
+      }));
+  }
+
+  listSkills(projectId: string): CrewSkill[] {
+    return this.db
+      .prepare(
+        "SELECT id, member_id AS memberId, name, markdown FROM crew_skills WHERE project_id = ? ORDER BY rowid",
+      )
+      .all(projectId) as CrewSkill[];
+  }
+
+  addSkill(projectId: string, skill: CrewSkill) {
+    if (!this.readMembers(projectId).some(({ id }) => id === skill.memberId))
+      throw new Error("이 프로젝트의 담당자를 선택해 주세요.");
+    const added = this.db
+      .prepare("INSERT OR IGNORE INTO crew_skills VALUES (?, ?, ?, ?, ?)")
+      .run(skill.id, projectId, skill.memberId, skill.name, skill.markdown);
+    if (added.changes)
+      this.logMcpSetting(
+        projectId,
+        skill.memberId + " · 스킬 추가 · " + skill.name,
+      );
+  }
+
+  removeSkill(projectId: string, memberId: string, skillId: string) {
+    const removed = this.db
+      .prepare(
+        "DELETE FROM crew_skills WHERE id = ? AND project_id = ? AND member_id = ? RETURNING name",
+      )
+      .get(skillId, projectId, memberId);
+    if (removed)
+      this.logMcpSetting(
+        projectId,
+        memberId + " · 스킬 해제 · " + removed.name,
+      );
+  }
+
+  listMcpGrants(projectId: string): McpGrant[] {
+    return this.db
+      .prepare(
+        `
+      SELECT g.member_id AS memberId, g.server_id AS serverId, g.tool_name AS toolName, g.fingerprint
+      FROM mcp_grants g JOIN mcp_endpoints s ON s.id = g.server_id WHERE s.project_id = ?
+    `,
+      )
+      .all(projectId) as McpGrant[];
+  }
+
+  saveMcpEndpoint(projectId: string, endpoint: McpEndpoint) {
+    this.getProject(projectId);
+    const existing = this.db
+      .prepare("SELECT project_id, url FROM mcp_endpoints WHERE id = ?")
+      .get(endpoint.id);
+    if (
+      existing &&
+      (existing.project_id !== projectId || existing.url !== endpoint.url)
+    )
+      throw new Error("주소가 바뀐 서버는 별도 연결로 추가해 주세요.");
+    this.db
+      .prepare(
+        `INSERT INTO mcp_endpoints VALUES (?, ?, ?, ?, 1, ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, enabled = 1, tools = excluded.tools`,
+      )
+      .run(
+        endpoint.id,
+        projectId,
+        endpoint.name,
+        endpoint.url,
+        JSON.stringify(endpoint.tools),
+      );
+    this.logMcpSetting(projectId, "MCP 연결 · " + endpoint.name);
+  }
+
+  disconnectMcpEndpoint(projectId: string, serverId: string) {
+    const row = this.db
+      .prepare(
+        "UPDATE mcp_endpoints SET enabled = 0 WHERE id = ? AND project_id = ? AND enabled = 1 RETURNING name",
+      )
+      .get(serverId, projectId);
+    if (row) this.logMcpSetting(projectId, "MCP 연결 해제 · " + row.name);
+  }
+
+  setMcpGrant(
+    projectId: string,
+    serverId: string,
+    memberId: string,
+    toolName: string,
+    allow: boolean,
+  ) {
+    const server = this.listMcpEndpoints(projectId).find(
+      ({ id }) => id === serverId,
+    );
+    const member = this.readMembers(projectId).find(
+      ({ id }) => id === memberId,
+    );
+    if (!server || !member)
+      throw new Error("이 프로젝트의 서버와 담당자를 선택해 주세요.");
+    const tool = server.tools.find(({ name }) => name === toolName);
+    if (allow && (!server.enabled || !tool?.readOnly || !member.hired || member.provider !== "local"))
+      throw new Error("로컬 모델을 쓰는 고용된 담당자에게 연결된 읽기 도구를 허용할 수 있어요.");
+    this.transaction(() => {
+      const result = allow
+        ? this.db
+            .prepare(
+              `INSERT INTO mcp_grants VALUES (?, ?, ?, ?)
+            ON CONFLICT(server_id, member_id, tool_name) DO UPDATE SET fingerprint = excluded.fingerprint
+            WHERE fingerprint <> excluded.fingerprint`,
+            )
+            .run(serverId, memberId, toolName, tool!.fingerprint)
+        : this.db
+            .prepare(
+              "DELETE FROM mcp_grants WHERE server_id = ? AND member_id = ? AND tool_name = ?",
+            )
+            .run(serverId, memberId, toolName);
+      if (result.changes)
+        this.logMcpSetting(
+          projectId,
+          member.name +
+            " · " +
+            server.name +
+            "/" +
+            toolName +
+            " " +
+            (allow ? "허용" : "회수"),
+        );
+    });
+  }
+
+  private logMcpSetting(projectId: string, note: string) {
+    const session = this.db
+      .prepare("SELECT last_session FROM projects WHERE id = ?")
+      .get(projectId)?.last_session;
+    if (typeof session === "string") this.log(session, "사용자 · " + note);
   }
 
   private isWorkspaceWriteAllowed(projectId: string, memberId: string) {
@@ -1665,6 +1843,9 @@ export class CrewStore {
         : [],
       followups: session ? this.readFollowups(session.id) : [],
       members: current ? this.readMembers(current.id) : [],
+      mcpServers: current ? this.listMcpEndpoints(current.id) : [],
+      mcpGrants: current ? this.listMcpGrants(current.id) : [],
+      skills: current ? this.listSkills(current.id) : [],
       assignees: session
         ? (this.db
             .prepare(

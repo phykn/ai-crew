@@ -106,6 +106,40 @@ export const actions = z.discriminatedUnion("type", [
     allow: z.boolean(),
   }),
   z.strictObject({
+    type: z.literal("mcp.connect"),
+    projectId: identifier,
+    serverId: identifier,
+    name: z.string().trim().min(1).max(64),
+    url: z.url().max(2048),
+  }),
+  z.strictObject({
+    type: z.literal("mcp.disconnect"),
+    projectId: identifier,
+    serverId: identifier,
+  }),
+  z.strictObject({
+    type: z.literal("mcp.grant"),
+    projectId: identifier,
+    serverId: identifier,
+    memberId: z.union([roleId, identifier]),
+    toolName: z.string().min(1).max(200),
+    allow: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal("crew.skill.add"),
+    projectId: identifier,
+    memberId: z.union([roleId, identifier]),
+    skillId: identifier,
+    name: z.string().trim().min(1).max(64),
+    markdown: z.string().trim().min(1).max(16000),
+  }),
+  z.strictObject({
+    type: z.literal("crew.skill.remove"),
+    projectId: identifier,
+    memberId: z.union([roleId, identifier]),
+    skillId: identifier,
+  }),
+  z.strictObject({
     type: z.literal("chat.send"),
     sessionId: identifier,
     requestId: identifier,
@@ -152,6 +186,32 @@ export type CrewMember = {
   assignmentJobId?: string;
   specialty?: string;
   writeAllowed?: boolean;
+};
+export type McpTool = {
+  name: string;
+  description: string;
+  readOnly: boolean;
+  fingerprint: string;
+  inputSchema: object;
+};
+export type McpEndpoint = {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  tools: McpTool[];
+};
+export type McpGrant = {
+  memberId: string;
+  serverId: string;
+  toolName: string;
+  fingerprint: string;
+};
+export type CrewSkill = {
+  id: string;
+  memberId: string;
+  name: string;
+  markdown: string;
 };
 export type ApprovalMode = z.infer<typeof approvalMode>;
 export type Project = {
@@ -266,6 +326,9 @@ export type Snapshot = {
   sessions: Session[];
   session: Session | null;
   members: CrewMember[];
+  mcpServers: McpEndpoint[];
+  mcpGrants: McpGrant[];
+  skills: CrewSkill[];
   assignees: { jobId: string; memberId: string; roleId: RoleId }[];
   messages: Message[];
   activity: Activity[];

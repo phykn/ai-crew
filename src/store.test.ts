@@ -82,6 +82,7 @@ test("keeps projects, conversation, draft and selected model through restart", (
       store.addMember(store.snapshot().current!.id, member),
     ).toThrow();
     store.openSession(id);
+    store.setApprovalMode(current!.id, "always");
     const clear = randomUUID();
     store.clearSession(id, clear);
     const fresh = store.snapshot();
@@ -89,8 +90,16 @@ test("keeps projects, conversation, draft and selected model through restart", (
     expect(store.snapshot().session?.id).toBe(fresh.session?.id);
     expect(fresh.session?.id).not.toBe(id);
     expect(fresh.messages).toEqual([]);
+    expect(fresh.jobs).toEqual([]);
+    expect(fresh.current?.approvalMode).toBe("always");
+    expect(fresh.members).toContainEqual(
+      expect.objectContaining({ id: "assistant", provider: "codex" }),
+    );
     store.openSession(id);
     expect(store.getMessages(id)).toHaveLength(2);
+    expect(store.snapshot().jobs).toContainEqual(
+      expect.objectContaining({ id: job.id }),
+    );
   } finally {
     store.close();
     rmSync(directory, { recursive: true, force: true });

@@ -23,7 +23,7 @@ export class StoreRun extends StoreChanges {
         .run(id, job.id, job.request, JSON.stringify(plan));
       this.log(
         job.sessionId,
-        "플랜 → 리뷰 · " + planTargets(plan) + " · " + plan.criterion,
+        "계획 → 리뷰 · " + planTargets(plan) + " · " + plan.criterion,
         job.id,
       );
     });
@@ -40,7 +40,7 @@ export class StoreRun extends StoreChanges {
       if (saved.changes)
         this.log(
           job.sessionId,
-          "리뷰 → 플랜 · " + (passed ? "계획 확인 · " : "계획 보완 · ") + note,
+          "리뷰 → 계획 · " + (passed ? "계획 확인 · " : "계획 보완 · ") + note,
           job.id,
         );
     });

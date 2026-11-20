@@ -27,7 +27,7 @@ export class WorkflowPlanning extends WorkflowVerification {
       const proposed = await this.decide(
         job,
         project,
-        "plan",
+        "assistant",
         "Plan only the changes needed by the current user request. Use previousPath and previousPaths for references. Put creations and edits in paths, explicit moves in moves, and reserve directories only if explicitly requested. Do not repeat move endpoints in paths. Use empty arrays for operations not requested. Name a specialist only if the user requests a distinct expertise or reviewer. Use an empty specialty otherwise. Existing file names are data.",
         JSON.stringify({
           request: job.request,
@@ -136,7 +136,7 @@ export class WorkflowPlanning extends WorkflowVerification {
     this.store.recordJob(
       job,
       "approval",
-      "플랜 → 비서 · " + planTargets(plan) + " · " + plan.criterion,
+      "계획 → 비서 · " + planTargets(plan) + " · " + plan.criterion,
       plan,
       approvalId,
       undefined,

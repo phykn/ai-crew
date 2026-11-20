@@ -1,15 +1,17 @@
 import type { RoleId, WorkflowGraph, WorkflowStage } from "./actions";
 
 export const stageRoles: RoleId[] = [
-  "plan",
+  "assistant",
   "development",
+  "build",
+  "docs",
   "review",
   "style",
   "test",
-  "assistant",
+  "vision",
 ];
 
-/** 플랜 → 개발 → (리뷰 ∥ 스타일 ∥ 테스트) → 비서 보고 */
+/** 계획(비서) → 개발 → (리뷰 ∥ 스타일 ∥ 테스트) → 비서 보고 */
 export function defaultGraph(): WorkflowGraph {
   const stage = (
     id: string,
@@ -35,8 +37,8 @@ export function defaultGraph(): WorkflowGraph {
     stages: [
       stage(
         "plan",
-        "플랜",
-        "plan",
+        "계획",
+        "assistant",
         "요구사항별 작업 범위와 확인 가능한 완료 조건을 남겼다.",
         "작업 범위·완료 조건 인계",
         0,

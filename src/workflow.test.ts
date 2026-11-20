@@ -135,8 +135,8 @@ test("peer consultation and a follow-up share a job with separate approvals", as
     const approval = store.getJob(id).approvalId!;
     expect(store.snapshot().activity.map(({ text }) => text)).toEqual(
       expect.arrayContaining([
-        expect.stringContaining("리뷰 → 플랜 · 계획 보완"),
-        expect.stringContaining("리뷰 → 플랜 · 계획 확인"),
+        expect.stringContaining("리뷰 → 계획 · 계획 보완"),
+        expect.stringContaining("리뷰 → 계획 · 계획 확인"),
       ]),
     );
     workflow.answer(id, randomUUID(), true);
@@ -394,15 +394,15 @@ test("stopping one queued role request leaves work ahead and behind it intact", 
     const memberId = randomUUID();
     store.addMember(session.projectId, {
       id: memberId,
-      roleId: "plan",
-      name: "다른 플랜 담당",
+      roleId: "assistant",
+      name: "다른 비서",
       provider: "local",
     });
     const fourth = workflow.delegate(session.id, randomUUID(), "Fourth").id;
     await vi.waitFor(() => expect(store.getJob(fourth).state).toBe("approval"));
-    expect(store.getAssignee(fourth, "plan")).toBe(memberId);
+    expect(store.getAssignee(fourth, "assistant")).toBe(memberId);
     expect(store.getAgentContext(fourth, memberId)?.result).toContain("Fourth");
-    expect(store.getAgentContext(fourth, "plan")).toBeUndefined();
+    expect(store.getAgentContext(fourth, "assistant")).toBeUndefined();
     expect(requested).toEqual(["First", "Fourth"]);
     release.resolve();
     await vi.waitFor(() => {
@@ -994,7 +994,7 @@ test("a disconnected Codex role resumes its new thread before falling back to th
   try {
     store.openFolder(folder);
     const session = store.snapshot().session!;
-    store.updateMember(session.projectId, "plan", { provider: "codex" });
+    store.updateMember(session.projectId, "assistant", { provider: "codex" });
     const calls = vi.spyOn(codex, "run");
     calls.mockImplementationOnce(
       async (
@@ -1052,7 +1052,7 @@ test("a disconnected Codex role resumes its new thread before falling back to th
     const { id } = workflow.delegate(session.id, randomUUID(), "파일 추가");
     await vi.waitFor(() => expect(store.getJob(id).state).toBe("approval"));
     expect(calls).toHaveBeenCalledTimes(2);
-    expect(store.getAgentContext(id, "plan")?.threadId).toBe(
+    expect(store.getAgentContext(id, "assistant")?.threadId).toBe(
       "recovered-thread",
     );
     expect(store.snapshot().activity).toEqual(

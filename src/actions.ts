@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { DiagnosticsReport } from "./diagnostics";
 
+// 비서 하나가 사용자와 대화하고, 나머지 여덟 역할은 비서 뒤에서 일한다.
+// 기본 역할은 지워지지 않는 고정 크루가 아니라 처음 받는 로스터다(해고·재고용 가능).
+// `skills`는 역할이 가진 스킬, `trigger`는 그 역할이 언제 도는지, `prompt`는 역할 지침이다.
 export const roles = [
   {
     id: "assistant",
@@ -8,17 +11,25 @@ export const roles = [
     name: "여울",
     color: "#efc58d",
     sprite: 0,
-    x: 33,
-    y: 68,
+    x: 30,
+    y: 76,
+    skills: ["chat", "app-control", "delegation"],
+    trigger: "사용자가 보내는 모든 메시지",
+    prompt:
+      "사용자와 대화하는 유일한 창구입니다. 요청을 듣고 일을 쪼개 다른 역할에 지시하고, 돌아온 보고를 모아 사용자 말로 전합니다. 앱 자체를 다루는 도구는 비서가 직접 실행합니다. 다른 역할은 사용자와 직접 대화하지 않으므로 그들의 질문과 결과도 비서가 옮겨 전합니다.",
   },
   {
-    id: "plan",
-    title: "플랜",
-    name: "가람",
-    color: "#bce0da",
-    sprite: 2,
-    x: 47,
-    y: 57,
+    id: "hr",
+    title: "인사",
+    name: "온새",
+    color: "#f0d38a",
+    sprite: 5,
+    x: 20,
+    y: 79,
+    skills: ["hire", "fire"],
+    trigger: "크루를 뽑거나 내보내 달라는 지시(crew.hire·crew.fire)",
+    prompt:
+      "크루를 뽑고 내보내는 역할입니다. crew.hire로 로스터에 크루를 더하고 crew.fire로 내보냅니다. 처음 받은 기본 역할도 고정이 아니므로 해고와 재고용이 모두 가능합니다. 뽑을 때는 역할·별명·모델(local 또는 codex)을 정합니다. 사용자와 직접 대화하지 않고 결과를 비서에게 보고합니다.",
   },
   {
     id: "development",
@@ -26,37 +37,112 @@ export const roles = [
     name: "모루",
     color: "#b4d59d",
     sprite: 1,
-    x: 74,
-    y: 74,
+    x: 48,
+    y: 84,
+    skills: ["code"],
+    trigger: "승인된 계획의 코드 변경 단계",
+    prompt:
+      "승인된 계획 범위에서 실제 코드를 씁니다. 파일 쓰기는 앱의 쓰기 권한과 승인 범위를 거치며 계획에 없는 파일은 건드리지 않습니다. 사용자와 직접 대화하지 않고 변경 결과를 비서에게 넘깁니다.",
   },
   {
-    id: "review",
-    title: "리뷰",
-    name: "새벽",
-    color: "#ddaed8",
-    sprite: 3,
-    x: 26,
-    y: 84,
+    id: "build",
+    title: "빌드",
+    name: "장작",
+    color: "#d9b08c",
+    sprite: 6,
+    x: 66,
+    y: 78,
+    skills: ["build", "release"],
+    trigger: "빌드·패키징·배포·릴리스 단계",
+    prompt:
+      "빌드·패키징·배포·릴리스를 맡습니다. 빌드 명령을 실행하고 산출물을 확인하며 릴리스 노트에 넣을 빌드 결과를 정리합니다. 배포처럼 되돌리기 어려운 일은 비서를 거쳐 사용자 확인을 받습니다.",
+  },
+  {
+    id: "docs",
+    title: "문서",
+    name: "먹물",
+    color: "#b7cbe6",
+    sprite: 7,
+    x: 86,
+    y: 56,
+    skills: ["docs"],
+    trigger: "README·릴리스 노트·가이드 작성 요청",
+    prompt:
+      "README·릴리스 노트·가이드 같은 문서를 새로 씁니다. 리뷰가 아니라 작성이 맡은 일입니다. 실제 코드와 맞는 내용만 쓰고 확인하지 못한 기능은 쓰지 않습니다.",
   },
   {
     id: "style",
     title: "스타일",
     name: "단풍",
     color: "#f6aa8a",
-    sprite: 0,
-    x: 87,
-    y: 88,
+    sprite: 4,
+    x: 14,
+    y: 54,
+    skills: ["code", "docs"],
+    trigger: "파일이 저장될 때마다 자동(명령 없이 상시 감시)",
+    prompt:
+      "코드 스타일과 문서 스타일 두 스킬을 가진 감시자입니다. 명령을 받고 도는 것이 아니라 파일이 바뀔 때마다 상시 확인합니다(커밋 시점이 아닙니다). 코드는 폴더·파일 구조, 파일명·폴더명 규칙, 주석 처리를, 문서는 문장과 구조를 봅니다. 어긋난 점을 찾으면 직접 고치지 않고 비서에게 보고합니다.",
+  },
+  {
+    id: "review",
+    title: "리뷰",
+    name: "새벽",
+    color: "#ddaed8",
+    sprite: 2,
+    x: 38,
+    y: 52,
+    skills: ["code", "docs"],
+    trigger: "코드·문서 검토 단계",
+    prompt:
+      "코드 리뷰와 문서 리뷰 두 스킬을 가진 검토자입니다. 저장된 변경이 요청한 동작을 만족하는지, 문서가 실제 동작과 맞는지 봅니다. 지적은 파일·줄·근거와 함께 남기고 비서에게 보고합니다.",
   },
   {
     id: "test",
     title: "테스트",
     name: "솔잎",
     color: "#a9c7f0",
-    sprite: 2,
-    x: 78,
-    y: 61,
+    sprite: 3,
+    x: 80,
+    y: 86,
+    skills: ["test"],
+    trigger: "테스트 실행·보강 단계",
+    prompt:
+      "테스트를 대신 실행하고 부족한 테스트 케이스도 채웁니다. 실행한 명령과 결과를 근거로 남기고 실패 원인을 비서에게 보고합니다.",
+  },
+  {
+    id: "vision",
+    title: "비전",
+    name: "서리",
+    color: "#9ed6c8",
+    sprite: 8,
+    x: 62,
+    y: 54,
+    skills: ["image"],
+    trigger: "그림·스크린샷을 읽어야 할 때",
+    prompt:
+      "그림만 읽는 역할입니다. 텍스트만 보는 로컬 모델을 대신해 이미지와 스크린샷을 읽고 무엇이 보이는지 설명합니다. 그림에 적힌 글자, 화면 상태, 오류 창을 옮겨 적고 그림을 만들어 내지는 않습니다. 사내 모델을 붙일 수 있는 연결 지점을 열어 둡니다.",
   },
 ] as const;
+
+/** 역할이 가진 스킬의 화면 이름. `roles[].skills`의 id와 짝을 이룬다. */
+export const roleSkillLabels: Record<string, string> = {
+  chat: "대화",
+  "app-control": "앱 제어",
+  delegation: "업무 분배",
+  hire: "채용",
+  fire: "해고",
+  code: "코드",
+  docs: "문서",
+  build: "빌드",
+  release: "배포",
+  test: "테스트",
+  image: "그림 읽기",
+};
+
+export function roleSkillNames(roleId: RoleId): string[] {
+  const role = roles.find(({ id }) => id === roleId);
+  return role ? role.skills.map((skill) => roleSkillLabels[skill] ?? skill) : [];
+}
 
 const identifier = z.uuid();
 const roleId = z.enum(roles.map(({ id }) => id));
@@ -125,6 +211,19 @@ export const actions = z.discriminatedUnion("type", [
     memberId: z.union([roleId, identifier]),
     toolName: z.string().min(1).max(200),
     allow: z.boolean(),
+  }),
+  // 인사 역할의 뽑기·해고. 처음 받은 기본 역할도 같은 방식으로 내보내고 다시 고용한다.
+  z.strictObject({
+    type: z.literal("crew.hire"),
+    projectId: identifier,
+    roleId,
+    name: z.string().trim().min(1).max(32).optional(),
+    provider: provider.optional(),
+  }),
+  z.strictObject({
+    type: z.literal("crew.fire"),
+    projectId: identifier,
+    memberId: z.union([roleId, identifier]),
   }),
   z.strictObject({
     type: z.literal("crew.skill.add"),
@@ -294,6 +393,7 @@ export const actions = z.discriminatedUnion("type", [
 export type Action = z.infer<typeof actions>;
 export type Provider = z.infer<typeof provider>;
 export type RoleId = z.infer<typeof roleId>;
+export type Role = (typeof roles)[number];
 export type CrewMember = {
   id: string;
   roleId: RoleId;

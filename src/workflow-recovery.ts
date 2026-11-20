@@ -75,7 +75,7 @@ export class WorkflowRecovery extends WorkflowDevelopment {
       this.store.recordJob(
         current,
         "planning",
-        "비서 → 플랜 · 반영된 변경 없이 새 계획 작성",
+        "비서 → 계획 · 반영된 변경 없이 새 계획 작성",
         null,
       );
       this.notify();

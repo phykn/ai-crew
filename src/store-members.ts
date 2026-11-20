@@ -185,6 +185,54 @@ export class StoreMembers extends StoreCrew {
     });
   }
 
+  /**
+   * 인사 역할의 뽑기. 처음 받은 로스터의 역할을 다시 고용하고, 별명과 모델을 함께 정한다.
+   * 이미 고용 중이면 별명·모델만 바뀐다.
+   */
+  hireMember(
+    projectId: string,
+    roleId: RoleId,
+    patch: { name?: string; provider?: Provider } = {},
+  ) {
+    const before = this.readMembers(projectId, roleId).find(
+      ({ id }) => id === roleId,
+    );
+    if (!before) throw new Error("이 프로젝트에서 해당 역할을 찾을 수 없어요.");
+    this.updateMember(projectId, roleId, { ...patch, hired: true });
+    const after = this.readMembers(projectId, roleId).find(
+      ({ id }) => id === roleId,
+    )!;
+    if (
+      !before.hired ||
+      after.name !== before.name ||
+      after.provider !== before.provider
+    )
+      this.recordAudit({
+        projectId,
+        event: "crew.roster",
+        outcome: "changed",
+        actor: "인사",
+        subject: after.name,
+        detail: (before.hired ? "역할 설정 변경 · " : "채용 · ") + roleId,
+      });
+  }
+
+  /** 인사 역할의 해고. 진행 중인 배정은 기존 절차대로 정리하고 기록은 남긴다. */
+  fireMember(projectId: string, memberId: string) {
+    const before = this.readMembers(projectId).find(({ id }) => id === memberId);
+    if (!before) throw new Error("이 프로젝트에서 해당 크루를 찾을 수 없어요.");
+    this.updateMember(projectId, memberId, { hired: false });
+    if (before.hired)
+      this.recordAudit({
+        projectId,
+        event: "crew.roster",
+        outcome: "changed",
+        actor: "인사",
+        subject: before.name,
+        detail: "해고 · " + before.roleId,
+      });
+  }
+
   protected logMemberEmployment(projectId: string, name: string, hired: boolean) {
     const session = this.db
       .prepare("SELECT last_session FROM projects WHERE id = ?")

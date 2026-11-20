@@ -15,11 +15,27 @@ import sprite0 from "../demo/assets/crew-0.webp";
 import sprite1 from "../demo/assets/crew-1.webp";
 import sprite2 from "../demo/assets/crew-2.webp";
 import sprite3 from "../demo/assets/crew-3.webp";
-export const sprites = [sprite0, sprite1, sprite2, sprite3];
+import sprite4 from "../demo/assets/crew-4.webp";
+import sprite5 from "../demo/assets/crew-5.webp";
+import sprite6 from "../demo/assets/crew-6.webp";
+import sprite7 from "../demo/assets/crew-7.webp";
+import sprite8 from "../demo/assets/crew-8.webp";
+// `roles[].sprite`는 이 목록의 위치다. 역할과 그림이 1:1로 맞는다.
+export const sprites = [
+  sprite0,
+  sprite1,
+  sprite2,
+  sprite3,
+  sprite4,
+  sprite5,
+  sprite6,
+  sprite7,
+  sprite8,
+];
 export const phase = {
   recovering: "파일 상태 확인 중",
   clarification: "답변 대기",
-  planning: "플랜",
+  planning: "계획",
   approval: "승인 대기",
   queued: "같은 파일 작업 대기",
   developing: "개발",

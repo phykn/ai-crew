@@ -146,6 +146,15 @@ export class ActionRunner {
       case "mcp.answer":
         workflow.answerTool(action.jobId, action.requestId, action.allow);
         break;
+      case "crew.hire":
+        store.hireMember(action.projectId, action.roleId, {
+          ...(action.name ? { name: action.name } : {}),
+          ...(action.provider ? { provider: action.provider } : {}),
+        });
+        break;
+      case "crew.fire":
+        store.fireMember(action.projectId, action.memberId);
+        break;
       case "crew.skill.add":
         store.addSkill(action.projectId, {
           id: action.skillId,
@@ -323,6 +332,8 @@ const descriptions: Record<string, string> = {
   "session.draft": "입력창 초안을 저장해요.",
   "crew.member.add": "정규 팀원을 고용해요.",
   "crew.member.update": "별명·모델·고용 상태를 바꿔요.",
+  "crew.hire": "크루를 뽑아요. 별명과 모델을 정하고, 해고한 크루는 다시 고용해요.",
+  "crew.fire": "크루를 로스터에서 내보내요. 해고는 기록으로 남아요.",
   "crew.workspace.write": "개발 담당의 파일 쓰기 권한을 부여·회수해요.",
   "mcp.connect": "프로젝트 MCP 서버를 연결하고 도구를 새로 읽어요.",
   "mcp.disconnect": "프로젝트 MCP 서버 연결을 해제해요.",

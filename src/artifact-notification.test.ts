@@ -70,14 +70,14 @@ test("one event makes one notification and reading it keeps the job link", async
     store.recordJob(
       store.getJob(job.id),
       "approval",
-      "플랜 → 비서 · notice.txt",
+      "계획 → 비서 · notice.txt",
       { path: "notice.txt", goal: "문구 변경", criterion: "After", baseline: null },
       approval,
     );
     store.recordJob(
       store.getJob(job.id),
       "approval",
-      "플랜 → 비서 · notice.txt",
+      "계획 → 비서 · notice.txt",
       { path: "notice.txt", goal: "문구 변경", criterion: "After", baseline: null },
       approval,
     );

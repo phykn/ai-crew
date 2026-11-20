@@ -12,7 +12,7 @@ export function initStoreSchema(db: DatabaseSync) {
     const migration = db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 35)
+    if (migration.user_version > 36)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       db.exec(`
@@ -490,6 +490,46 @@ export function initStoreSchema(db: DatabaseSync) {
         PRAGMA user_version = 35;
         COMMIT;
       `);
+    }
+    if (migration.user_version < 36) {
+      // 'plan' 역할은 비서가 계획까지 맡는 구성으로 바뀌었다. 예전 기록의 역할 이름을
+      // 새 역할로 옮겨 저장된 업무·크루·워크플로우를 그대로 열 수 있게 한다.
+      const versions = db
+        .prepare("SELECT workflow_id, version, graph FROM workflow_versions")
+        .all() as { workflow_id: string; version: number; graph: string }[];
+      const graphs: { id: string; version: number; graph: string }[] = [];
+      for (const row of versions) {
+        const graph = JSON.parse(row.graph) as {
+          stages?: { roleId?: string }[];
+        };
+        const stages = graph.stages ?? [];
+        if (!stages.some(({ roleId }) => roleId === "plan")) continue;
+        for (const stage of stages)
+          if (stage.roleId === "plan") stage.roleId = "assistant";
+        graphs.push({
+          id: row.workflow_id,
+          version: row.version,
+          graph: JSON.stringify(graph),
+        });
+      }
+      db.exec("BEGIN;");
+      try {
+        db.exec(`
+          DELETE FROM crew WHERE role = 'plan';
+          UPDATE crew_members SET role = 'assistant' WHERE role = 'plan';
+          UPDATE job_assignees SET role = 'assistant' WHERE role = 'plan';
+          UPDATE model_runs SET role_id = 'assistant' WHERE role_id = 'plan';
+        `);
+        const update = db.prepare(
+          "UPDATE workflow_versions SET graph = ? WHERE workflow_id = ? AND version = ?",
+        );
+        for (const { graph, id, version } of graphs)
+          update.run(graph, id, version);
+        db.exec("PRAGMA user_version = 36; COMMIT;");
+      } catch (error) {
+        db.exec("ROLLBACK;");
+        throw error;
+      }
     }
     db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",

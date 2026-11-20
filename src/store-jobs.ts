@@ -237,7 +237,7 @@ export class StoreJobs extends StoreWorkspace {
         .run(item.text, job.id);
       this.log(
         job.sessionId,
-        "비서 → 플랜 · 선택한 업무에 추가 지시 반영",
+        "비서 → 계획 · 선택한 업무에 추가 지시 반영",
         job.id,
       );
       return "planning";
@@ -345,8 +345,8 @@ export class StoreJobs extends StoreWorkspace {
       this.log(
         job.sessionId,
         questionId
-          ? "비서 → 플랜 · 사용자 확인 답변 전달"
-          : "비서 → 플랜 · 완료 업무의 추가 지시",
+          ? "비서 → 계획 · 사용자 확인 답변 전달"
+          : "비서 → 계획 · 완료 업무의 추가 지시",
         job.id,
       );
       return true;

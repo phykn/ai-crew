@@ -94,8 +94,12 @@ export function campState({
     selectedJobId ??
     jobs.find(({ state }) => workingStates.includes(state))?.id ??
     null;
+  // 예전 저장본에 남은 역할 이름은 캠프에서 건너뛴다.
+  const roster = members.filter((member) =>
+    roles.some(({ id }) => id === member.roleId),
+  );
   return {
-    members: members.map((member) => {
+    members: roster.map((member) => {
       const role = roles.find(({ id }) => id === member.roleId)!;
       const assignment = assignees.find(({ memberId, jobId }) => {
         const job = jobs.find(({ id }) => id === jobId);

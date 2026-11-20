@@ -50,7 +50,8 @@ export type AuditEvent =
   | "file.approval"
   | "tool.approval"
   | "model.connection"
-  | "workspace.apply";
+  | "workspace.apply"
+  | "crew.roster";
 
 export type AuditOutcome = "requested" | "allowed" | "denied" | "changed" | "applied" | "blocked";
 

@@ -90,7 +90,7 @@ test(
       store.openFolder(folder);
       const projectId = store.snapshot().current!.id;
       const sessionId = store.snapshot().session!.id;
-      const planMember = store.readMembers(projectId, "plan")[0];
+      const planMember = store.readMembers(projectId, "assistant")[0];
       store.updateMember(projectId, planMember.id, { provider: "codex" });
 
       let attempts = 0;
@@ -150,8 +150,8 @@ test(
       expect(store.getJob(id).plan?.goal).toBe("빈 검색어는 전체 목록");
       expect(store.snapshot().activity.map(({ text }) => text)).toEqual(
         expect.arrayContaining([
-          expect.stringContaining("비서 → 플랜 · 사용자 요청 인계"),
-          expect.stringContaining("플랜 → 비서 · search.js"),
+          expect.stringContaining("비서 → 계획 · 사용자 요청 인계"),
+          expect.stringContaining("계획 → 비서 · search.js"),
         ]),
       );
       workflow.answer(id, store.getJob(id).approvalId!, true);

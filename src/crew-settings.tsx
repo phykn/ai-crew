@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { Action, CrewMember, Snapshot } from "./actions";
+import { roleSkillNames, type Action, type CrewMember, type Snapshot } from "./actions";
 import { crewDefinition } from "./crew-definition";
 import { skillStateLabels } from "./skill-status";
 
@@ -78,6 +78,9 @@ export function CrewSettings({
           닫기
         </button>
       </header>
+      <p className="crew-role-skills">
+        역할 스킬 · {roleSkillNames(member.roleId).join(", ")}
+      </p>
       <details>
         <summary>정의 MD</summary>
         <pre>{crewDefinition(member.roleId)}</pre>

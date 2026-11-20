@@ -24,7 +24,7 @@ export class CrewWorkflow extends WorkflowRecovery {
       .find((job) => job.id === responseId);
     if (existing) return { id: existing.id, status: existing.state };
     const job = this.store.createJob(sessionId, responseId, text);
-    this.store.log(sessionId, "비서 → 플랜 · 사용자 요청 인계", job.id);
+    this.store.log(sessionId, "비서 → 계획 · 사용자 요청 인계", job.id);
     this.notify();
     this.start(job, "planning");
     return { id: job.id, status: "planning" };
@@ -235,7 +235,7 @@ export class CrewWorkflow extends WorkflowRecovery {
       this.store.recordJob(
         job,
         "planning",
-        "비서 → 플랜 · 현재 파일 상태에서 이어가기",
+        "비서 → 계획 · 현재 파일 상태에서 이어가기",
         null,
       );
       this.start(job, "planning");
@@ -330,7 +330,7 @@ export class CrewWorkflow extends WorkflowRecovery {
           this.store.recordJob(
             current,
             "planning",
-            "비서 → 플랜 · 대기 중 바뀐 파일을 기준으로 다시 계획",
+            "비서 → 계획 · 대기 중 바뀐 파일을 기준으로 다시 계획",
             null,
           );
         } else

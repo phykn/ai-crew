@@ -159,7 +159,7 @@ export const peerSchema = z.strictObject({
       "Guidance for answer, or the unresolved requirement for blocked. Otherwise empty.",
     ),
   peer: z
-    .enum(["none", "plan", "development", "review", "style", "test"])
+    .enum(["none", "development", "review", "style", "test"])
     .describe("A role for consult only. Otherwise none."),
   question: z
     .string()

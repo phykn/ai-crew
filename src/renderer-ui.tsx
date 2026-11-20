@@ -41,6 +41,14 @@ const icons = {
   stop: "M6 6h12v12H6Z",
   flow: "M6 4h12v5H6Zm0 11h5v5H6Zm7 0h5v5h-5Zm-3.5-6v3h6v3",
   bell: "M12 3a5 5 0 0 0-5 5v4l-2 4h14l-2-4V8a5 5 0 0 0-5-5Zm-2 15a2 2 0 0 0 4 0",
+  search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm4.9 11.9L21 21",
+  close: "M6 6l12 12M18 6 6 18",
+  pulse: "M2 12h4.2l2.4-6 4 12 2.4-6H22",
+  refresh: "M20 11a8 8 0 1 0-2.4 5.7M20 4v6h-6",
+  compass: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm3.2 5.8-1.8 5.4-5.4 1.8 1.8-5.4Z",
+  bug: "M9 9a3 3 0 0 1 6 0v4a3 3 0 0 1-6 0V9Zm-5 3h4m8 0h4M4 16h5m6 0h5M7 6l2 2m8-2-2 2M12 3v3",
+  flask: "M9 3h6M10 3v5.2L5.4 17A2 2 0 0 0 7.2 20h9.6a2 2 0 0 0 1.8-3L14 8.2V3",
+  pencil: "M4 20h4L20.5 7.5l-4-4L4 16v4Zm9.5-14.5 4 4",
 };
 export function Icon({ name }: { name: keyof typeof icons }) {
   return (

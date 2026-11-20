@@ -4,7 +4,7 @@
 
 import { type ReactNode } from "react";
 import { roles, type Snapshot } from "./actions";
-import { phase, sprites } from "./renderer-ui";
+import { Icon, phase, sprites } from "./renderer-ui";
 
 type ChatStatusProps = {
   data: Snapshot | null;
@@ -14,6 +14,9 @@ type ChatStatusProps = {
   showCamp: boolean;
   setShowCamp: (camp: boolean) => void;
   openLog: (jobId: string) => void;
+  /** 대화 안 찾기 막대를 열었는지. */
+  searching: boolean;
+  toggleSearch: () => void;
   // 업무가 한 건일 때는 그 업무의 버튼을 배너 안에 붙여 줄을 하나로 유지한다.
   jobActions?: ReactNode;
 };
@@ -26,6 +29,8 @@ export function ChatStatus({
   showCamp,
   setShowCamp,
   openLog,
+  searching,
+  toggleSearch,
   jobActions,
 }: ChatStatusProps) {
   if (!data?.session) return null;
@@ -90,6 +95,16 @@ export function ChatStatus({
       {!!jobActions && (
         <span className="chat-status-actions">{jobActions}</span>
       )}
+      <button
+        type="button"
+        className="icon-button chat-status-search"
+        aria-label={searching ? "대화 찾기 닫기" : "대화에서 찾기"}
+        title="대화에서 찾기 (⌘/Ctrl+F)"
+        aria-pressed={searching}
+        onClick={toggleSearch}
+      >
+        <Icon name="search" />
+      </button>
       <button
         type="button"
         className="chat-status-camp"

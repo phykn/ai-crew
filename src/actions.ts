@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DiagnosticsReport } from "./diagnostics";
 
 export const roles = [
   {
@@ -7,8 +8,8 @@ export const roles = [
     name: "여울",
     color: "#efc58d",
     sprite: 0,
-    x: 28,
-    y: 62,
+    x: 33,
+    y: 68,
   },
   {
     id: "plan",
@@ -16,8 +17,8 @@ export const roles = [
     name: "가람",
     color: "#bce0da",
     sprite: 2,
-    x: 48,
-    y: 52,
+    x: 47,
+    y: 57,
   },
   {
     id: "development",
@@ -25,8 +26,8 @@ export const roles = [
     name: "모루",
     color: "#b4d59d",
     sprite: 1,
-    x: 64,
-    y: 78,
+    x: 74,
+    y: 74,
   },
   {
     id: "review",
@@ -34,8 +35,8 @@ export const roles = [
     name: "새벽",
     color: "#ddaed8",
     sprite: 3,
-    x: 23,
-    y: 83,
+    x: 26,
+    y: 84,
   },
   {
     id: "style",
@@ -43,8 +44,8 @@ export const roles = [
     name: "단풍",
     color: "#f6aa8a",
     sprite: 0,
-    x: 86,
-    y: 84,
+    x: 87,
+    y: 88,
   },
   {
     id: "test",
@@ -52,8 +53,8 @@ export const roles = [
     name: "솔잎",
     color: "#a9c7f0",
     sprite: 2,
-    x: 79,
-    y: 65,
+    x: 78,
+    y: 61,
   },
 ] as const;
 
@@ -629,8 +630,10 @@ export type ChatEvent = {
   responseId: string;
   delta: string;
 };
+// 화면에서 실행한 동작의 결과. 환경 진단만 점검 결과를 함께 돌려준다.
+export type RunResult = Snapshot & { diagnostics?: DiagnosticsReport };
 export type CrewApi = {
-  run: (action: Action) => Promise<Snapshot>;
+  run: (action: Action) => Promise<RunResult>;
   subscribe: (receive: (event: ChatEvent | null) => void) => () => void;
 };
 

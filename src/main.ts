@@ -332,7 +332,10 @@ async function startApp() {
     )
       throw new Error("현재 앱 창에서 요청해 주세요.");
     const outcome = await runner.run(input, "ui");
-    return outcome.snapshot;
+    // 환경 진단은 저장된 상태에 없는 점검 결과를 화면에 함께 돌려준다.
+    return outcome.status === "diagnostics"
+      ? { ...outcome.snapshot, diagnostics: outcome.report }
+      : outcome.snapshot;
   });
 
   async function showWindow() {

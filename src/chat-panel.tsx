@@ -1,7 +1,7 @@
 // The chat view: the live status banner, running jobs, the transcript, the
 // decisions waiting on the user, and the composer.
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   approvalLabels,
   type Action,
@@ -12,8 +12,9 @@ import {
 import { copyText } from "./clipboard";
 import { ChatStatus } from "./chat-status";
 import { DecisionStack } from "./chat-decisions";
+import { filterMessages, searchCount } from "./chat-search";
 import { Markdown } from "./markdown";
-import { Icon, phase } from "./renderer-ui";
+import { Icon, phase, sprites } from "./renderer-ui";
 
 type ChatPanelProps = {
   data: Snapshot | null;
@@ -57,6 +58,53 @@ const stoppable = [
   "recovering",
   "clarification",
 ];
+
+// 빈 화면에서 바로 누를 수 있는 짧은 작업. 누르면 입력창에 요청 문장이 채워진다.
+const quickTasks: {
+  icon: "compass" | "bug" | "flask" | "pencil";
+  label: string;
+  prompt: string;
+}[] = [
+  {
+    icon: "compass",
+    label: "구조 파악",
+    prompt: "이 프로젝트 구조를 파악해서 핵심 모듈과 흐름을 정리해 줘.",
+  },
+  {
+    icon: "bug",
+    label: "버그 점검",
+    prompt: "지금 코드에서 버그가 날 만한 곳을 점검해 줘.",
+  },
+  {
+    icon: "flask",
+    label: "테스트 확인",
+    prompt: "테스트를 돌려서 지금 상태를 확인해 줘.",
+  },
+  {
+    icon: "pencil",
+    label: "변경 리뷰",
+    prompt: "최근 변경 사항을 리뷰해 줘.",
+  },
+];
+
+/** 답을 기다리는 동안의 말풍선: 크루 스프라이트와 점 세 개, 짧은 상태 배지. */
+function PendingBubble({ queued }: { queued: boolean }) {
+  return (
+    <span
+      className="bubble-pending"
+      role="status"
+      aria-label={queued ? "앞선 답변 뒤에 이어서 답할 준비 중" : "답변 진행 중"}
+    >
+      <img src={sprites[0]} alt="" />
+      <span className="pending-dots" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="pending-badge">{queued ? "대기 중" : "진행 중"}</span>
+    </span>
+  );
+}
 
 type JobActionsProps = {
   job: Snapshot["jobs"][number];
@@ -184,6 +232,10 @@ export function ChatPanel({
   const [copied, setCopied] = useState<string | null>(null);
   const [showJump, setShowJump] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
+  const [search, setSearch] = useState<string | null>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searching = search !== null;
+  const query = search?.trim() ?? "";
   const currentJobs =
     data?.jobs.filter((job) => !["complete", "denied"].includes(job.state)) ||
     [];
@@ -199,6 +251,9 @@ export function ChatPanel({
         message.state === "stopping" ||
         message.state === "queued",
     ) || [];
+  const shownMessages = query
+    ? filterMessages(visibleMessages, query)
+    : visibleMessages;
   const commandKey = commandSuggestions.map(([command]) => command).join("|");
   const selectedCommand = Math.min(
     Math.max(commandIndex, 0),
@@ -208,6 +263,23 @@ export function ChatPanel({
   useEffect(() => {
     setCommandIndex(0);
   }, [commandKey]);
+
+  // Cmd/Ctrl+F로 대화 안 찾기를 열고 닫는다.
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "f")
+        return;
+      event.preventDefault();
+      setSearch((current) => current ?? "");
+      requestAnimationFrame(() => searchInput.current?.focus());
+    };
+    document.addEventListener("keydown", shortcut);
+    return () => document.removeEventListener("keydown", shortcut);
+  }, []);
+
+  useEffect(() => {
+    if (searching) searchInput.current?.focus();
+  }, [searching]);
 
   // 입력한 만큼 입력창을 늘리되 두 줄에서 160px 사이로 둔다.
   useEffect(() => {
@@ -244,6 +316,8 @@ export function ChatPanel({
         showCamp={showCamp}
         setShowCamp={setShowCamp}
         openLog={openLog}
+        searching={searching}
+        toggleSearch={() => setSearch(searching ? null : "")}
         jobActions={
           singleJob ? (
             <JobActions
@@ -261,6 +335,37 @@ export function ChatPanel({
           ) : undefined
         }
       />
+      {searching && (
+        <div className="chat-search" role="search" aria-label="대화에서 찾기">
+          <Icon name="search" />
+          <input
+            ref={searchInput}
+            type="search"
+            value={search}
+            aria-label="대화에서 찾기"
+            placeholder="대화에서 찾기"
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setSearch(null);
+              }
+            }}
+          />
+          <span className="chat-search-count" aria-live="polite">
+            {query ? searchCount(shownMessages.length) : ""}
+          </span>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="대화 찾기 닫기"
+            title="닫기"
+            onClick={() => setSearch(null)}
+          >
+            <Icon name="close" />
+          </button>
+        </div>
+      )}
       {!!jobList.length && (
         <div className="current-jobs" aria-label="업무">
           {jobList.map((job) => (
@@ -302,75 +407,81 @@ export function ChatPanel({
           }}
         >
           {visibleMessages.length ? (
-            <div className="transcript">
-              {visibleMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`bubble ${message.role}`}
-                  aria-label={message.role === "user" ? "나" : "비서"}
-                >
-                  {message.role === "assistant" ? (
-                    message.text ? (
-                      <Markdown text={message.text} />
-                    ) : message.state === "queued" ? (
-                      "앞선 답변 뒤에 이어서 답할게요…"
-                    ) : message.state === "running" ? (
-                      "답변을 준비하고 있어요…"
-                    ) : null
-                  ) : (
-                    message.text
-                  )}
-                  {message.state === "stopped" && <small>응답 중단</small>}
-                  {message.state === "stopping" && <small>중단 중</small>}
-                  {message.error && (
-                    <small role="status">{message.error}</small>
-                  )}
-                  {message.text && (
-                    <button
-                      type="button"
-                      className="bubble-copy"
-                      aria-label={
-                        copied === message.id ? "복사됨" : "메시지 복사"
-                      }
-                      onClick={() => void copyMessage(message)}
-                    >
-                      {copied === message.id ? "복사됨" : "복사"}
-                    </button>
-                  )}
-                  {message.role === "assistant" && message.jobId && (
-                    <div className="report-actions">
+            query && !shownMessages.length ? (
+              <p className="chat-search-none">
+                ‘{query}’이 들어간 대화가 없어요.
+              </p>
+            ) : (
+              <div className="transcript">
+                {shownMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`bubble ${message.role}`}
+                    aria-label={message.role === "user" ? "나" : "비서"}
+                  >
+                    {message.role === "assistant" ? (
+                      message.text ? (
+                        <Markdown text={message.text} />
+                      ) : message.state === "queued" ? (
+                        <PendingBubble queued />
+                      ) : message.state === "running" ? (
+                        <PendingBubble queued={false} />
+                      ) : null
+                    ) : (
+                      message.text
+                    )}
+                    {message.state === "stopped" && <small>응답 중단</small>}
+                    {message.state === "stopping" && <small>중단 중</small>}
+                    {message.error && (
+                      <small role="status">{message.error}</small>
+                    )}
+                    {message.text && (
                       <button
                         type="button"
-                        onClick={() => openLog(message.jobId!)}
+                        className="bubble-copy"
+                        aria-label={
+                          copied === message.id ? "복사됨" : "메시지 복사"
+                        }
+                        onClick={() => void copyMessage(message)}
                       >
-                        업무 로그
+                        {copied === message.id ? "복사됨" : "복사"}
                       </button>
-                      {data?.jobs.some(
-                        (job) =>
-                          job.id === message.jobId &&
-                          job.state === "complete",
-                      ) &&
-                        data.messages.findLast(
-                          (item) =>
-                            item.role === "assistant" &&
-                            item.jobId === message.jobId,
-                        )?.id === message.id && (
-                          <button
-                            type="button"
-                            disabled={sending}
-                            onClick={() => {
-                              setRevision({ id: message.jobId!, text: "" });
-                              composer.current?.focus();
-                            }}
-                          >
-                            추가 지시
-                          </button>
-                        )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                    )}
+                    {message.role === "assistant" && message.jobId && (
+                      <div className="report-actions">
+                        <button
+                          type="button"
+                          onClick={() => openLog(message.jobId!)}
+                        >
+                          업무 로그
+                        </button>
+                        {data?.jobs.some(
+                          (job) =>
+                            job.id === message.jobId &&
+                            job.state === "complete",
+                        ) &&
+                          data.messages.findLast(
+                            (item) =>
+                              item.role === "assistant" &&
+                              item.jobId === message.jobId,
+                          )?.id === message.id && (
+                            <button
+                              type="button"
+                              disabled={sending}
+                              onClick={() => {
+                                setRevision({ id: message.jobId!, text: "" });
+                                composer.current?.focus();
+                              }}
+                            >
+                              추가 지시
+                            </button>
+                          )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
           ) : (
             <div className="empty">
               <h1>
@@ -378,13 +489,32 @@ export function ChatPanel({
                   ? "무엇을 맡길까요?"
                   : "프로젝트를 열어 시작하세요"}
               </h1>
-              {data && !data.current && (
-                <button
-                  type="button"
-                  onClick={() => void navigate({ type: "project.pick" })}
-                >
-                  폴더 열기 <span aria-hidden="true">↗</span>
-                </button>
+              {data?.current ? (
+                <div className="quick-tasks" role="group" aria-label="빠른 작업">
+                  {quickTasks.map(({ icon, label, prompt }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      title={prompt}
+                      onClick={() => {
+                        saveDraft(prompt);
+                        composer.current?.focus();
+                      }}
+                    >
+                      <Icon name={icon} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                data && (
+                  <button
+                    type="button"
+                    onClick={() => void navigate({ type: "project.pick" })}
+                  >
+                    폴더 열기 <span aria-hidden="true">↗</span>
+                  </button>
+                )
               )}
             </div>
           )}

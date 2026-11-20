@@ -19,6 +19,9 @@ type ToolbarProps = {
   setFocusedApprovalId: (jobId: string | null) => void;
   navigate: (action: Action) => Promise<void>;
   run: (action: Action, resetDraft?: boolean) => Promise<boolean>;
+  /** 환경 진단 실행. 결과 배너는 캠프 위 작업 영역에 그린다. */
+  diagnose: () => void;
+  diagnosing: boolean;
 };
 
 export function Toolbar({
@@ -35,6 +38,8 @@ export function Toolbar({
   setFocusedApprovalId,
   navigate,
   run,
+  diagnose,
+  diagnosing,
 }: ToolbarProps) {
   return (
     <header className="toolbar">
@@ -144,6 +149,20 @@ export function Toolbar({
           }}
         >
           <Icon name="flow" />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="환경 진단"
+          title="환경 진단 — Git · Codex · 모델 · MCP"
+          aria-busy={diagnosing}
+          disabled={!data?.current || diagnosing}
+          onClick={() => {
+            setMenu(null);
+            diagnose();
+          }}
+        >
+          <Icon name="pulse" />
         </button>
         <button
           type="button"

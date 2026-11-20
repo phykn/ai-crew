@@ -16,6 +16,8 @@ import { findChatCommand, suggestChatCommands } from "./chat-commands";
 import { type Action, type Snapshot } from "./actions";
 import { CampPanel } from "./camp-panel";
 import { ChatPanel } from "./chat-panel";
+import { DiagnosticsBanner } from "./diagnostics-banner";
+import type { DiagnosticsReport } from "./diagnostics";
 import { Toolbar } from "./toolbar";
 import { WorklogPanel } from "./worklog-panel";
 import "../demo/tokens.css";
@@ -58,6 +60,10 @@ function Workspace() {
     text: string;
   } | null>(null);
   const [toolFocus, setToolFocus] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsReport | null>(
+    null,
+  );
+  const [diagnosing, setDiagnosing] = useState(false);
   const dataRef = useRef<Snapshot | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const messages = useRef<HTMLDivElement>(null);
@@ -206,6 +212,26 @@ function Workspace() {
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : String(problem));
       return false;
+    }
+  }
+
+  // 환경 진단은 상태 변경 없이 점검 결과만 돌려받아 배너로 보여 준다.
+  async function diagnose() {
+    const project = dataRef.current?.current;
+    if (!project) return;
+    setDiagnosing(true);
+    setError("");
+    try {
+      const next = await window.crew.run({
+        type: "diagnostics.run",
+        projectId: project.id,
+      });
+      apply(next);
+      if (next.diagnostics) setDiagnostics(next.diagnostics);
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : String(problem));
+    } finally {
+      setDiagnosing(false);
     }
   }
 
@@ -388,8 +414,18 @@ function Workspace() {
           setFocusedApprovalId={setFocusedApprovalId}
           navigate={navigate}
           run={run}
+          diagnose={() => void diagnose()}
+          diagnosing={diagnosing}
         />
-        <div className="pane">
+        <div className={"pane" + (diagnostics ? " pane-diagnosed" : "")}>
+          {diagnostics && (
+            <DiagnosticsBanner
+              report={diagnostics}
+              running={diagnosing}
+              rerun={() => void diagnose()}
+              close={() => setDiagnostics(null)}
+            />
+          )}
           {view === "workflow" ? (
           data && (
             <WorkflowPanel

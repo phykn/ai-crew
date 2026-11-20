@@ -33,6 +33,9 @@ test("keeps projects, conversation, draft and selected model through restart", (
     store.updateMember(current!.id, member.id, { hired: false });
     store.updateMember(current!.id, member.id, { hired: false });
     const job = store.createJob(id, response, "파일 수정");
+    store.recordModelRun(id, job.id, { roleId: "development", provider: "local" }, 75.48, {
+      model: "qwen-test", inputTokens: 31, outputTokens: 12,
+    });
     store.saveAgentContext(
       job.id,
       "development",
@@ -64,6 +67,12 @@ test("keeps projects, conversation, draft and selected model through restart", (
       result: '{"content":"answer"}',
     });
     expect(store.getAgentContext(job.id, "review")).toBeUndefined();
+    expect(store.snapshot().modelRuns).toEqual([
+      {
+        id: 1, jobId: job.id, roleId: "development", provider: "local",
+        model: "qwen-test", elapsedMs: 75, inputTokens: 31, outputTokens: 12,
+      },
+    ]);
     expect(store.readMembers(current!.id, "review")).toContainEqual({
       ...member,
       name: "보조 리뷰 팀원",
@@ -73,6 +82,7 @@ test("keeps projects, conversation, draft and selected model through restart", (
       store.snapshot().activity.filter(({ text }) => text.endsWith("미고용")),
     ).toHaveLength(1);
     store.openFolder("/work/another-project");
+    expect(store.snapshot().modelRuns).toEqual([]);
     expect(() =>
       store.updateMember(store.snapshot().current!.id, member.id, {
         hired: true,
@@ -91,6 +101,7 @@ test("keeps projects, conversation, draft and selected model through restart", (
     expect(fresh.session?.id).not.toBe(id);
     expect(fresh.messages).toEqual([]);
     expect(fresh.jobs).toEqual([]);
+    expect(fresh.modelRuns).toEqual([]);
     expect(fresh.current?.approvalMode).toBe("always");
     expect(fresh.members).toContainEqual(
       expect.objectContaining({ id: "assistant", provider: "codex" }),

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { z } from "zod";
-import type { Project } from "./actions";
+import type { ModelDetails, Project } from "./actions";
 import { ModelConnectionError, ModelLimitError } from "./model-errors";
 
 import type { InitializeParams } from "./codex-protocol/InitializeParams";
@@ -37,6 +37,15 @@ const deltaSchema = z.object({
   threadId: z.string(),
   turnId: z.string(),
   delta: z.string(),
+});
+const tokenCounts = z.object({
+  inputTokens: z.int().nonnegative(),
+  outputTokens: z.int().nonnegative(),
+});
+const tokenUsage = z.object({
+  threadId: z.string(),
+  turnId: z.string(),
+  tokenUsage: z.object({ total: tokenCounts, last: tokenCounts }),
 });
 const turnError = z.object({
   message: z.string(),
@@ -83,7 +92,10 @@ const turnResult = z.object({
   }),
 });
 const turnNotification = turnResult.extend({ threadId: z.string() });
-const threadResult = z.object({ thread: z.object({ id: z.string() }) });
+const threadResult = z.object({
+  thread: z.object({ id: z.string() }),
+  model: z.string().optional(),
+});
 
 type Notification = (method: string, params: unknown) => void;
 
@@ -240,6 +252,7 @@ export class CodexConnection {
       resumeTurn: string | null;
       onTurn: (threadId: string, turnId: string) => void;
     },
+    details?: ModelDetails,
   ) {
     await this.connect();
     signal.throwIfAborted();
@@ -251,13 +264,15 @@ export class CodexConnection {
     let thread: string | undefined;
     if (previousThread) {
       try {
-        thread = threadResult.parse(
+        const resumed = threadResult.parse(
           await this.rpc("thread/resume", {
             threadId: previousThread,
             excludeTurns: true,
             ...policy,
           }),
-        ).thread.id;
+        );
+        thread = resumed.thread.id;
+        if (details) details.model = resumed.model;
       } catch (error) {
         if (
           !recover ||
@@ -321,15 +336,19 @@ export class CodexConnection {
         if (error instanceof ModelLimitError) throw error;
       }
     }
-    thread ??= threadResult.parse(
-      await this.rpc("thread/start", {
-        ...policy,
-        ephemeral: !!outputSchema && !previousThread && !recover,
-        developerInstructions: outputSchema
-          ? "Return structured output for the delegated AI Crew role."
-          : "You are the AI Crew secretary. Reply to the user in chat. Project changes are performed by delegated crew workflows.",
-      }),
-    ).thread.id;
+    if (!thread) {
+      const opened = threadResult.parse(
+        await this.rpc("thread/start", {
+          ...policy,
+          ephemeral: !!outputSchema && !previousThread && !recover,
+          developerInstructions: outputSchema
+            ? "Return structured output for the delegated AI Crew role."
+            : "You are the AI Crew secretary. Reply to the user in chat. Project changes are performed by delegated crew workflows.",
+        }),
+      );
+      thread = opened.thread.id;
+      if (details) details.model = opened.model;
+    }
     const activeThread = thread;
     rememberThread(activeThread);
     signal.throwIfAborted();
@@ -348,11 +367,14 @@ export class CodexConnection {
     });
     void complete.catch(() => {});
     const early: [string, unknown][] = [];
+    let tokenBaseline: z.infer<typeof tokenCounts> | undefined;
     const off = (method: string, params: unknown) => {
       if (method === "disconnect") return finish(params as Error);
       if (
         !turnId &&
-        (method === "item/agentMessage/delta" || method === "turn/completed") &&
+        (method === "item/agentMessage/delta" ||
+          method === "turn/completed" ||
+          method === "thread/tokenUsage/updated") &&
         params &&
         typeof params === "object" &&
         "threadId" in params &&
@@ -360,6 +382,30 @@ export class CodexConnection {
       ) {
         early.push([method, params]);
         return;
+      }
+      if (method === "thread/tokenUsage/updated" && details) {
+        const usage = tokenUsage.safeParse(params);
+        if (
+          usage.success &&
+          usage.data.threadId === activeThread &&
+          usage.data.turnId === turnId
+        ) {
+          const { total, last } = usage.data.tokenUsage;
+          const baseline = tokenBaseline ?? {
+            inputTokens: total.inputTokens - last.inputTokens,
+            outputTokens: total.outputTokens - last.outputTokens,
+          };
+          if (
+            baseline.inputTokens >= 0 &&
+            baseline.outputTokens >= 0 &&
+            total.inputTokens >= baseline.inputTokens &&
+            total.outputTokens >= baseline.outputTokens
+          ) {
+            tokenBaseline = baseline;
+            details.inputTokens = total.inputTokens - baseline.inputTokens;
+            details.outputTokens = total.outputTokens - baseline.outputTokens;
+          }
+        }
       }
       if (method === "item/agentMessage/delta") {
         const delta = deltaSchema.safeParse(params);

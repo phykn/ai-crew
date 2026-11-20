@@ -441,6 +441,9 @@ summary:focus-visible {
 .composer:focus-within {
   border-color: #928062;
 }
+.model-usage li {
+  overflow-wrap: anywhere;
+}
 .command-list {
   margin-bottom: var(--space-1);
   padding-bottom: var(--space-1);

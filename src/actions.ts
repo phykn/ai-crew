@@ -332,6 +332,7 @@ export type Snapshot = {
   assignees: { jobId: string; memberId: string; roleId: RoleId }[];
   messages: Message[];
   activity: Activity[];
+  modelRuns: ModelRun[];
   jobs: Job[];
   fileApprovals: {
     id: string;
@@ -343,6 +344,21 @@ export type Snapshot = {
   }[];
   followups: { id: string; text: string; candidateIds: string[] }[];
   changes: WorkChange[];
+};
+export type ModelDetails = {
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+};
+export type ModelRun = {
+  id: number;
+  jobId: string | null;
+  roleId: RoleId;
+  provider: Provider;
+  model: string | null;
+  elapsedMs: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
 };
 export type ChatEvent = {
   sessionId: string;

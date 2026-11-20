@@ -9,6 +9,7 @@ import {
   type Action,
   type ApprovalMode,
   type Job,
+  type ModelRun,
   type Snapshot,
   type WorkCheck,
 } from "./actions";
@@ -82,6 +83,60 @@ function CheckList({ checks }: { checks: WorkCheck[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function ModelUsage({
+  runs,
+  jobId,
+}: {
+  runs: ModelRun[];
+  jobId: string | null;
+}) {
+  const groups = new Map<
+    string,
+    {
+      roleId: ModelRun["roleId"];
+      model: string;
+      count: number;
+      elapsedMs: number;
+      tokens: number | null;
+    }
+  >();
+  for (const run of runs) {
+    if (jobId && run.jobId !== jobId) continue;
+    const key = JSON.stringify([run.roleId, run.provider, run.model]);
+    const group = groups.get(key) ?? {
+      roleId: run.roleId,
+      model: run.model ?? (run.provider === "codex" ? "Codex" : "로컬 LLM"),
+      count: 0,
+      elapsedMs: 0,
+      tokens: null,
+    };
+    group.count++;
+    group.elapsedMs += run.elapsedMs;
+    if (run.inputTokens !== null || run.outputTokens !== null)
+      group.tokens =
+        (group.tokens ?? 0) + (run.inputTokens ?? 0) + (run.outputTokens ?? 0);
+    groups.set(key, group);
+  }
+  if (!groups.size) return null;
+  return (
+    <details className="change-log model-usage">
+      <summary>모델 실행</summary>
+      <ul>
+        {[...groups].map(([key, group]) => (
+          <li key={key}>
+            {roles.find(({ id }) => id === group.roleId)?.title} ·{" "}
+            {group.model}
+            <br />
+            {group.count}회 · {(group.elapsedMs / 1000).toFixed(1)}초
+            {group.tokens !== null &&
+              ` · 확인된 토큰 ${group.tokens.toLocaleString()}`}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -662,6 +717,7 @@ function Workspace() {
                 )}
               </div>
             )}
+            <ModelUsage runs={data?.modelRuns ?? []} jobId={logJob} />
             {selectedLogJob &&
               data?.fileApprovals
                 .filter(({ jobId }) => jobId === selectedLogJob.id)

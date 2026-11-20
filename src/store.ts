@@ -12,6 +12,8 @@ import {
   type CrewSkill,
   type McpEndpoint,
   type McpGrant,
+  type ModelDetails,
+  type ModelRun,
   type Job,
   type JobState,
   type WorkPlan,
@@ -35,7 +37,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 23)
+    if (migration.user_version > 24)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -337,6 +339,19 @@ export class CrewStore {
           member_id TEXT NOT NULL, name TEXT NOT NULL, markdown TEXT NOT NULL
         );
         PRAGMA user_version = 23;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 24) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE model_runs (
+          id INTEGER PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id),
+          job_id TEXT REFERENCES jobs(id), role_id TEXT NOT NULL, provider TEXT NOT NULL,
+          model TEXT, elapsed_ms INTEGER NOT NULL, input_tokens INTEGER, output_tokens INTEGER
+        );
+        CREATE INDEX model_runs_by_session ON model_runs(session_id);
+        PRAGMA user_version = 24;
         COMMIT;
       `);
     }
@@ -1792,6 +1807,30 @@ export class CrewStore {
     });
   }
 
+  recordModelRun(
+    sessionId: string,
+    jobId: string | null,
+    member: Pick<CrewMember, "roleId" | "provider">,
+    elapsed: number,
+    details: ModelDetails,
+  ) {
+    this.db
+      .prepare(`
+        INSERT INTO model_runs (session_id, job_id, role_id, provider, model, elapsed_ms, input_tokens, output_tokens)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        sessionId,
+        jobId,
+        member.roleId,
+        member.provider,
+        details.model ?? null,
+        Math.round(elapsed),
+        details.inputTokens ?? null,
+        details.outputTokens ?? null,
+      );
+  }
+
   snapshot(): Snapshot {
     const projects = this.db
       .prepare(
@@ -1821,6 +1860,15 @@ export class CrewStore {
       sessions,
       session,
       messages: session ? this.getMessages(session.id) : [],
+      modelRuns: session
+        ? (this.db
+            .prepare(`
+            SELECT id, job_id AS jobId, role_id AS roleId, provider, model,
+                   elapsed_ms AS elapsedMs, input_tokens AS inputTokens, output_tokens AS outputTokens
+            FROM model_runs WHERE session_id = ? ORDER BY id DESC
+          `)
+            .all(session.id) as ModelRun[])
+        : [],
       jobs: session ? this.readJobs(session.id) : [],
       fileApprovals: session
         ? (

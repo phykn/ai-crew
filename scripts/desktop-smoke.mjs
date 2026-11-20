@@ -69,6 +69,9 @@ try {
   await expect(
     page.getByText("비서 · 현재 프로젝트 조회").first(),
   ).toBeVisible();
+  await page.getByText("모델 실행", { exact: true }).click();
+  await expect(page.locator(".model-usage")).toContainText(/비서[\s\S]*3회/);
+  await expect(page.locator(".model-usage")).toContainText("확인된 토큰");
   await page.getByRole("button", { name: "대화", exact: true }).click();
   await send("한 줄에 한 개씩 아주 많은 색 이름과 설명을 써줘.");
   await page.getByRole("button", { name: "응답 멈춤" }).click();
@@ -209,7 +212,7 @@ try {
     .getByRole("button", { name: "업무 로그", exact: true })
     .last()
     .click();
-  const changeLog = page.locator(".change-log").first();
+  const changeLog = page.locator(".change-log:not(.model-usage)").first();
   await expect(page.getByText(/새 플랜 담당 배정/).first()).toBeVisible();
   await expect(page.getByText(/인사팀 · 개발 후보 준비/).first()).toBeVisible();
   await expect(

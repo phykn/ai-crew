@@ -27,7 +27,8 @@ test("reconnecting to Codex reads the exact turn and does not start a duplicate"
       "  if (id === undefined) return;",
       "  const result = {",
       "    initialize: {},",
-      '    "thread/resume": { thread: { id: "saved-thread" } },',
+      '    "thread/resume": { thread: { id: "saved-thread" }, model: "codex-test" },',
+      '    "turn/start": { turn: { id: "new-turn", status: "inProgress" } },',
       '    "thread/turns/list": { data: [',
       '      { id: "finished", status: "completed", items: [',
       '        { type: "agentMessage", text: "중간 내용", phase: "commentary" },',
@@ -36,7 +37,17 @@ test("reconnecting to Codex reads the exact turn and does not start a duplicate"
       '      { id: "active", status: "inProgress", items: [] },',
       "    ] },",
       "  }[method];",
-      '  process.stdout.write(JSON.stringify({ id, result }) + "\\n");',
+      '  const send = (message) => process.stdout.write(JSON.stringify(message) + "\\n");',
+      '  if (method === "turn/start") {',
+      '    const usage = (turnId, input, output, lastIn, lastOut) => send({ method: "thread/tokenUsage/updated", params: {',
+      '      threadId: "saved-thread", turnId, tokenUsage: { total: { inputTokens: input, outputTokens: output }, last: { inputTokens: lastIn, outputTokens: lastOut } },',
+      '    }});',
+      '    usage("new-turn", 1010, 505, 10, 5);',
+      '    usage("new-turn", 1020, 508, 10, 3);',
+      '    usage("other-turn", 2000, 800, 980, 292);',
+      '    send({ method: "turn/completed", params: { threadId: "saved-thread", turn: { id: "new-turn", status: "completed" } } });',
+      '  }',
+      '  send({ id, result });',
       "});",
     ].join("\n"),
   );
@@ -91,6 +102,20 @@ test("reconnecting to Codex reads the exact turn and does not start a duplicate"
       requests.filter(({ method }) => method === "thread/turns/list"),
     ).toHaveLength(2);
     expect(requests.some(({ method }) => method === "turn/start")).toBe(false);
+    const usage = {};
+    await codex.run(
+      project,
+      "saved-thread",
+      "new work",
+      signal,
+      emit,
+      remember,
+      undefined,
+      undefined,
+      undefined,
+      usage,
+    );
+    expect(usage).toEqual({ model: "codex-test", inputTokens: 20, outputTokens: 8 });
   } finally {
     codex.close();
     vi.unstubAllEnvs();

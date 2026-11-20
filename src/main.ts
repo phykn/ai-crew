@@ -1,7 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
-import { actions, type ChatEvent, type Completion } from "./actions";
+import {
+  actions,
+  type ChatEvent,
+  type Completion,
+  type ModelDetails,
+} from "./actions";
 import { findChatCommand } from "./chat-commands";
 import { CodexConnection } from "./codex";
 import { classifyModelFailure } from "./model-errors";
@@ -71,6 +76,8 @@ async function startApp() {
       .map(({ role, text: content }) => ({ role, content }));
     let status: Completion = "complete";
     let failure: string | null = null;
+    const started = performance.now();
+    const details: ModelDetails = {};
     const emit = (delta: string) => {
       if (closing || controller.signal.aborted) return;
       store.append(id, delta);
@@ -102,6 +109,8 @@ async function startApp() {
               store.log(sessionId, "비서 · 저장한 대화에서 Codex 맥락 복구");
             return withHistory();
           },
+          undefined,
+          details,
         );
       } else {
         if (store.getCodexThread(sessionId))
@@ -121,6 +130,7 @@ async function startApp() {
             controller.signal,
           ),
           crewInstructions(assistant, store.listSkills(project.id)),
+          details,
         );
       }
     } catch (error) {
@@ -135,6 +145,13 @@ async function startApp() {
     } finally {
       runs.delete(sessionId);
       if (!closing) {
+        store.recordModelRun(
+          sessionId,
+          null,
+          assistant,
+          performance.now() - started,
+          details,
+        );
         store.finish(
           id,
           controller.signal.aborted ? "stopped" : status,

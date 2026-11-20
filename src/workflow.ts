@@ -8,6 +8,7 @@ import {
   roles,
   type CrewMember,
   type Job,
+  type ModelDetails,
   type Project,
   type RoleId,
   type WorkPlan,
@@ -729,53 +730,68 @@ export class CrewWorkflow {
       signal.throwIfAborted();
       try {
         let output: z.infer<T>;
-        if (member.provider === "local") {
-          output = await decideLocal(
-            system,
-            withPrevious(),
-            schema,
-            signal,
-            this.mcp.modelTools(job, member, signal),
-          );
-        } else {
-          let raw = "";
-          const pending = this.store.readPendingModelTurn(job.id, step);
-          const resumeId = pending?.threadId ?? threadId;
-          await this.codex.run(
-            project,
-            resumeId,
-            system + "\n\n" + (resumeId ? prompt : withPrevious()),
-            signal,
-            (text) => {
-              raw += text;
-            },
-            (thread) => {
-              threadId = thread;
-              if (!signal.aborted && this.active.has(job.id))
-                this.store.rememberAgentThread(job.id, member.id, thread);
-            },
-            z.json().parse(z.toJSONSchema(schema)),
-            () => {
-              signal.throwIfAborted();
-              this.store.log(
-                job.sessionId,
-                member.name +
-                  " · 이전 Codex 세션 " +
-                  resumeId +
-                  "을 불러올 수 없어 저장한 맥락으로 새 실행 연결",
-                job.id,
-              );
-              return system + "\n\n" + withPrevious();
-            },
-            {
-              resumeTurn: pending?.turnId ?? null,
-              onTurn: (thread, turn) => {
-                if (!signal.aborted)
-                  this.store.savePendingModelTurn(job.id, step, thread, turn);
+        const started = performance.now();
+        const details: ModelDetails = {};
+        try {
+          if (member.provider === "local") {
+            output = await decideLocal(
+              system,
+              withPrevious(),
+              schema,
+              signal,
+              this.mcp.modelTools(job, member, signal),
+              details,
+            );
+          } else {
+            let raw = "";
+            const pending = this.store.readPendingModelTurn(job.id, step);
+            const resumeId = pending?.threadId ?? threadId;
+            await this.codex.run(
+              project,
+              resumeId,
+              system + "\n\n" + (resumeId ? prompt : withPrevious()),
+              signal,
+              (text) => {
+                raw += text;
               },
-            },
-          );
-          output = schema.parse(JSON.parse(raw));
+              (thread) => {
+                threadId = thread;
+                if (!signal.aborted && this.active.has(job.id))
+                  this.store.rememberAgentThread(job.id, member.id, thread);
+              },
+              z.json().parse(z.toJSONSchema(schema)),
+              () => {
+                signal.throwIfAborted();
+                this.store.log(
+                  job.sessionId,
+                  member.name +
+                    " · 이전 Codex 세션 " +
+                    resumeId +
+                    "을 불러올 수 없어 저장한 맥락으로 새 실행 연결",
+                  job.id,
+                );
+                return system + "\n\n" + withPrevious();
+              },
+              {
+                resumeTurn: pending?.turnId ?? null,
+                onTurn: (thread, turn) => {
+                  if (!signal.aborted)
+                    this.store.savePendingModelTurn(job.id, step, thread, turn);
+                },
+              },
+              details,
+            );
+            output = schema.parse(JSON.parse(raw));
+          }
+        } finally {
+          if (this.active.has(job.id))
+            this.store.recordModelRun(
+              job.sessionId,
+              job.id,
+              member,
+              performance.now() - started,
+              details,
+            );
         }
         if (signal.aborted && this.active.has(job.id))
           this.store.log(

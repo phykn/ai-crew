@@ -86,6 +86,25 @@ summary:focus-visible {
   border: 1px solid var(--line-control);
   border-radius: var(--radius-surface);
   background: var(--bg);
+  max-height: min(70vh, 530px);
+  overflow-y: auto;
+}
+.crew-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.crew-add input,
+.crew-add select,
+.crew-name {
+  max-width: 112px;
+  background: var(--card);
+  border: 1px solid var(--line-control);
+  border-radius: 5px;
+}
+.add-member {
+  margin-top: var(--space-2);
+  color: var(--warm);
 }
 .crew-row {
   display: flex;

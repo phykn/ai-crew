@@ -6,6 +6,7 @@ import {
   type Activity,
   type ApprovalMode,
   type Completion,
+  type CrewMember,
   type Job,
   type JobState,
   type WorkPlan,
@@ -27,7 +28,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 9)
+    if (migration.user_version > 10)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -143,6 +144,22 @@ export class CrewStore {
         COMMIT;
       `);
     }
+    if (migration.user_version < 10) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE crew ADD COLUMN name TEXT;
+        CREATE TABLE crew_members (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+          role TEXT NOT NULL, name TEXT NOT NULL, provider TEXT NOT NULL, hired INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE job_assignees (
+          job_id TEXT NOT NULL REFERENCES jobs(id), role TEXT NOT NULL,
+          member_id TEXT NOT NULL, PRIMARY KEY (job_id, role)
+        );
+        PRAGMA user_version = 10;
+        COMMIT;
+      `);
+    }
     this.db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'stopping');",
     );
@@ -248,29 +265,11 @@ export class CrewStore {
       .run(draft, id);
   }
 
-  setProvider(projectId: string, roleId: RoleId, provider: Provider) {
-    this.getProject(projectId);
-    this.db
-      .prepare(
-        "INSERT INTO crew (project_id, role, provider) VALUES (?, ?, ?) ON CONFLICT(project_id, role) DO UPDATE SET provider = excluded.provider",
-      )
-      .run(projectId, roleId, provider);
-  }
-
   setApprovalMode(projectId: string, mode: ApprovalMode) {
     this.getProject(projectId);
     this.db
       .prepare("UPDATE projects SET approval_mode = ? WHERE id = ?")
       .run(mode, projectId);
-  }
-
-  setEmployment(projectId: string, roleId: RoleId, hired: boolean) {
-    this.getProject(projectId);
-    this.db
-      .prepare(
-        "INSERT INTO crew (project_id, role, provider, hired) VALUES (?, ?, 'local', ?) ON CONFLICT(project_id, role) DO UPDATE SET hired = excluded.hired",
-      )
-      .run(projectId, roleId, Number(hired));
   }
 
   isHired(projectId: string, roleId: RoleId) {
@@ -281,16 +280,130 @@ export class CrewStore {
     );
   }
 
-  getProviders(projectId: string) {
-    const rows = this.db
-      .prepare("SELECT role, provider FROM crew WHERE project_id = ?")
-      .all(projectId) as { role: RoleId; provider: Provider }[];
-    return Object.fromEntries(
-      roles.map(({ id }) => [
-        id,
-        rows.find((row) => row.role === id)?.provider ?? "local",
-      ]),
-    ) as Record<RoleId, Provider>;
+  readMembers(projectId: string, roleId?: RoleId): CrewMember[] {
+    const defaults = this.db
+      .prepare(
+        "SELECT role, name, provider, hired FROM crew WHERE project_id = ?",
+      )
+      .all(projectId);
+    const members = this.db
+      .prepare(
+        "SELECT id, role AS roleId, name, provider, hired FROM crew_members WHERE project_id = ? ORDER BY rowid",
+      )
+      .all(projectId) as (Omit<CrewMember, "hired"> & { hired: number })[];
+    return roles
+      .filter((role) => !roleId || role.id === roleId)
+      .flatMap((role) => {
+        const saved = defaults.find((item) => item.role === role.id);
+        return [
+          {
+            id: role.id,
+            roleId: role.id,
+            name: (saved?.name as string | null) ?? role.name,
+            provider: (saved?.provider as Provider) ?? "local",
+            hired: saved?.hired !== 0,
+          },
+          ...members
+            .filter((member) => member.roleId === role.id)
+            .map((member) => ({
+              ...member,
+              hired: Boolean(member.hired),
+            })),
+        ];
+      });
+  }
+
+  addMember(projectId: string, member: Omit<CrewMember, "hired">) {
+    this.getProject(projectId);
+    this.transaction(() => {
+      const existing = this.db
+        .prepare("SELECT project_id, role FROM crew_members WHERE id = ?")
+        .get(member.id);
+      if (existing) {
+        if (
+          existing.project_id !== projectId ||
+          existing.role !== member.roleId
+        )
+          throw new Error("이미 다른 팀원에게 사용된 ID예요.");
+        return;
+      }
+      this.db
+        .prepare(
+          "INSERT INTO crew_members (id, project_id, role, name, provider) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(member.id, projectId, member.roleId, member.name, member.provider);
+      this.logMemberEmployment(projectId, member.name, true);
+    });
+  }
+
+  updateMember(
+    projectId: string,
+    memberId: string,
+    patch: Partial<Pick<CrewMember, "name" | "provider" | "hired">>,
+  ) {
+    this.getProject(projectId);
+    const member = this.readMembers(projectId).find(
+      ({ id }) => id === memberId,
+    );
+    if (!member) throw new Error("이 프로젝트에서 해당 팀원을 찾을 수 없어요.");
+    const {
+      name = member.name,
+      provider = member.provider,
+      hired = member.hired,
+    } = patch;
+    this.transaction(() => {
+      if (member.id === member.roleId)
+        this.db
+          .prepare(
+            `INSERT INTO crew (project_id, role, name, provider, hired) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, role) DO UPDATE SET name = excluded.name, provider = excluded.provider, hired = excluded.hired`,
+          )
+          .run(projectId, member.roleId, name, provider, Number(hired));
+      else
+        this.db
+          .prepare(
+            "UPDATE crew_members SET name = ?, provider = ?, hired = ? WHERE id = ? AND project_id = ?",
+          )
+          .run(name, provider, Number(hired), memberId, projectId);
+      if (hired !== member.hired)
+        this.logMemberEmployment(projectId, name, hired);
+    });
+  }
+
+  private logMemberEmployment(projectId: string, name: string, hired: boolean) {
+    const session = this.db
+      .prepare("SELECT last_session FROM projects WHERE id = ?")
+      .get(projectId)?.last_session;
+    if (typeof session === "string")
+      this.log(
+        session,
+        "사용자 · " + name + " · " + (hired ? "고용" : "미고용"),
+      );
+  }
+
+  getAssignee(jobId: string, role: RoleId) {
+    return this.db
+      .prepare(
+        "SELECT member_id FROM job_assignees WHERE job_id = ? AND role = ?",
+      )
+      .get(jobId, role)?.member_id;
+  }
+
+  assignMember(job: Job, member: CrewMember) {
+    this.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO job_assignees VALUES (?, ?, ?)
+        ON CONFLICT(job_id, role) DO UPDATE SET member_id = excluded.member_id`,
+        )
+        .run(job.id, member.roleId, member.id);
+      const title = roles.find(({ id }) => id === member.roleId)?.title;
+      this.log(
+        job.sessionId,
+        "비서 → " + title + " · " + member.name + " 배정",
+        job.id,
+      );
+    });
   }
 
   getMessages(sessionId: string) {
@@ -639,7 +752,7 @@ export class CrewStore {
     });
   }
 
-  getAgentContext(jobId: string, role: RoleId) {
+  getAgentContext(jobId: string, memberId: string) {
     return this.db
       .prepare(
         `SELECT thread_id AS threadId,
@@ -648,14 +761,14 @@ export class CrewStore {
           ) THEN result ELSE '' END AS result
         FROM agent_context AS context WHERE job_id = ? AND role = ?`,
       )
-      .get(jobId, role) as
+      .get(jobId, memberId) as
       | { threadId: string | null; result: string }
       | undefined;
   }
 
   saveAgentContext(
     jobId: string,
-    role: RoleId,
+    memberId: string,
     threadId: string | null,
     result: string,
   ) {
@@ -666,7 +779,7 @@ export class CrewStore {
         ON CONFLICT(job_id, role) DO UPDATE SET
           thread_id = excluded.thread_id, result = excluded.result, revision_id = excluded.revision_id`,
       )
-      .run(jobId, role, threadId, result, jobId);
+      .run(jobId, memberId, threadId, result, jobId);
   }
 
   openPeerRequest(
@@ -767,14 +880,17 @@ export class CrewStore {
       current,
       sessions,
       session,
-      crew: current ? this.getProviders(current.id) : null,
-      employment: current
-        ? (Object.fromEntries(
-            roles.map(({ id }) => [id, this.isHired(current.id, id)]),
-          ) as Record<RoleId, boolean>)
-        : null,
       messages: session ? this.getMessages(session.id) : [],
       jobs: session ? this.readJobs(session.id) : [],
+      members: current ? this.readMembers(current.id) : [],
+      assignees: session
+        ? (this.db
+            .prepare(
+              `SELECT a.job_id AS jobId, a.member_id AS memberId, a.role AS roleId
+            FROM job_assignees a JOIN jobs j ON j.id = a.job_id WHERE j.session_id = ?`,
+            )
+            .all(session.id) as Snapshot["assignees"])
+        : [],
       changes: session ? this.readChanges(session.id) : [],
       activity: session
         ? (this.db

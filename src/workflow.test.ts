@@ -298,12 +298,25 @@ test("stopping one queued role request leaves work ahead and behind it intact", 
     workflow.stop(second);
     await vi.waitFor(() => expect(store.getJob(second).state).toBe("stopped"));
     expect(requested).toEqual(["First"]);
+    const memberId = randomUUID();
+    store.addMember(session.projectId, {
+      id: memberId,
+      roleId: "plan",
+      name: "다른 플랜 담당",
+      provider: "local",
+    });
+    const fourth = workflow.delegate(session.id, randomUUID(), "Fourth").id;
+    await vi.waitFor(() => expect(store.getJob(fourth).state).toBe("approval"));
+    expect(store.getAssignee(fourth, "plan")).toBe(memberId);
+    expect(store.getAgentContext(fourth, memberId)?.result).toContain("Fourth");
+    expect(store.getAgentContext(fourth, "plan")).toBeUndefined();
+    expect(requested).toEqual(["First", "Fourth"]);
     release.resolve();
     await vi.waitFor(() => {
       expect(store.getJob(first).state).toBe("approval");
       expect(store.getJob(third).state).toBe("approval");
     });
-    expect(requested).toEqual(["First", "Third"]);
+    expect(requested).toEqual(["First", "Fourth", "Third"]);
   } finally {
     release.resolve();
     workflow.close();

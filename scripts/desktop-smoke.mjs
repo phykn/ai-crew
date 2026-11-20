@@ -69,6 +69,22 @@ try {
   await page.getByRole("button", { name: "세션 목록" }).click();
   await page.getByRole("button", { name: /오늘의 확인 코드는/ }).click();
   await expect(page.locator(".bubble.user").first()).toContainText("crew-571");
+  await page.locator(".roster summary").click();
+  const roster = page.locator(".crew-list");
+  await roster.getByRole("button", { name: "＋ 팀원" }).click();
+  await roster
+    .getByRole("combobox", { name: "새 팀원 역할" })
+    .selectOption("plan");
+  await roster.getByRole("textbox", { name: "새 팀원 별명" }).fill("새 플랜");
+  await roster.getByRole("button", { name: "고용", exact: true }).click();
+  await roster.getByRole("button", { name: "새 플랜", exact: true }).click();
+  await roster.getByRole("textbox", { name: "플랜 별명" }).fill("새 플랜 담당");
+  await roster.getByRole("textbox", { name: "플랜 별명" }).press("Enter");
+  await expect(
+    roster.getByRole("button", { name: "새 플랜 담당", exact: true }),
+  ).toBeVisible();
+  await roster.getByRole("button", { name: "플랜 고용", exact: true }).click();
+  await page.locator(".roster summary").click();
   await send(
     "프로젝트의 notes.txt 파일을 실제로 수정해줘. 기존 내용 Before를 After로 바꾸고 줄바꿈 한 개를 유지해줘.",
   );
@@ -95,6 +111,7 @@ try {
     .last()
     .click();
   const changeLog = page.locator(".change-log").first();
+  await expect(page.getByText(/새 플랜 담당 배정/).first()).toBeVisible();
   await changeLog.locator("summary").click();
   await expect(changeLog.getByText(/테스트 · 통과/)).toBeVisible();
   await page.getByRole("button", { name: "대화" }).click();

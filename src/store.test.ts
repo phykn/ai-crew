@@ -20,7 +20,18 @@ test("keeps projects, conversation, draft and selected model through restart", (
     expect(store.beginResponse(id, request, "보존할 질문")).toBeNull();
     store.append(response, "여기까지 답변");
     store.saveDraft(id, "전송하지 않은 초안");
-    store.setProvider(current!.id, "assistant", "codex");
+    store.updateMember(current!.id, "assistant", { provider: "codex" });
+    const member = {
+      id: randomUUID(),
+      roleId: "review",
+      name: "보조 리뷰",
+      provider: "local",
+    } as const;
+    store.addMember(current!.id, member);
+    store.addMember(current!.id, member);
+    store.updateMember(current!.id, member.id, { name: "보조 리뷰 팀원" });
+    store.updateMember(current!.id, member.id, { hired: false });
+    store.updateMember(current!.id, member.id, { hired: false });
     const job = store.createJob(id, response, "파일 수정");
     store.saveAgentContext(
       job.id,
@@ -34,7 +45,15 @@ test("keeps projects, conversation, draft and selected model through restart", (
     expect(store.snapshot()).toMatchObject({
       current: { id: current!.id },
       session: { id, title: "보존할 질문", draft: "전송하지 않은 초안" },
-      crew: { assistant: "codex" },
+      members: expect.arrayContaining([
+        {
+          id: "assistant",
+          roleId: "assistant",
+          provider: "codex",
+          name: "여울",
+          hired: true,
+        },
+      ]),
       messages: [
         { text: "보존할 질문", state: "complete" },
         { text: "여기까지 답변", state: "stopped" },
@@ -45,6 +64,24 @@ test("keeps projects, conversation, draft and selected model through restart", (
       result: '{"content":"answer"}',
     });
     expect(store.getAgentContext(job.id, "review")).toBeUndefined();
+    expect(store.readMembers(current!.id, "review")).toContainEqual({
+      ...member,
+      name: "보조 리뷰 팀원",
+      hired: false,
+    });
+    expect(
+      store.snapshot().activity.filter(({ text }) => text.endsWith("미고용")),
+    ).toHaveLength(1);
+    store.openFolder("/work/another-project");
+    expect(() =>
+      store.updateMember(store.snapshot().current!.id, member.id, {
+        hired: true,
+      }),
+    ).toThrow();
+    expect(() =>
+      store.addMember(store.snapshot().current!.id, member),
+    ).toThrow();
+    store.openSession(id);
     const clear = randomUUID();
     store.clearSession(id, clear);
     const fresh = store.snapshot();

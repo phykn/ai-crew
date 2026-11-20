@@ -52,7 +52,7 @@ async function startApp() {
   ) {
     const session = store.getSession(sessionId);
     const project = store.getProject(session.projectId);
-    const provider = store.getProviders(project.id).assistant;
+    const { provider } = store.readMembers(project.id, "assistant")[0];
     const history = store
       .getMessages(sessionId)
       .filter(
@@ -152,9 +152,6 @@ async function startApp() {
       case "project.approval":
         store.setApprovalMode(action.projectId, action.mode);
         break;
-      case "crew.employment":
-        store.setEmployment(action.projectId, action.roleId, action.hired);
-        break;
       case "project.open":
         store.openProject(action.projectId);
         break;
@@ -167,8 +164,16 @@ async function startApp() {
       case "session.draft":
         store.saveDraft(action.sessionId, action.draft);
         break;
-      case "crew.provider":
-        store.setProvider(action.projectId, action.roleId, action.provider);
+      case "crew.member.add":
+        store.addMember(action.projectId, {
+          id: action.memberId,
+          roleId: action.roleId,
+          name: action.name,
+          provider: action.provider,
+        });
+        break;
+      case "crew.member.update":
+        store.updateMember(action.projectId, action.memberId, action);
         break;
       case "chat.send": {
         const current = runs.get(action.sessionId);

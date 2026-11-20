@@ -76,12 +76,6 @@ export const actions = z.discriminatedUnion("type", [
     projectId: identifier,
     mode: approvalMode,
   }),
-  z.strictObject({
-    type: z.literal("crew.employment"),
-    projectId: identifier,
-    roleId,
-    hired: z.boolean(),
-  }),
   z.strictObject({ type: z.literal("session.new"), projectId: identifier }),
   z.strictObject({ type: z.literal("session.open"), sessionId: identifier }),
   z.strictObject({
@@ -90,10 +84,20 @@ export const actions = z.discriminatedUnion("type", [
     draft: z.string().max(32000),
   }),
   z.strictObject({
-    type: z.literal("crew.provider"),
+    type: z.literal("crew.member.add"),
     projectId: identifier,
-    roleId,
+    memberId: identifier,
+    roleId: roleId.exclude(["assistant"]),
+    name: z.string().trim().min(1).max(32),
     provider,
+  }),
+  z.strictObject({
+    type: z.literal("crew.member.update"),
+    projectId: identifier,
+    memberId: z.union([roleId, identifier]),
+    name: z.string().trim().min(1).max(32).optional(),
+    provider: provider.optional(),
+    hired: z.boolean().optional(),
   }),
   z.strictObject({
     type: z.literal("chat.send"),
@@ -126,6 +130,13 @@ export const actions = z.discriminatedUnion("type", [
 export type Action = z.infer<typeof actions>;
 export type Provider = z.infer<typeof provider>;
 export type RoleId = z.infer<typeof roleId>;
+export type CrewMember = {
+  id: string;
+  roleId: RoleId;
+  name: string;
+  provider: Provider;
+  hired: boolean;
+};
 export type ApprovalMode = z.infer<typeof approvalMode>;
 export type Project = {
   id: string;
@@ -207,8 +218,8 @@ export type Snapshot = {
   current: Project | null;
   sessions: Session[];
   session: Session | null;
-  crew: Record<RoleId, Provider> | null;
-  employment: Record<RoleId, boolean> | null;
+  members: CrewMember[];
+  assignees: { jobId: string; memberId: string; roleId: RoleId }[];
   messages: Message[];
   activity: Activity[];
   jobs: Job[];

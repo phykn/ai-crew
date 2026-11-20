@@ -58,6 +58,8 @@ function Workspace() {
   const [view, setView] = useState<"chat" | "log">("chat");
   const [menu, setMenu] = useState<"projects" | "sessions" | null>(null);
   const [showCamp, setShowCamp] = useState(false);
+  const [addingMember, setAddingMember] = useState(false);
+  const [editingMember, setEditingMember] = useState<string | null>(null);
   const dataRef = useRef<Snapshot | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const messages = useRef<HTMLDivElement>(null);
@@ -123,6 +125,8 @@ function Workspace() {
   async function navigate(action: Action) {
     setMenu(null);
     setLogJob(null);
+    setAddingMember(false);
+    setEditingMember(null);
     if (await run(action)) {
       setView("chat");
       setShowCamp(false);
@@ -181,8 +185,20 @@ function Workspace() {
     data?.activity.filter((entry) => !logJob || entry.jobId === logJob) || [];
   const changes =
     data?.changes.filter((change) => !logJob || change.jobId === logJob) || [];
-  const hasPlanning = data?.jobs.some((job) => job.state === "planning");
-  const hasDeveloping = data?.jobs.some((job) => job.state === "developing");
+  const workingMembers = new Set(
+    data?.assignees
+      .filter(({ jobId, roleId }) =>
+        data.jobs.some(
+          (job) =>
+            job.id === jobId &&
+            ((job.state === "planning" && roleId === "plan") ||
+              (job.state === "developing" && roleId === "development") ||
+              (job.state === "reviewing" &&
+                ["review", "style", "test"].includes(roleId))),
+        ),
+      )
+      .map(({ memberId }) => memberId),
+  );
   const visibleMessages =
     data?.messages.filter(
       (message) =>
@@ -215,90 +231,203 @@ function Workspace() {
           {data?.current && (
             <details className="roster">
               <summary>
-                크루 ·{" "}
-                {Object.values(data.employment || {}).filter(Boolean).length}
+                크루 · {data.members.filter((member) => member.hired).length}
               </summary>
               <div className="crew-list">
-                {roles.map((role) => (
-                  <div key={role.id} className="crew-row">
-                    <button
-                      type="button"
-                      className="employment"
-                      aria-label={
-                        role.title +
-                        " " +
-                        (data.employment?.[role.id] ? "고용" : "미고용")
-                      }
-                      aria-pressed={data.employment?.[role.id]}
-                      onClick={() => {
-                        if (data.current)
-                          void run({
-                            type: "crew.employment",
-                            projectId: data.current.id,
-                            roleId: role.id,
-                            hired: !data.employment?.[role.id],
-                          });
-                      }}
-                    >
-                      {data.employment?.[role.id] ? "고용" : "미고용"}
-                    </button>
-                    <span>
-                      {role.title} ·{" "}
-                      <b style={{ color: role.color }}>{role.name}</b>
-                    </span>
-                    <select
-                      aria-label={role.title + " 모델"}
-                      value={data.crew?.[role.id] || "local"}
-                      onChange={(event) => {
-                        if (data.current)
-                          void run({
-                            type: "crew.provider",
-                            projectId: data.current.id,
-                            roleId: role.id,
-                            provider:
-                              event.target.value === "codex"
-                                ? "codex"
-                                : "local",
-                          });
-                      }}
-                    >
+                {data.members.map((member) => {
+                  const role = roles.find(({ id }) => id === member.roleId)!;
+                  return (
+                    <div key={member.id} className="crew-row">
+                      <button
+                        type="button"
+                        className="employment"
+                        aria-label={
+                          role.title +
+                          " " +
+                          (member.hired ? "고용" : "미고용") +
+                          (member.id !== role.id ? " · " + member.name : "")
+                        }
+                        aria-pressed={member.hired}
+                        onClick={() => {
+                          if (data.current)
+                            void run({
+                              type: "crew.member.update",
+                              projectId: data.current.id,
+                              memberId: member.id,
+                              hired: !member.hired,
+                            });
+                        }}
+                      >
+                        {member.hired ? "고용" : "미고용"}
+                      </button>
+                      <span>
+                        {role.title} ·{" "}
+                        {editingMember === member.id ? (
+                          <input
+                            className="crew-name"
+                            autoFocus
+                            aria-label={role.title + " 별명"}
+                            maxLength={32}
+                            defaultValue={member.name}
+                            onKeyDown={(event) => {
+                              if (event.nativeEvent.isComposing) return;
+                              if (event.key === "Escape")
+                                event.currentTarget.value = member.name;
+                              if (
+                                event.key === "Escape" ||
+                                event.key === "Enter"
+                              )
+                                event.currentTarget.blur();
+                            }}
+                            onBlur={(event) => {
+                              const name = event.currentTarget.value.trim();
+                              setEditingMember(null);
+                              if (data.current && name && name !== member.name)
+                                void run({
+                                  type: "crew.member.update",
+                                  projectId: data.current.id,
+                                  memberId: member.id,
+                                  name,
+                                });
+                            }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            style={{ color: role.color }}
+                            onClick={() => setEditingMember(member.id)}
+                          >
+                            {member.name}
+                          </button>
+                        )}
+                      </span>
+                      <select
+                        aria-label={
+                          role.title +
+                          " 모델" +
+                          (member.id !== role.id ? " · " + member.name : "")
+                        }
+                        value={member.provider}
+                        onChange={(event) => {
+                          if (data.current)
+                            void run({
+                              type: "crew.member.update",
+                              projectId: data.current.id,
+                              memberId: member.id,
+                              provider:
+                                event.target.value === "codex"
+                                  ? "codex"
+                                  : "local",
+                            });
+                        }}
+                      >
+                        <option value="local">로컬 LLM</option>
+                        <option value="codex">Codex</option>
+                      </select>
+                    </div>
+                  );
+                })}
+                {addingMember ? (
+                  <form
+                    className="crew-add"
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+                      if (!data.current) return;
+                      const form = new FormData(event.currentTarget);
+                      const roleId = roles.find(
+                        ({ id }) => id === form.get("role"),
+                      )?.id;
+                      const name = String(form.get("name") ?? "").trim();
+                      if (!roleId || roleId === "assistant" || !name) return;
+                      if (
+                        await run({
+                          type: "crew.member.add",
+                          projectId: data.current.id,
+                          memberId: crypto.randomUUID(),
+                          roleId,
+                          name,
+                          provider:
+                            form.get("provider") === "codex"
+                              ? "codex"
+                              : "local",
+                        })
+                      )
+                        setAddingMember(false);
+                    }}
+                  >
+                    <select name="role" aria-label="새 팀원 역할">
+                      {roles
+                        .filter(({ id }) => id !== "assistant")
+                        .map(({ id, title }) => (
+                          <option value={id} key={id}>
+                            {title}
+                          </option>
+                        ))}
+                    </select>
+                    <input
+                      name="name"
+                      autoFocus
+                      aria-label="새 팀원 별명"
+                      maxLength={32}
+                      required
+                    />
+                    <select name="provider" aria-label="새 팀원 모델">
                       <option value="local">로컬 LLM</option>
                       <option value="codex">Codex</option>
                     </select>
-                  </div>
-                ))}
+                    <button type="submit">고용</button>
+                    <button
+                      type="button"
+                      onClick={() => setAddingMember(false)}
+                    >
+                      취소
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    className="add-member"
+                    type="button"
+                    onClick={() => setAddingMember(true)}
+                  >
+                    ＋ 팀원
+                  </button>
+                )}
               </div>
             </details>
           )}
         </div>
         {data?.current &&
-          roles.map((role) => (
-            <div
-              className="character"
-              key={role.id}
-              style={{
-                left:
-                  (data.employment?.[role.id]
-                    ? role.x
-                    : role.x < 50
-                      ? -14
-                      : 114) + "%",
-                top: role.y + "%",
-              }}
-            >
-              <span>
-                <b style={{ color: role.color }}>{role.name}</b>
-                {role.id === "assistant" && running
-                  ? " · 답변 중"
-                  : role.id === "plan" && hasPlanning
-                    ? " · 플랜"
-                    : role.id === "development" && hasDeveloping
-                      ? " · 개발"
+          data.members.map((member, index) => {
+            const role = roles.find(({ id }) => id === member.roleId)!;
+            const extra = member.id !== role.id;
+            return (
+              <div
+                className="character"
+                key={member.id}
+                style={{
+                  left:
+                    (member.hired || workingMembers.has(member.id)
+                      ? extra
+                        ? 18 + ((index * 13) % 65)
+                        : role.x
+                      : role.x < 50
+                        ? -14
+                        : 114) + "%",
+                  top: (extra ? 88 + (index % 3) * 4 : role.y) + "%",
+                }}
+              >
+                <span>
+                  <b style={{ color: role.color }}>{member.name}</b>
+                  {role.id === "assistant" && running
+                    ? " · 답변 중"
+                    : workingMembers.has(member.id)
+                      ? " · " + role.title
                       : ""}
-              </span>
-              <img src={sprites[role.sprite]} alt="" />
-            </div>
-          ))}
+                </span>
+                <img src={sprites[role.sprite]} alt="" />
+              </div>
+            );
+          })}
       </section>
       <section className="panel" aria-label="작업 패널">
         <header className="toolbar">

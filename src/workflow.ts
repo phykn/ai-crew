@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
-  roles,
+  type CrewMember,
   type Job,
   type Project,
   type RoleId,
@@ -156,7 +156,11 @@ export class CrewWorkflow {
     }
     if (this.active.has(job.id))
       throw new Error("업무를 정리 중이에요. 잠시 뒤 다시 눌러 주세요.");
-    if (!this.store.isHired(job.projectId, "development"))
+    if (
+      !this.store
+        .readMembers(job.projectId, "development")
+        .some((member) => member.hired)
+    )
       throw new Error("개발 담당을 재고용해 주세요.");
     const target = job.projectId + ":" + job.plan.path.toLowerCase();
     if (this.reserved.has(target)) {
@@ -317,8 +321,22 @@ export class CrewWorkflow {
     prompt: string,
     schema: T,
     signal: AbortSignal,
-  ) {
-    const key = project.id + ":" + role;
+  ): Promise<z.infer<T>> {
+    signal.throwIfAborted();
+    const members = this.store
+      .readMembers(project.id, role)
+      .filter((member) => member.hired);
+    const assignee = this.store.getAssignee(job.id, role);
+    const member =
+      members.find(({ id }) => id === assignee) ??
+      members.find(({ id }) => !this.agentTurns.has(project.id + ":" + id)) ??
+      members[0];
+    if (!member) throw new Error(role + " 역할을 재고용해 주세요.");
+    if (member.id !== assignee) {
+      this.store.assignMember(job, member);
+      this.notify();
+    }
+    const key = project.id + ":" + member.id;
     const previous = this.agentTurns.get(key);
     const turn = Promise.withResolvers<void>();
     const tail = previous ? previous.then(() => turn.promise) : turn.promise;
@@ -328,8 +346,7 @@ export class CrewWorkflow {
       if (previous) {
         this.store.log(
           job.sessionId,
-          (roles.find(({ id }) => id === role)?.title ?? role) +
-            " · 앞 요청을 마칠 때까지 대기",
+          member.name + " · 앞 요청을 마칠 때까지 대기",
           job.id,
         );
         this.notify();
@@ -343,10 +360,23 @@ export class CrewWorkflow {
         }
       }
       signal.throwIfAborted();
+      const current = this.store
+        .readMembers(project.id, role)
+        .find(({ id }) => id === member.id);
+      if (!current?.hired)
+        return await this.decide(
+          job,
+          project,
+          role,
+          system,
+          prompt,
+          schema,
+          signal,
+        );
       return await this.runAgent(
         job,
         project,
-        role,
+        current,
         system,
         prompt,
         schema,
@@ -363,17 +393,15 @@ export class CrewWorkflow {
   private async runAgent<T extends z.ZodType>(
     job: Job,
     project: Project,
-    role: RoleId,
+    member: CrewMember,
     system: string,
     prompt: string,
     schema: T,
     signal: AbortSignal,
   ) {
-    if (!this.store.isHired(project.id, role))
-      throw new Error(role + " 역할을 재고용해 주세요.");
-    const previous = this.store.getAgentContext(job.id, role);
+    const previous = this.store.getAgentContext(job.id, member.id);
     const withPrevious = () =>
-      previous?.result && role !== "test"
+      previous?.result && member.roleId !== "test"
         ? "Previous validated result for this role (use the current request for scope):\n" +
           previous.result +
           "\n\n" +
@@ -381,7 +409,7 @@ export class CrewWorkflow {
         : prompt;
     let output: z.infer<T>;
     let threadId: string | null = null;
-    if (this.store.getProviders(project.id)[role] === "local") {
+    if (member.provider === "local") {
       output = await decideLocal(system, withPrevious(), schema, signal);
     } else {
       let raw = "";
@@ -405,7 +433,7 @@ export class CrewWorkflow {
     if (this.active.has(job.id))
       this.store.saveAgentContext(
         job.id,
-        role,
+        member.id,
         threadId,
         JSON.stringify(output),
       );

@@ -26,7 +26,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 3)
+    if (migration.user_version > 4)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -57,6 +57,20 @@ export class CrewStore {
         ALTER TABLE projects ADD COLUMN approval_mode TEXT NOT NULL DEFAULT 'manual';
         ALTER TABLE crew ADD COLUMN hired INTEGER NOT NULL DEFAULT 1;
         PRAGMA user_version = 3;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 4) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE agent_context (
+          job_id TEXT NOT NULL REFERENCES jobs(id),
+          role TEXT NOT NULL,
+          thread_id TEXT,
+          result TEXT NOT NULL,
+          PRIMARY KEY (job_id, role)
+        );
+        PRAGMA user_version = 4;
         COMMIT;
       `);
     }
@@ -292,7 +306,7 @@ export class CrewStore {
     return row?.codex_thread as string | null;
   }
 
-  setCodexThread(sessionId: string, id: string) {
+  setCodexThread(sessionId: string, id: string | null) {
     this.db
       .prepare("UPDATE sessions SET codex_thread = ? WHERE id = ?")
       .run(id, sessionId);
@@ -347,6 +361,29 @@ export class CrewStore {
       this.readJobs(String(row.session_id)).find((item) => item.id === id);
     if (!job) throw new Error("업무를 찾을 수 없어요.");
     return job;
+  }
+
+  getAgentContext(jobId: string, role: RoleId) {
+    return this.db
+      .prepare(
+        "SELECT thread_id AS threadId, result FROM agent_context WHERE job_id = ? AND role = ?",
+      )
+      .get(jobId, role) as
+      | { threadId: string | null; result: string }
+      | undefined;
+  }
+
+  saveAgentContext(
+    jobId: string,
+    role: RoleId,
+    threadId: string | null,
+    result: string,
+  ) {
+    this.db
+      .prepare(
+        "INSERT INTO agent_context VALUES (?, ?, ?, ?) ON CONFLICT(job_id, role) DO UPDATE SET thread_id = excluded.thread_id, result = excluded.result",
+      )
+      .run(jobId, role, threadId, result);
   }
 
   recordJob(

@@ -5,6 +5,24 @@ import { createInterface } from "node:readline";
 import { z } from "zod";
 import type { Project } from "./actions";
 
+import type { InitializeParams } from "./codex-protocol/InitializeParams";
+import type { ThreadStartParams } from "./codex-protocol/v2/ThreadStartParams";
+import type { ThreadResumeParams } from "./codex-protocol/v2/ThreadResumeParams";
+import type { TurnStartParams } from "./codex-protocol/v2/TurnStartParams";
+import type { TurnInterruptParams } from "./codex-protocol/v2/TurnInterruptParams";
+import type { CommandExecParams } from "./codex-protocol/v2/CommandExecParams";
+import type { CommandExecTerminateParams } from "./codex-protocol/v2/CommandExecTerminateParams";
+
+type RequestParams = {
+  initialize: InitializeParams;
+  "thread/start": ThreadStartParams;
+  "thread/resume": ThreadResumeParams;
+  "turn/start": TurnStartParams;
+  "turn/interrupt": TurnInterruptParams;
+  "command/exec": CommandExecParams;
+  "command/exec/terminate": CommandExecTerminateParams;
+};
+
 const messageSchema = z.object({
   id: z.union([z.number(), z.string()]).optional(),
   method: z.string().optional(),
@@ -121,7 +139,10 @@ export class CodexConnection {
     this.process.stdin.write(JSON.stringify(payload) + "\n");
   }
 
-  private rpc(method: string, params: object) {
+  private rpc<M extends keyof RequestParams>(
+    method: M,
+    params: RequestParams[M],
+  ) {
     const id = ++this.id;
     return new Promise<unknown>((resolve, reject) => {
       this.replies.set(id, { resolve, reject });
@@ -167,7 +188,8 @@ export class CodexConnection {
     signal: AbortSignal,
     emit: (text: string) => void,
     rememberThread: (id: string) => void,
-    outputSchema?: object,
+    outputSchema?: TurnStartParams["outputSchema"],
+    recover?: () => string,
   ) {
     await this.connect();
     signal.throwIfAborted();
@@ -175,44 +197,75 @@ export class CodexConnection {
       cwd: project.root,
       sandbox: "read-only",
       approvalPolicy: "never",
-    };
-    const thread = threadResult.parse(
-      previousThread
-        ? await this.rpc("thread/resume", {
+    } as const;
+    let thread: string | undefined;
+    if (previousThread) {
+      try {
+        thread = threadResult.parse(
+          await this.rpc("thread/resume", {
             threadId: previousThread,
             excludeTurns: true,
             ...policy,
-          })
-        : await this.rpc("thread/start", {
-            ...policy,
-            ephemeral: !!outputSchema,
-            developerInstructions: outputSchema
-              ? "Return structured output for the delegated AI Crew role."
-              : "You are the AI Crew secretary. Reply to the user in chat. Project changes are performed by delegated crew workflows.",
           }),
+        ).thread.id;
+      } catch (error) {
+        if (
+          !recover ||
+          !(error instanceof Error) ||
+          !/thread not found|no rollout found|no rollout path|unknown thread|could not find|thread .* not found/i.test(
+            error.message,
+          )
+        )
+          throw error;
+        signal.throwIfAborted();
+        prompt = recover();
+      }
+    }
+    thread ??= threadResult.parse(
+      await this.rpc("thread/start", {
+        ...policy,
+        ephemeral: !!outputSchema && !previousThread && !recover,
+        developerInstructions: outputSchema
+          ? "Return structured output for the delegated AI Crew role."
+          : "You are the AI Crew secretary. Reply to the user in chat. Project changes are performed by delegated crew workflows.",
+      }),
     ).thread.id;
-    rememberThread(thread);
+    const activeThread = thread;
+    rememberThread(activeThread);
     signal.throwIfAborted();
 
     let turnId: string | undefined;
     let finish: (error?: Error) => void = () => {};
     const interrupt = () => {
       if (turnId)
-        void this.rpc("turn/interrupt", { threadId: thread, turnId }).catch(
-          finish,
-        );
+        void this.rpc("turn/interrupt", {
+          threadId: activeThread,
+          turnId,
+        }).catch(() => {});
     };
     const complete = new Promise<void>((resolve, reject) => {
       finish = (error) => (error ? reject(error) : resolve());
     });
     void complete.catch(() => {});
+    const early: [string, unknown][] = [];
     const off = (method: string, params: unknown) => {
       if (method === "disconnect") return finish(params as Error);
+      if (
+        !turnId &&
+        (method === "item/agentMessage/delta" || method === "turn/completed") &&
+        params &&
+        typeof params === "object" &&
+        "threadId" in params &&
+        params.threadId === activeThread
+      ) {
+        early.push([method, params]);
+        return;
+      }
       if (method === "item/agentMessage/delta") {
         const delta = deltaSchema.safeParse(params);
         if (
           delta.success &&
-          delta.data.threadId === thread &&
+          delta.data.threadId === activeThread &&
           (!turnId || turnId === delta.data.turnId)
         )
           emit(delta.data.delta);
@@ -221,7 +274,7 @@ export class CodexConnection {
         const result = turnNotification.safeParse(params);
         if (
           !result.success ||
-          result.data.threadId !== thread ||
+          result.data.threadId !== activeThread ||
           (turnId && result.data.turn.id !== turnId)
         )
           return;
@@ -239,12 +292,13 @@ export class CodexConnection {
     try {
       const turn = turnResult.parse(
         await this.rpc("turn/start", {
-          threadId: thread,
+          threadId: activeThread,
           input: [{ type: "text", text: prompt, text_elements: [] }],
           outputSchema,
         }),
       ).turn;
       turnId = turn.id;
+      for (const event of early) off(...event);
       if (signal.aborted) interrupt();
       await complete;
       signal.throwIfAborted();

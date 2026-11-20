@@ -21,6 +21,13 @@ test("keeps projects, conversation, draft and selected model through restart", (
     store.append(response, "여기까지 답변");
     store.saveDraft(id, "전송하지 않은 초안");
     store.setProvider(current!.id, "assistant", "codex");
+    const job = store.createJob(id, response, "파일 수정");
+    store.saveAgentContext(
+      job.id,
+      "development",
+      "codex-thread",
+      '{"content":"answer"}',
+    );
     store.close();
 
     store = new CrewStore(path);
@@ -33,6 +40,11 @@ test("keeps projects, conversation, draft and selected model through restart", (
         { text: "여기까지 답변", state: "stopped" },
       ],
     });
+    expect(store.getAgentContext(job.id, "development")).toEqual({
+      threadId: "codex-thread",
+      result: '{"content":"answer"}',
+    });
+    expect(store.getAgentContext(job.id, "review")).toBeUndefined();
     const clear = randomUUID();
     store.clearSession(id, clear);
     const fresh = store.snapshot();

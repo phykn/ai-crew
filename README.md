@@ -11,9 +11,11 @@ npm install
 npm start
 ```
 
-프로젝트 폴더를 열고 비서에게 메시지를 보냅니다. 로컬 LLM은 기본으로 `http://127.0.0.1:8082/v1`에 연결하며 `AI_CREW_LOCAL_URL`과 `AI_CREW_LOCAL_MODEL`로 주소와 모델 ID를 지정할 수 있습니다. 크루에서 역할별로 로컬 LLM 또는 설치된 Codex를 고릅니다. 세션과 초안은 앱 데이터 폴더의 SQLite에 저장됩니다. 단일 텍스트 파일의 변경을 요청하면 플랜을 확인한 뒤 수정을 승인하고, 세 검증 결과를 업무 로그에서 읽을 수 있습니다.
+프로젝트 폴더를 열고 비서에게 메시지를 보냅니다. 로컬 LLM은 기본으로 `http://127.0.0.1:8082/v1`에 연결하며 `AI_CREW_LOCAL_URL`과 `AI_CREW_LOCAL_MODEL`로 주소와 모델 ID를 지정할 수 있습니다. 크루에서 역할별로 로컬 LLM 또는 설치된 Codex를 고릅니다. Codex 세션을 다시 열 수 없으면 저장된 대화에서 이어갑니다. 세션과 초안은 앱 데이터 폴더의 SQLite에 저장됩니다. 단일 텍스트 파일의 변경을 요청하면 플랜을 확인한 뒤 수정을 승인하고, 세 검증 결과를 업무 로그에서 읽을 수 있습니다.
 
 `npm run package`로 데스크톱 앱을 만들고 `npm run check`와 `npm test`로 타입과 저장을 검사합니다. Apple Silicon에서는 로컬 모델을 띄운 뒤 `npm run test:desktop`으로 패키징한 앱의 폴더 선택·세션 복원·도구 호출·파일 승인 흐름을 확인할 수 있습니다.
+
+Codex 프로토콜 타입은 `node scripts/generate-codex-types.mjs`로 현재 설치된 CLI에서 다시 생성합니다.
 
 ## 목업 실행
 

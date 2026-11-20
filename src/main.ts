@@ -75,8 +75,8 @@ async function startApp() {
     try {
       if (provider === "codex") {
         const previous = store.getCodexThread(sessionId);
-        const prompt =
-          !previous && history.length > 1
+        const withHistory = () =>
+          history.length > 1
             ? "Earlier conversation in this AI Crew session:\n" +
               JSON.stringify(history.slice(0, -1)) +
               "\n\nCurrent request:\n" +
@@ -85,14 +85,22 @@ async function startApp() {
         await codex.run(
           project,
           previous,
-          prompt,
+          previous ? text : withHistory(),
           controller.signal,
           emit,
           (thread) => {
             if (!closing) store.setCodexThread(sessionId, thread);
           },
+          undefined,
+          () => {
+            if (!closing)
+              store.log(sessionId, "비서 · 저장한 대화에서 Codex 맥락 복구");
+            return withHistory();
+          },
         );
       } else {
+        if (store.getCodexThread(sessionId))
+          store.setCodexThread(sessionId, null);
         await runLocal(
           project,
           history,

@@ -1,6 +1,8 @@
 import { _electron as electron, expect } from "@playwright/test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import { join, resolve } from "node:path";
 
 const executable = resolve(
@@ -85,12 +87,50 @@ try {
       .selectOption("codex");
     await page.locator(".roster summary").click();
     await send("/clear");
-    await send("도구를 쓰지 말고 CODEX-571만 답해줘.");
+    await send(
+      "이 대화의 확인 코드는 CODEX-571이야. 도구를 쓰지 말고 확인 코드만 답해줘.",
+    );
     await expect(answer()).toContainText("CODEX-571", { timeout: 45000 });
     await expect(page.getByRole("button", { name: "응답 멈춤" })).toHaveCount(
       0,
     );
-    console.log("PASS packaged Electron: Codex App Server turn");
+    await application.close();
+    application = await electron.launch({ executablePath: executable, env });
+    page = await application.firstWindow();
+    page.on("pageerror", (error) => errors.push(error.message));
+    await send("앞서 정한 확인 코드를 답해줘.");
+    await expect(answer()).toContainText("CODEX-571", { timeout: 45000 });
+    await expect(page.getByRole("button", { name: "응답 멈춤" })).toHaveCount(
+      0,
+    );
+    await application.close();
+    const database = new DatabaseSync(join(directory, "crew.sqlite"));
+    try {
+      expect(
+        database
+          .prepare(
+            "UPDATE sessions SET codex_thread = ? WHERE codex_thread IS NOT NULL",
+          )
+          .run(randomUUID()).changes,
+      ).toBe(1);
+    } finally {
+      database.close();
+    }
+    application = await electron.launch({ executablePath: executable, env });
+    page = await application.firstWindow();
+    page.on("pageerror", (error) => errors.push(error.message));
+    await send("저장된 대화의 확인 코드만 다시 써줘.");
+    await expect(answer()).toContainText("CODEX-571", { timeout: 45000 });
+    await expect(page.getByRole("button", { name: "응답 멈춤" })).toHaveCount(
+      0,
+    );
+    await page.getByRole("button", { name: "로그" }).click();
+    await expect(
+      page.getByText("비서 · 저장한 대화에서 Codex 맥락 복구"),
+    ).toBeVisible();
+    console.log(
+      "PASS packaged Electron: Codex native resume and saved-context fallback",
+    );
   }
   expect(errors).toEqual([]);
   console.log(

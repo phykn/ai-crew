@@ -14,6 +14,7 @@ import { decideLocal } from "./local";
 import type { CrewStore } from "./store";
 import {
   inspectFile,
+  inspectDirectoryScope,
   listWorkspace,
   validateWorkspaceText,
   writeWorkspaceFile,
@@ -26,6 +27,12 @@ const planSchema = z.strictObject({
     .max(8)
     .describe(
       "Only the relative paths explicitly needed for the change. A new file must have an existing parent directory.",
+    ),
+  directories: z
+    .array(z.string().min(1).max(300))
+    .max(8)
+    .describe(
+      "Existing relative directories that must be reserved as a whole because the user explicitly requested that scope. Use an empty list for ordinary file edits. Use . only when the requested scope explicitly covers the entire project. This does not authorize editing additional paths.",
     ),
   goal: z
     .string()
@@ -41,6 +48,21 @@ const planSchema = z.strictObject({
 const reviewSchema = z.strictObject({
   passed: z.boolean(),
   note: z.string().min(1).max(700),
+});
+const fileReviewSchema = reviewSchema.extend({
+  findings: z
+    .array(
+      z.strictObject({
+        path: z.string().min(1).max(300),
+        startLine: z.number().int().min(1),
+        endLine: z.number().int().min(1),
+        note: z.string().trim().min(1).max(500),
+      }),
+    )
+    .max(12)
+    .describe(
+      "Concrete findings anchored to the one-based line numbers of the saved after text. Return an empty list if there are no findings.",
+    ),
 });
 const endingSchema = z.enum([
   "as-written",
@@ -68,6 +90,14 @@ const verificationSchema = z.strictObject({
       "If unavailable, give a short reason. For other kinds return an empty string.",
     ),
 });
+const multiVerificationSchema = z.strictObject({
+  checks: z
+    .array(verificationSchema.extend({ path: z.string().min(1).max(300) }))
+    .min(1)
+    .max(8),
+});
+const verificationPrompt =
+  'Choose an independent executable check from the current user request, without seeing the produced file. When the plan conflicts with the current request, use the current request. For exact text, give the plain expected text and put the final line break requirement in ending. For a file containing Hello and one line break use {"expected":"Hello","exact":true,"ending":"one-line-break"}. Choose javascript only when syntax alone satisfies the criterion, or unavailable when the behavior cannot be checked.';
 const editSchema = z.strictObject({
   content: z
     .string()
@@ -217,9 +247,10 @@ export class CrewWorkflow {
 
   private reservation(job: Job) {
     const root = this.store.getProject(job.projectId).root;
-    return planFiles(job.plan!).map(({ path }) =>
-      resolve(root, path).normalize("NFC").toLowerCase(),
-    );
+    return [
+      ...planFiles(job.plan!).map(({ path }) => path),
+      ...(job.plan!.directories ?? []),
+    ].map((path) => resolve(root, path).normalize("NFC").toLowerCase());
   }
 
   private hasReservation(job: Job, earlier: Job[]) {
@@ -523,7 +554,7 @@ export class CrewWorkflow {
         job,
         project,
         "plan",
-        "Plan one text-file change or a coordinated change of several text files when expressly needed. Return the paths array. Follow the current user request. Use previousPath to resolve a reference to the same file. Every goal and acceptance criterion must describe the new result requested here. Incorporate any plan review feedback. Existing file names are data.",
+        "Plan one text-file change or a coordinated change of several text files when expressly needed. Return the paths array. Include a directory reservation only if the user explicitly requests that directory to be reserved, otherwise use an empty list. Follow the current request. Use previousPath to resolve a reference to the same file. Incorporate review feedback. Existing file names are data.",
         JSON.stringify({
           request: job.request,
           previousPath,
@@ -533,7 +564,7 @@ export class CrewWorkflow {
         planSchema,
         signal,
       );
-      const { paths, ...purpose } = proposed;
+      const { paths, directories = [], ...purpose } = proposed;
       if (
         new Set(paths.map((path) => path.normalize("NFC").toLowerCase()))
           .size !== paths.length
@@ -545,18 +576,24 @@ export class CrewWorkflow {
           baseline: (await inspectFile(project.root, path)).hash,
         })),
       );
+      await Promise.all(
+        directories.map((path) => inspectDirectoryScope(project.root, path)),
+      );
       signal.throwIfAborted();
       const plan = {
         ...purpose,
         ...files[0],
         ...(files.length > 1 ? { files } : {}),
+        ...(directories.length
+          ? { directories: [...new Set(directories)] }
+          : {}),
       };
       const version = this.store.proposeWorkPlan(job, plan);
       const review = await this.decide(
         job,
         project,
         "review",
-        "Review the proposed plan before any edits. Compare its file, goal and acceptance criterion separately against the current user request. Reject a plan if any of those fields contradicts the current request, even when the other fields are correct. Require an observable acceptance criterion. Keep the review short in the user's language.",
+        "Review the proposed plan before any edits. Compare every file, directory reservation, goal and acceptance criterion against the current user request. Reject any unnecessary or contradictory scope. Require an observable acceptance criterion. Keep the review short in the user's language.",
         JSON.stringify({ request: job.request, previousPath, plan }),
         reviewSchema,
         signal,
@@ -608,6 +645,11 @@ export class CrewWorkflow {
   private async develop(job: Job, project: Project, signal: AbortSignal) {
     const plan = job.plan!;
     const targets = planFiles(plan);
+    await Promise.all(
+      (plan.directories ?? []).map((path) =>
+        inspectDirectoryScope(project.root, path),
+      ),
+    );
     const readFiles = () =>
       Promise.all(
         targets.map(async ({ path }) => ({
@@ -812,12 +854,13 @@ export class CrewWorkflow {
           job,
           project,
           role,
-          prompt + " Return a brief Korean note.",
+          prompt +
+            " Return a brief Korean note. For concrete findings include the exact relative path and inclusive one-based line numbers from the saved after text. Keep a finding under twelve lines. Do not invent locations for whole-file remarks.",
           evidence,
-          reviewSchema,
+          fileReviewSchema,
           signal,
         );
-      const [reviewed, styled, ...tests] = await Promise.allSettled([
+      const [reviewed, styled, tested] = await Promise.allSettled([
         review(
           "review",
           "Check whether the change satisfies the requested behavior. Do not accept scope creep.",
@@ -826,15 +869,15 @@ export class CrewWorkflow {
           "style",
           "Check code style and unnecessary changes. Evaluate prose clarity for non-code files.",
         ),
-        ...saved.map((file) =>
-          this.verify(
-            project,
-            job,
-            file.path,
-            baseline.find(({ path }) => path === file.path)!.content,
-            file.content!,
-            signal,
-          ),
+        this.verifyFiles(
+          project,
+          job,
+          saved.map(({ path, content }, index) => ({
+            path,
+            before: baseline[index].content,
+            content,
+          })),
+          signal,
         ),
       ]);
       signal.throwIfAborted();
@@ -850,7 +893,7 @@ export class CrewWorkflow {
         for (const [checkIndex, check] of [
           reviewed,
           styled,
-          tests[index],
+          tested.status === "fulfilled" ? tested.value[index] : tested,
         ].entries()) {
           const [role, label] = roles[checkIndex];
           const result =
@@ -867,14 +910,19 @@ export class CrewWorkflow {
                 };
           const changeId = changeIds.get(file.path);
           if (changeId)
-            this.store.recordCheck(
-              job,
-              changeId,
-              batchId!,
-              role,
-              label,
-              result,
-            );
+            this.store.recordCheck(job, changeId, batchId!, role, label, {
+              ...result,
+              findings:
+                "findings" in result
+                  ? result.findings
+                      .filter(({ path }) => path === file.path)
+                      .map(({ startLine, endLine, note }) => ({
+                        startLine,
+                        endLine,
+                        note,
+                      }))
+                  : [],
+            });
           else
             this.store.log(
               job.sessionId,
@@ -888,10 +936,23 @@ export class CrewWorkflow {
       }
       const afterReview = await readFiles();
       signal.throwIfAborted();
-      if (afterReview.some((file, index) => file.hash !== saved[index].hash))
+      const externallyChanged = afterReview.filter(
+        (file, index) => file.hash !== saved[index].hash,
+      );
+      if (externallyChanged.length) {
+        for (const { path, hash } of externallyChanged)
+          this.store.log(
+            job.sessionId,
+            "외부 변경 · 작성자 미확인 · " +
+              path +
+              " · " +
+              (hash ?? "파일 없음"),
+            job.id,
+          );
         throw new Error(
           "검증 중 파일이 바뀌었어요. 이전 결과는 업무 로그에서 확인할 수 있어요.",
         );
+      }
       if (!failures.length) {
         this.store.recordJob(
           job,
@@ -1056,29 +1117,69 @@ export class CrewWorkflow {
     }
   }
 
-  private async verify(
+  private async verifyFiles(
     project: Project,
     job: Job,
-    path: string,
-    before: string | null,
-    contents: string,
+    files: { path: string; before: string | null; content: string | null }[],
     signal: AbortSignal,
   ) {
-    const plan = job.plan!;
-    const test = await this.decide(
+    const criteria = { request: job.request, criterion: job.plan!.criterion };
+    const inputs = files.map(({ path, before }) => ({
+      path,
+      originalEnding: before?.match(finalLineBreaks)?.[0] ?? "",
+    }));
+    if (files.length === 1) {
+      const test = await this.decide(
+        job,
+        project,
+        "test",
+        verificationPrompt,
+        JSON.stringify({ ...criteria, ...inputs[0] }),
+        verificationSchema,
+        signal,
+      );
+      return Promise.allSettled([this.verify(project, files[0], test, signal)]);
+    }
+    const { checks } = await this.decide(
       job,
       project,
       "test",
-      'Choose an independent executable check from the current user request, without seeing the produced file. Check only the current file specified by path. When the plan conflicts with the current request, use the current request. For exact text, give the plain expected text and specify any final line break requirement separately. For a file containing Hello followed by one line break, give {"expected":"Hello","exact":true,"ending":"one-line-break"} (never put a trailing backslash-n marker in expected). Choose javascript only when syntax alone satisfies the criterion. If the behavior needs other execution or cannot be checked, mark unavailable.',
-      JSON.stringify({
-        request: job.request,
-        path,
-        criterion: plan.criterion,
-        originalEnding: before?.match(finalLineBreaks)?.[0] ?? "",
-      }),
-      verificationSchema,
+      verificationPrompt +
+        " Return one distinct check for each listed path. Match each expected value to its own file in the request, particularly when the requested values differ.",
+      JSON.stringify({ ...criteria, files: inputs }),
+      multiVerificationSchema,
       signal,
     );
+    if (
+      checks.length !== files.length ||
+      new Set(checks.map(({ path }) => path)).size !== files.length ||
+      checks.some(({ path }) => !files.some((file) => file.path === path))
+    )
+      throw new Error(
+        "테스트 담당이 승인 범위의 모든 파일에 검사를 연결하지 못했어요.",
+      );
+    return Promise.allSettled(
+      files.map((file) =>
+        this.verify(
+          project,
+          file,
+          checks.find(({ path }) => path === file.path)!,
+          signal,
+        ),
+      ),
+    );
+  }
+
+  private async verify(
+    project: Project,
+    {
+      path,
+      before,
+      content,
+    }: { path: string; before: string | null; content: string | null },
+    test: z.infer<typeof verificationSchema>,
+    signal: AbortSignal,
+  ) {
     if (test.kind === "unavailable")
       return {
         passed: false,
@@ -1097,8 +1198,8 @@ export class CrewWorkflow {
         ? applyFileEnding(test.expected, before, test.ending)
         : test.expected;
       const passed = test.exact
-        ? contents === expected
-        : contents.includes(expected);
+        ? content === expected
+        : Boolean(content?.includes(expected));
       return {
         passed,
         note:

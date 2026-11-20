@@ -8,6 +8,7 @@ import {
   type ApprovalMode,
   type Job,
   type Snapshot,
+  type WorkCheck,
 } from "./actions";
 import camp from "../demo/assets/camp.webp";
 import sprite0 from "../demo/assets/crew-0.webp";
@@ -45,6 +46,39 @@ function Icon({ name }: { name: keyof typeof icons }) {
     <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d={icons[name]} />
     </svg>
+  );
+}
+
+function CheckList({ checks }: { checks: WorkCheck[] }) {
+  return (
+    <ul>
+      {checks.map((check) => (
+        <li key={check.role}>
+          {roles.find(({ id }) => id === check.role)?.title} ·{" "}
+          {check.passed ? "통과" : check.unavailable ? "미검증" : "실패"}
+          {check.command && (
+            <>
+              {" "}
+              · <code>{check.command}</code>
+            </>
+          )}
+          {" · "}
+          {check.note}
+          {check.findings.map((finding, index) => (
+            <details className="review-finding" key={index}>
+              <summary>
+                {finding.startLine === finding.endLine
+                  ? `${finding.startLine}줄`
+                  : `${finding.startLine}–${finding.endLine}줄`}
+                {" · "}
+                {finding.note}
+              </summary>
+              <pre>{finding.excerpt}</pre>
+            </details>
+          ))}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -557,26 +591,22 @@ function Workspace() {
                     {new Date(change.savedAt).toLocaleString()}
                   </time>
                 </p>
-                <ul>
-                  {change.checks.map((check) => (
-                    <li key={check.role}>
-                      {roles.find(({ id }) => id === check.role)?.title} ·{" "}
-                      {check.passed
-                        ? "통과"
-                        : check.unavailable
-                          ? "미검증"
-                          : "실패"}
-                      {check.command && (
-                        <>
-                          {" "}
-                          · <code>{check.command}</code>
-                        </>
-                      )}
-                      {" · "}
-                      {check.note}
-                    </li>
-                  ))}
-                </ul>
+                <CheckList checks={change.checks} />
+                {change.previousChecks.length > 0 && (
+                  <details>
+                    <summary>
+                      이전 검증 {change.previousChecks.length}건
+                    </summary>
+                    {change.previousChecks.map((checks) => (
+                      <section key={checks[0].batchId}>
+                        <time dateTime={checks[0].checkedAt}>
+                          {new Date(checks[0].checkedAt).toLocaleString()}
+                        </time>
+                        <CheckList checks={checks} />
+                      </section>
+                    ))}
+                  </details>
+                )}
               </details>
             ))}
             {activity.map((entry) => (
@@ -786,6 +816,9 @@ function Workspace() {
                         ))}
                       </ul>
                     )}
+                    {approval.plan.directories?.length ? (
+                      <p>폴더 예약 · {approval.plan.directories.join(", ")}</p>
+                    ) : null}
                     <small>
                       {approval.plan.goal} · {approval.plan.criterion}
                     </small>

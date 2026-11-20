@@ -12,6 +12,8 @@ import {
   type JobState,
   type WorkPlan,
   type WorkChange,
+  type WorkCheck,
+  type ReviewFinding,
   type Message,
   type Project,
   type Provider,
@@ -29,7 +31,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 13)
+    if (migration.user_version > 14)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -200,6 +202,14 @@ export class CrewStore {
         INSERT INTO work_checks SELECT *, change_id FROM previous_work_checks;
         DROP TABLE previous_work_checks;
         PRAGMA user_version = 13;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 14) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE work_checks ADD COLUMN findings TEXT NOT NULL DEFAULT '[]';
+        PRAGMA user_version = 14;
         COMMIT;
       `);
     }
@@ -740,13 +750,31 @@ export class CrewStore {
       note: string;
       unavailable?: boolean;
       command?: string;
+      findings?: Omit<ReviewFinding, "excerpt">[];
     },
   ) {
     this.transaction(() => {
+      const change = this.db
+        .prepare(
+          "SELECT after_hash, after_text FROM work_changes WHERE id = ? AND job_id = ? AND saved_at IS NOT NULL",
+        )
+        .get(changeId, job.id);
+      if (!change) return;
+      const lines = String(change.after_text).split(/\r\n|\r|\n/);
+      if (lines.at(-1) === "") lines.pop();
+      const findings = (result.findings ?? []).filter(
+        ({ startLine, endLine }) =>
+          Number.isInteger(startLine) &&
+          Number.isInteger(endLine) &&
+          startLine >= 1 &&
+          endLine >= startLine &&
+          endLine <= lines.length &&
+          endLine - startLine < 12,
+      );
       const saved = this.db
         .prepare(
           `INSERT OR IGNORE INTO work_checks
-          SELECT id, ?, ?, ?, ?, ?, ?, ? FROM work_changes
+          SELECT id, ?, ?, ?, ?, ?, ?, ?, ? FROM work_changes
           WHERE id = ? AND job_id = ? AND saved_at IS NOT NULL RETURNING change_id`,
         )
         .get(
@@ -757,16 +785,14 @@ export class CrewStore {
           result.command ?? null,
           new Date().toISOString(),
           batchId,
+          JSON.stringify(findings),
           changeId,
           job.id,
         );
       if (saved) {
-        const change = this.db
-          .prepare("SELECT after_hash FROM work_changes WHERE id = ?")
-          .get(changeId);
         this.log(
           job.sessionId,
-          label + " · " + result.note + " · " + change!.after_hash,
+          label + " · " + result.note + " · " + change.after_hash,
           job.id,
         );
       }
@@ -777,33 +803,48 @@ export class CrewStore {
     const changes = this.db
       .prepare(
         `SELECT c.id, c.job_id AS jobId, c.plan_id AS planId,
-      c.path, c.before_hash AS beforeHash, c.after_hash AS afterHash, c.saved_at AS savedAt
+      c.path, c.before_hash AS beforeHash, c.after_hash AS afterHash, c.saved_at AS savedAt, c.after_text AS afterText
       FROM work_changes c JOIN jobs j ON j.id = c.job_id
       WHERE j.session_id = ? AND c.saved_at IS NOT NULL ORDER BY c.rowid DESC`,
       )
-      .all(sessionId) as Omit<WorkChange, "checks">[];
+      .all(sessionId) as (Omit<WorkChange, "checks" | "previousChecks"> & {
+      afterText: string;
+    })[];
     const checks = this.db
-      .prepare(`SELECT role, passed, unavailable, note, command, checked_at AS checkedAt, batch_id AS batchId
-      FROM work_checks WHERE change_id = ? AND batch_id = (
-        SELECT b.batch_id FROM work_checks b WHERE b.change_id = work_checks.change_id ORDER BY b.rowid DESC LIMIT 1
-      ) ORDER BY rowid`);
+      .prepare(`SELECT role, passed, unavailable, note, command, checked_at AS checkedAt, batch_id AS batchId, findings
+      FROM work_checks WHERE change_id = ? ORDER BY rowid`);
     type CheckRow = Omit<
       WorkChange["checks"][number],
-      "passed" | "unavailable"
+      "passed" | "unavailable" | "findings"
     > & {
       passed: number;
       unavailable: number;
+      findings: string;
     };
-    return changes.map(
-      (change): WorkChange => ({
-        ...change,
-        checks: (checks.all(change.id) as CheckRow[]).map((check) => ({
-          ...check,
-          passed: Boolean(check.passed),
-          unavailable: Boolean(check.unavailable),
-        })),
-      }),
-    );
+    return changes.map(({ afterText, ...change }): WorkChange => {
+      const batches = new Map<string, WorkCheck[]>();
+      const lines = afterText.split(/\r\n|\r|\n/);
+      for (const row of checks.all(change.id) as CheckRow[]) {
+        const batch = batches.get(row.batchId) ?? [];
+        batch.push({
+          ...row,
+          passed: Boolean(row.passed),
+          unavailable: Boolean(row.unavailable),
+          findings: (
+            JSON.parse(row.findings) as Omit<ReviewFinding, "excerpt">[]
+          ).map((finding) => ({
+            ...finding,
+            excerpt: lines
+              .slice(finding.startLine - 1, finding.endLine)
+              .join("\n")
+              .slice(0, 1600),
+          })),
+        });
+        batches.set(row.batchId, batch);
+      }
+      const [latest = [], ...previousChecks] = [...batches.values()].reverse();
+      return { ...change, checks: latest, previousChecks };
+    });
   }
 
   proposeWorkPlan(job: Job, plan: WorkPlan) {

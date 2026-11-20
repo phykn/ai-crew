@@ -272,6 +272,14 @@ summary:focus-visible {
 .change-log summary {
   cursor: pointer;
 }
+.review-finding {
+  margin-block: var(--space-1);
+}
+.review-finding pre {
+  overflow: auto;
+  padding: var(--space-2);
+  background: var(--card);
+}
 .change-log code,
 .activity-time {
   color: var(--dim);

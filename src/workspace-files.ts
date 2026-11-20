@@ -39,7 +39,7 @@ export async function listWorkspace(root: string) {
   return entries.sort();
 }
 
-export async function inspectFile(root: string, path: string) {
+function resolveWorkspacePath(root: string, path: string) {
   if (
     !path ||
     isAbsolute(path) ||
@@ -50,7 +50,22 @@ export async function inspectFile(root: string, path: string) {
   ) {
     throw new Error("프로젝트 안의 작업 파일 경로를 지정해 주세요.");
   }
-  const target = resolve(root, path);
+  return resolve(root, path);
+}
+
+export async function inspectDirectoryScope(root: string, path: string) {
+  const target = path === "." ? root : resolveWorkspacePath(root, path);
+  if (
+    (await realpath(target)) !== target ||
+    !(await lstat(target)).isDirectory()
+  )
+    throw new Error(
+      "예약할 작업 폴더는 프로젝트 안의 실제 디렉터리여야 합니다.",
+    );
+}
+
+export async function inspectFile(root: string, path: string) {
+  const target = resolveWorkspacePath(root, path);
   const parent = await realpath(dirname(target));
   if (
     parent !== dirname(target) ||

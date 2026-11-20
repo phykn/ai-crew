@@ -189,10 +189,27 @@ export type WorkPlan = {
   criterion: string;
   baseline: string | null;
   files?: { path: string; baseline: string | null }[];
+  directories?: string[];
 };
 export function planFiles(plan: WorkPlan) {
   return plan.files ?? [{ path: plan.path, baseline: plan.baseline }];
 }
+export type ReviewFinding = {
+  startLine: number;
+  endLine: number;
+  note: string;
+  excerpt: string;
+};
+export type WorkCheck = {
+  role: "review" | "style" | "test";
+  passed: boolean;
+  unavailable: boolean;
+  note: string;
+  command: string | null;
+  checkedAt: string;
+  batchId: string;
+  findings: ReviewFinding[];
+};
 export type WorkChange = {
   id: string;
   jobId: string;
@@ -201,15 +218,8 @@ export type WorkChange = {
   beforeHash: string | null;
   afterHash: string;
   savedAt: string;
-  checks: {
-    role: "review" | "style" | "test";
-    passed: boolean;
-    unavailable: boolean;
-    note: string;
-    command: string | null;
-    checkedAt: string;
-    batchId: string;
-  }[];
+  checks: WorkCheck[];
+  previousChecks: WorkCheck[][];
 };
 export type Job = {
   id: string;

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -256,6 +257,26 @@ test("overlapping jobs replan and checks stay attached to the version they revie
         };
       if (request === "Third" && system.startsWith("Check code style"))
         writeFileSync(file, "External edit\n");
+      if (request === "Third" && system.startsWith("Check whether the change"))
+        return {
+          passed: true,
+          note: "저장한 버전 확인",
+          findings: [
+            {
+              path: "notice.txt",
+              startLine: 1,
+              endLine: 1,
+              note: "저장된 문구",
+            },
+            {
+              path: "notice.txt",
+              startLine: 2,
+              endLine: 2,
+              note: "범위 밖 줄",
+            },
+            { path: "other.txt", startLine: 1, endLine: 1, note: "다른 파일" },
+          ],
+        };
       return { passed: true, note: "확인했어요." };
     });
     store.openFolder(folder);
@@ -295,13 +316,27 @@ test("overlapping jobs replan and checks stay attached to the version they revie
     workflow.answer(third, store.getJob(third).approvalId!, true);
     await vi.waitFor(() => expect(store.getJob(third).state).toBe("failed"));
     expect(readFileSync(file, "utf8")).toBe("External edit\n");
+    expect(store.snapshot().activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          jobId: third,
+          text: expect.stringContaining("작성자 미확인 · notice.txt"),
+        }),
+      ]),
+    );
     expect(store.getMessages(thirdSession).at(-1)?.text).toContain(
       "검증 중 파일이 바뀌었어요.",
     );
     expect(store.readChanges(thirdSession)[0]).toMatchObject({
       jobId: third,
       checks: [
-        { role: "review", passed: true },
+        {
+          role: "review",
+          passed: true,
+          findings: [
+            { startLine: 1, endLine: 1, note: "저장된 문구", excerpt: "Three" },
+          ],
+        },
         { role: "style", passed: true },
         { role: "test", passed: true },
       ],
@@ -466,6 +501,10 @@ test("a coordinated edit reserves all files and rejects an out-of-scope write be
   const a = join(folder, "a.txt");
   const b = join(folder, "b.txt");
   const other = join(folder, "other.txt");
+  const docs = join(folder, "docs");
+  mkdirSync(docs);
+  const nestedFile = join(docs, "note.txt");
+  writeFileSync(nestedFile, "old note\n");
   writeFileSync(a, "old A\n");
   writeFileSync(b, "old B\n");
   writeFileSync(other, "external\n");
@@ -475,14 +514,27 @@ test("a coordinated edit reserves all files and rejects an out-of-scope write be
   try {
     let batchPass = 0;
     vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
-      const { request, path } = JSON.parse(prompt.split("\n\n").at(-1)!);
+      const { request, path, files } = JSON.parse(prompt.split("\n\n").at(-1)!);
       if (system.startsWith("Plan one"))
         return {
-          paths: request === "Shared" ? ["b.txt"] : ["a.txt", "b.txt"],
+          paths:
+            request === "Nested"
+              ? ["note.txt"]
+              : request === "Shared"
+                ? ["b.txt"]
+                : ["a.txt", "b.txt"],
+          directories: request === "Batch" ? ["docs"] : [],
           goal: request,
           criterion: "new values",
         };
       if (system.startsWith("Implement only")) {
+        if (request === "Nested")
+          return {
+            content: "new note",
+            ending: "preserve",
+            consult: "none",
+            question: "",
+          };
         if (request === "Batch") {
           batchPass++;
           await edit.promise;
@@ -501,19 +553,49 @@ test("a coordinated edit reserves all files and rejects an out-of-scope write be
           question: "",
         };
       }
-      if (system.startsWith("Choose an independent"))
-        return {
+      if (system.startsWith("Choose an independent")) {
+        const check = (target: string) => ({
           kind: "text",
-          expected: path === "a.txt" ? "new A" : "new B",
+          expected:
+            target === "note.txt"
+              ? "new note"
+              : target === "a.txt"
+                ? "new A"
+                : "new B",
           exact: true,
           ending: "preserve",
           reason: "",
-        };
-      if (system.startsWith("Check whether the change")) {
+        });
+        return files
+          ? {
+              checks: files.map(({ path }: { path: string }) => ({
+                path,
+                ...check(path),
+              })),
+            }
+          : check(path);
+      }
+      if (
+        request === "Batch" &&
+        system.startsWith("Check whether the change")
+      ) {
         expect(prompt).toContain('"after":"new A\\n"');
         expect(prompt).toContain(
           batchPass === 1 ? '"after":"old B\\n"' : '"after":"new B\\n"',
         );
+        if (batchPass === 1)
+          return {
+            passed: true,
+            note: "첫 검토",
+            findings: [
+              {
+                path: "a.txt",
+                startLine: 1,
+                endLine: 1,
+                note: "첫 버전의 문구",
+              },
+            ],
+          };
       }
       return { passed: true, note: "확인했어요." };
     });
@@ -534,21 +616,35 @@ test("a coordinated edit reserves all files and rejects an out-of-scope write be
 
     const batch = workflow.delegate(session.id, randomUUID(), "Batch").id;
     const shared = workflow.delegate(session.id, randomUUID(), "Shared").id;
+    store.openFolder(docs);
+    const nestedSession = store.snapshot().session!;
+    const nested = workflow.delegate(
+      nestedSession.id,
+      randomUUID(),
+      "Nested",
+    ).id;
     await vi.waitFor(() => {
       expect(store.getJob(batch).state).toBe("approval");
       expect(store.getJob(shared).state).toBe("approval");
+      expect(store.getJob(nested).state).toBe("approval");
     });
     const oldApproval = store.getJob(shared).approvalId!;
     workflow.answer(batch, store.getJob(batch).approvalId!, true);
     workflow.answer(shared, oldApproval, true);
+    workflow.answer(nested, store.getJob(nested).approvalId!, true);
     expect(store.getJob(shared).state).toBe("queued");
+    expect(store.getJob(nested).state).toBe("queued");
+    expect(readFileSync(nestedFile, "utf8")).toBe("old note\n");
     edit.resolve();
     await vi.waitFor(() => {
       expect(store.getJob(batch).state).toBe("complete");
       expect(store.getJob(shared).state).toBe("approval");
+      expect(store.getJob(nested).state).toBe("complete");
     });
     expect(store.getJob(shared).approvalId).not.toBe(oldApproval);
     expect(batchPass).toBe(2);
+    expect(readFileSync(nestedFile, "utf8")).toBe("new note\n");
+    store.openSession(session.id);
     expect(store.snapshot().activity).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -566,6 +662,9 @@ test("a coordinated edit reserves all files and rejects an out-of-scope write be
     ]);
     const changes = store.readChanges(session.id);
     expect(changes.map(({ path }) => path)).toEqual(["b.txt", "a.txt"]);
+    expect(changes[1].previousChecks[0][0].findings).toEqual([
+      { startLine: 1, endLine: 1, note: "첫 버전의 문구", excerpt: "new A" },
+    ]);
     expect(
       new Set(
         changes.flatMap(({ checks }) => checks.map(({ batchId }) => batchId)),

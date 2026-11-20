@@ -142,7 +142,7 @@ export class CrewWorkflow extends WorkflowRecovery {
       undefined,
       decision,
     );
-    this.reserved.set(job.id, this.reservation(job));
+    this.directories.hold(job.id, this.reservation(job));
     this.start(job, "developing");
   }
 
@@ -157,19 +157,19 @@ export class CrewWorkflow extends WorkflowRecovery {
 
   protected hasReservation(job: Job, earlier: Job[]) {
     const paths = this.reservation(job);
-    return [
-      ...this.reserved.values(),
-      ...earlier.map((waiting) => this.reservation(waiting)),
-    ].some((held) =>
-      paths.some((path) =>
-        held.some(
-          (other) =>
-            path === other ||
-            path.startsWith(other + sep) ||
-            other.startsWith(path + sep),
+    if (this.directories.conflict(paths, job.id)) return true;
+    return earlier
+      .map((waiting) => this.reservation(waiting))
+      .some((held) =>
+        paths.some((path) =>
+          held.some(
+            (other) =>
+              path === other ||
+              path.startsWith(other + sep) ||
+              other.startsWith(path + sep),
+          ),
         ),
-      ),
-    );
+      );
   }
 
   protected dispatchQueuedJobs() {
@@ -186,6 +186,7 @@ export class CrewWorkflow extends WorkflowRecovery {
 
   stop(id: string) {
     const job = this.store.getJob(id);
+    this.stops.stop(id);
     if (
       job.state === "approval" ||
       job.state === "queued" ||
@@ -228,7 +229,7 @@ export class CrewWorkflow extends WorkflowRecovery {
         "recovering",
         "비서 · 저장 기록과 실제 파일 확인",
       );
-      this.reserved.set(job.id, this.reservation(job));
+      this.directories.hold(job.id, this.reservation(job));
       this.start(job, "recovering");
     } else {
       this.store.recordJob(
@@ -264,6 +265,7 @@ export class CrewWorkflow extends WorkflowRecovery {
 
   protected start(job: Job, phase: "planning" | "developing" | "recovering") {
     const controller = new AbortController();
+    const generation = this.stops.begin(job.id);
     this.active.set(job.id, controller);
     const base = this.store.getProject(job.projectId);
     const fresh = this.store.getJob(job.id);
@@ -344,12 +346,14 @@ export class CrewWorkflow extends WorkflowRecovery {
       .finally(() => {
         if (this.active.get(job.id) !== controller) return;
         this.active.delete(job.id);
+        // 멈춘 실행의 늦은 마무리는 대기를 풀기만 하고 새 실행을 시작하지 않는다.
+        const stopped = this.stops.isStale(job.id, generation);
         if (phase !== "planning" && job.plan) {
-          this.reserved.delete(job.id);
+          this.directories.release(job.id);
           this.dispatchQueuedJobs();
         }
-        if (replan) this.start(this.store.getJob(job.id), "planning");
-        if (authorized) {
+        if (replan && !stopped) this.start(this.store.getJob(job.id), "planning");
+        if (authorized && !stopped) {
           try {
             this.answer(job.id, authorized, true, "비서");
           } catch (error) {

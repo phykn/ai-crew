@@ -17,6 +17,7 @@ import {
 import type { CodexConnection } from "./codex";
 import { codexMcpConfig } from "./codex-mcp";
 import { crewInstructions } from "./crew-definition";
+import { DirectoryFence, StopFence } from "./engine-fence";
 import type { CrewStore } from "./store";
 import { decideLocal } from "./local";
 import { ModelLimitError, classifyModelFailure } from "./model-errors";
@@ -26,7 +27,10 @@ import { maxRetries } from "./workflow-support";
 
 export class WorkflowBase {
   protected active = new Map<string, AbortController>();
-  protected reserved = new Map<string, string[]>();
+  /** 업무별 실행 세대. 멈춘 실행의 늦은 마무리가 새 실행에 끼어들지 않게 한다. */
+  protected stops = new StopFence();
+  /** 진행 중인 업무가 잡고 있는 작업 경로. */
+  protected directories = new DirectoryFence();
   protected agentTurns = new Map<string, Promise<void>>();
   protected toolWaiters = new Map<string, (allow: boolean | null) => void>();
 

@@ -12,6 +12,7 @@ import { appTools } from "./app-tools";
 import { ChatQueue } from "./chat-queue";
 import { findChatCommand } from "./chat-commands";
 import { CodexConnection } from "./codex";
+import { StopFence } from "./engine-fence";
 import { classifyModelFailure } from "./model-errors";
 import { runLocal, setLocalConnection } from "./local";
 import { CrewMcp } from "./mcp";
@@ -49,6 +50,8 @@ async function startApp() {
     string,
     { id: string; request: string; controller: AbortController }
   >();
+  /** 멈춘 응답의 세대. 멈춘 뒤 도착하는 스트림 청크를 버린다. */
+  const fences = new StopFence();
   const waiting = new ChatQueue();
   let window: BrowserWindow | null;
   let closing = false;
@@ -64,6 +67,7 @@ async function startApp() {
     id: string,
     text: string,
     controller: AbortController,
+    generation: number,
   ) {
     const session = store.getSession(sessionId);
     const project = store.getProject(session.projectId);
@@ -93,6 +97,7 @@ async function startApp() {
     );
     const emit = (delta: string) => {
       if (closing || controller.signal.aborted) return;
+      if (fences.isStale(id, generation)) return;
       store.append(id, delta);
       publish({ sessionId, responseId: id, delta });
     };
@@ -180,7 +185,7 @@ async function startApp() {
           error instanceof Error ? error.message : String(error)
         ).slice(0, 400);
     } finally {
-      runs.delete(sessionId);
+      if (runs.get(sessionId)?.controller === controller) runs.delete(sessionId);
       if (!closing) {
         store.recordModelRun(
           sessionId,
@@ -212,7 +217,13 @@ async function startApp() {
     store.startResponse(responseId);
     const controller = new AbortController();
     runs.set(sessionId, { id: responseId, request: requestId, controller });
-    void generate(sessionId, responseId, text, controller);
+    void generate(
+      sessionId,
+      responseId,
+      text,
+      controller,
+      fences.begin(responseId),
+    );
   }
 
   const applyModelConnections = (
@@ -303,6 +314,7 @@ async function startApp() {
     stop: (sessionId, responseId) => {
       const run = runs.get(sessionId);
       if (!run || run.id !== responseId || run.controller.signal.aborted) return;
+      fences.stop(responseId);
       store.finish(run.id, "stopping");
       run.controller.abort();
       // 멈추면 기다리던 메시지도 함께 접는다.

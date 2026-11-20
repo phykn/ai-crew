@@ -857,3 +857,11 @@ summary:focus-visible {
 .menu.notifications button[aria-current="true"] {
   color: var(--warm);
 }
+.character.highlighted img {
+  filter: drop-shadow(0 0 10px #efc58dcc);
+}
+.character.highlighted span {
+  text-decoration: underline;
+  text-decoration-color: #efc58d80;
+  text-underline-offset: 3px;
+}

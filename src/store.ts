@@ -36,6 +36,7 @@ import {
   type AppNotification,
   type Artifact,
 } from "./actions";
+import { campState } from "./camp";
 import { skillStates } from "./skill-status";
 import {
   applyBranch,
@@ -2808,6 +2809,23 @@ export class CrewStore {
       skills: current ? this.listSkills(current.id) : [],
       workflows: current ? this.listWorkflows(current.id) : [],
       artifacts: current ? this.listArtifacts(current.id) : [],
+      camp: current
+        ? campState({
+            members: this.readMembers(current.id),
+            jobs: session ? this.readJobs(session.id) : [],
+            assignees: session
+              ? (this.db
+                  .prepare(
+                    `SELECT a.job_id AS jobId, a.member_id AS memberId,
+                     CASE WHEN instr(a.role, ':') > 0 THEN substr(a.role, 1, instr(a.role, ':') - 1) ELSE a.role END AS roleId
+                     FROM job_assignees a JOIN jobs j ON j.id = a.job_id WHERE j.session_id = ?`,
+                  )
+                  .all(session.id) as Snapshot["assignees"])
+              : [],
+            selectedJobId: session ? this.viewState(session.id).logJobId : null,
+            hour: new Date().getHours(),
+          })
+        : { members: [], highlightedJobId: null },
       notifications: session ? this.readNotifications(session.id) : [],
       toolApprovals: session ? this.readToolApprovals(session.id) : [],
       skillStates: current

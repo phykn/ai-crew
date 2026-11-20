@@ -339,6 +339,7 @@ export type AppRead = {
   view: Snapshot["view"];
   artifacts: Artifact[];
   notifications: AppNotification[];
+  camp: Snapshot["camp"];
   jobs: Snapshot["jobs"];
   pendingApprovals: { id: string; jobId: string }[];
   pendingToolApprovals: ToolApproval[];
@@ -384,6 +385,7 @@ export function appRead(store: CrewStore): AppRead {
     view: snapshot.view,
     artifacts: snapshot.artifacts,
     notifications: snapshot.notifications,
+    camp: snapshot.camp,
     jobs: snapshot.jobs,
     pendingApprovals: snapshot.fileApprovals
       .filter(({ decision }) => decision === null)

@@ -498,19 +498,8 @@ function Workspace() {
     data?.activity.filter((entry) => !logJob || entry.jobId === logJob) || [];
   const changes =
     data?.changes.filter((change) => !logJob || change.jobId === logJob) || [];
-  const workingMembers = new Set(
-    data?.assignees
-      .filter(({ jobId, roleId }) =>
-        data.jobs.some(
-          (job) =>
-            job.id === jobId &&
-            ((job.state === "planning" && roleId === "plan") ||
-              (job.state === "developing" && roleId === "development") ||
-              (job.state === "reviewing" &&
-                ["review", "style", "test"].includes(roleId))),
-        ),
-      )
-      .map(({ memberId }) => memberId),
+  const campMembers = new Map(
+    (data?.camp.members ?? []).map((member) => [member.id, member]),
   );
   const visibleMessages =
     data?.messages.filter(
@@ -816,11 +805,16 @@ function Workspace() {
             const extra = member.id !== role.id;
             return (
               <div
-                className="character"
+                className={
+                  "character" +
+                  (campMembers.get(member.id)?.highlighted
+                    ? " highlighted"
+                    : "")
+                }
                 key={member.id}
                 style={{
                   left:
-                    (member.hired || workingMembers.has(member.id)
+                    (member.hired || campMembers.get(member.id)?.working
                       ? extra
                         ? 18 + ((index * 13) % 65)
                         : role.x
@@ -834,8 +828,8 @@ function Workspace() {
                   <b style={{ color: role.color }}>{member.name}</b>
                   {role.id === "assistant" && running
                     ? " · 답변 중"
-                    : workingMembers.has(member.id)
-                      ? " · " + role.title
+                    : campMembers.get(member.id)?.working
+                      ? " · " + campMembers.get(member.id)!.status
                       : ""}
                 </span>
                 <img src={sprites[role.sprite]} alt="" />

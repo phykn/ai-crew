@@ -468,6 +468,19 @@ export type Artifact = {
   hash: string;
   createdAt: string;
 };
+export type CampMemberState = {
+  id: string;
+  roleId: RoleId;
+  name: string;
+  color: string;
+  hired: boolean;
+  jobId: string | null;
+  jobTitle: string | null;
+  status: string;
+  working: boolean;
+  highlighted: boolean;
+  line: string | null;
+};
 export type ViewState = {
   tab: "chat" | "log" | "memory" | "workflow";
   camp: boolean;
@@ -515,6 +528,7 @@ export type Snapshot = {
   workflows: Workflow[];
   artifacts: Artifact[];
   notifications: AppNotification[];
+  camp: { members: CampMemberState[]; highlightedJobId: string | null };
   memories: CrewMemory[];
   wiki: WikiPage[];
   assignees: { jobId: string; memberId: string; roleId: RoleId }[];

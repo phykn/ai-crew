@@ -2,6 +2,7 @@
 // the current job phase and goal, and any waiting decision visible without
 // opening the camp view.
 
+import { type ReactNode } from "react";
 import { roles, type Snapshot } from "./actions";
 import { phase, sprites } from "./renderer-ui";
 
@@ -13,6 +14,8 @@ type ChatStatusProps = {
   showCamp: boolean;
   setShowCamp: (camp: boolean) => void;
   openLog: (jobId: string) => void;
+  // 업무가 한 건일 때는 그 업무의 버튼을 배너 안에 붙여 줄을 하나로 유지한다.
+  jobActions?: ReactNode;
 };
 
 export function ChatStatus({
@@ -23,6 +26,7 @@ export function ChatStatus({
   showCamp,
   setShowCamp,
   openLog,
+  jobActions,
 }: ChatStatusProps) {
   if (!data?.session) return null;
   const active = jobs[0];
@@ -83,6 +87,9 @@ export function ChatStatus({
         </span>
       </button>
       {!!waits.length && <span className="chat-status-wait">{waits.join(" · ")}</span>}
+      {!!jobActions && (
+        <span className="chat-status-actions">{jobActions}</span>
+      )}
       <button
         type="button"
         className="chat-status-camp"

@@ -409,6 +409,19 @@ summary:focus-visible {
   line-height: 18px;
   white-space: nowrap;
 }
+.chat-status-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+.chat-status-actions .job-action {
+  padding: 0 8px;
+  border: 1px solid var(--line-control);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+}
 .chat-status-camp {
   flex: none;
   padding: 2px 6px;
@@ -597,6 +610,10 @@ summary:focus-visible {
   border-radius: 12px 12px 12px 4px;
   background: var(--card);
 }
+/* 복사 버튼 자리를 말풍선 위쪽에 비워 두어 본문과 겹치지 않게 한다. */
+.bubble:has(.bubble-copy) {
+  padding-top: 26px;
+}
 .bubble.assistant {
   white-space: normal;
 }
@@ -607,21 +624,23 @@ summary:focus-visible {
 }
 .bubble-copy {
   position: absolute;
-  top: -11px;
+  top: 6px;
   right: 8px;
   padding: 0 8px;
   border: 1px solid var(--line-control);
   border-radius: 999px;
-  background: var(--bg);
+  background-color: inherit;
   color: var(--dim);
   font-size: 11px;
   line-height: 18px;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s;
 }
 .bubble:hover .bubble-copy,
 .bubble:focus-within .bubble-copy {
   opacity: 1;
+  pointer-events: auto;
 }
 .bubble-copy:hover {
   color: var(--text);
@@ -987,7 +1006,10 @@ summary:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
   .project-toggle span {
-    display: none;
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .project-toggle {
     max-width: none;

@@ -129,7 +129,9 @@ try {
   await expect(
     page.getByRole("region", { name: "권한 승인", exact: true }),
   ).toHaveCount(1);
-  await expect(page.locator(".current-jobs .job")).toContainText("승인 대기");
+  // 업무가 한 건이면 배너 한 줄에 단계와 멈춤 버튼이 함께 붙는다.
+  await expect(page.locator(".chat-status")).toContainText("승인 대기");
+  await expect(page.locator(".current-jobs")).toHaveCount(0);
   await question.getByRole("button", { name: "승인 업무 로그 열기" }).click();
   // 넓은 창에서는 대화를 닫지 않고 오른쪽에 업무 로그를 나란히 연다.
   await expect(page.locator(".split-log")).toBeVisible();

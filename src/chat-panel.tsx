@@ -48,6 +48,109 @@ type ChatPanelProps = {
   setFocusedApprovalId: (jobId: string | null) => void;
 };
 
+const stoppable = [
+  "planning",
+  "developing",
+  "reviewing",
+  "approval",
+  "queued",
+  "recovering",
+  "clarification",
+];
+
+type JobActionsProps = {
+  job: Snapshot["jobs"][number];
+  approval: Snapshot["jobs"][number] | undefined;
+  toolApproval: Snapshot["toolApprovals"][number] | undefined;
+  pendingTools: Snapshot["toolApprovals"];
+  setRevision: (
+    revision: { id: string; text: string; questionId?: string } | null,
+  ) => void;
+  composer: { current: HTMLTextAreaElement | null };
+  run: (action: Action, resetDraft?: boolean) => Promise<boolean>;
+  setFocusedApprovalId: (jobId: string | null) => void;
+  setToolFocus: (approvalId: string | null) => void;
+  compact?: boolean;
+};
+
+// 한 업무에 딸린 버튼. 목록에서는 대기 중인 승인·질문으로 건너뛰는 버튼까지 두고,
+// 상단 배너(compact)에서는 한 줄을 지키려고 멈춤·이어가기만 붙인다.
+function JobActions({
+  job,
+  approval,
+  toolApproval,
+  pendingTools,
+  setRevision,
+  composer,
+  run,
+  setFocusedApprovalId,
+  setToolFocus,
+  compact,
+}: JobActionsProps) {
+  return (
+    <>
+      {!compact && job.state === "approval" && job.id !== approval?.id && (
+        <button
+          className="job-action"
+          type="button"
+          onClick={() => setFocusedApprovalId(job.id)}
+        >
+          권한 요청
+        </button>
+      )}
+      {!compact &&
+        pendingTools.some(
+          ({ jobId, id }) => jobId === job.id && id !== toolApproval?.id,
+        ) && (
+          <button
+            className="job-action"
+            type="button"
+            onClick={() => {
+              const next = pendingTools.find(({ jobId }) => jobId === job.id);
+              if (next) setToolFocus(next.id);
+            }}
+          >
+            도구 승인
+          </button>
+        )}
+      {!compact && job.clarification && (
+        <button
+          className="job-action"
+          type="button"
+          onClick={() => {
+            setRevision({
+              id: job.id,
+              text: "",
+              questionId: job.clarification!.id,
+            });
+            composer.current?.focus();
+          }}
+        >
+          답변
+        </button>
+      )}
+      {stoppable.includes(job.state) && job.id !== approval?.id && (
+        <button
+          className="job-action"
+          type="button"
+          onClick={() => void run({ type: "job.stop", jobId: job.id })}
+        >
+          멈춤
+        </button>
+      )}
+      {["stopped", "failed"].includes(job.state) && (
+        <button
+          className="job-action"
+          type="button"
+          onClick={() => void run({ type: "job.resume", jobId: job.id })}
+        >
+          이어가기
+        </button>
+      )}
+    </>
+  );
+}
+
 export function ChatPanel({
   data,
   running,
@@ -84,6 +187,9 @@ export function ChatPanel({
   const currentJobs =
     data?.jobs.filter((job) => !["complete", "denied"].includes(job.state)) ||
     [];
+  // 업무가 한 건뿐이면 배너에 그 업무를 붙이고, 여러 건일 때만 목록을 편다.
+  const singleJob = currentJobs.length === 1 ? currentJobs[0] : undefined;
+  const jobList = currentJobs.length > 1 ? currentJobs : [];
   const visibleMessages =
     data?.messages.filter(
       (message) =>
@@ -138,10 +244,26 @@ export function ChatPanel({
         showCamp={showCamp}
         setShowCamp={setShowCamp}
         openLog={openLog}
+        jobActions={
+          singleJob ? (
+            <JobActions
+              job={singleJob}
+              compact
+              approval={approval}
+              toolApproval={toolApproval}
+              pendingTools={pendingTools}
+              setRevision={setRevision}
+              composer={composer}
+              run={run}
+              setFocusedApprovalId={setFocusedApprovalId}
+              setToolFocus={setToolFocus}
+            />
+          ) : undefined
+        }
       />
-      {!!currentJobs.length && (
+      {!!jobList.length && (
         <div className="current-jobs" aria-label="업무">
-          {currentJobs.map((job) => (
+          {jobList.map((job) => (
             <div className="job" key={job.id}>
               <button
                 className="job-title"
@@ -151,77 +273,17 @@ export function ChatPanel({
                 {job.plan?.goal || job.request}
               </button>
               <small>{phase[job.state]}</small>
-              {job.state === "approval" && job.id !== approval?.id && (
-                <button
-                  className="job-action"
-                  type="button"
-                  onClick={() => setFocusedApprovalId(job.id)}
-                >
-                  권한 요청
-                </button>
-              )}
-              {pendingTools.some(
-                ({ jobId, id }) =>
-                  jobId === job.id && id !== toolApproval?.id,
-              ) && (
-                <button
-                  className="job-action"
-                  type="button"
-                  onClick={() => {
-                    const next = pendingTools.find(
-                      ({ jobId }) => jobId === job.id,
-                    );
-                    if (next) setToolFocus(next.id);
-                  }}
-                >
-                  도구 승인
-                </button>
-              )}
-              {job.clarification && (
-                <button
-                  className="job-action"
-                  type="button"
-                  onClick={() => {
-                    setRevision({
-                      id: job.id,
-                      text: "",
-                      questionId: job.clarification!.id,
-                    });
-                    composer.current?.focus();
-                  }}
-                >
-                  답변
-                </button>
-              )}
-              {[
-                "planning",
-                "developing",
-                "reviewing",
-                "approval",
-                "queued",
-                "recovering",
-                "clarification",
-              ].includes(job.state) &&
-                job.id !== approval?.id && (
-                  <button
-                    className="job-action"
-                    onClick={() =>
-                      void run({ type: "job.stop", jobId: job.id })
-                    }
-                  >
-                    멈춤
-                  </button>
-                )}
-              {["stopped", "failed"].includes(job.state) && (
-                <button
-                  className="job-action"
-                  onClick={() =>
-                    void run({ type: "job.resume", jobId: job.id })
-                  }
-                >
-                  이어가기
-                </button>
-              )}
+              <JobActions
+                job={job}
+                approval={approval}
+                toolApproval={toolApproval}
+                pendingTools={pendingTools}
+                setRevision={setRevision}
+                composer={composer}
+                run={run}
+                setFocusedApprovalId={setFocusedApprovalId}
+                setToolFocus={setToolFocus}
+              />
             </div>
           ))}
         </div>

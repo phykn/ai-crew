@@ -166,13 +166,16 @@ function Workspace() {
       .catch((problem: Error) => setError(problem.message));
   }
   const setView = (tab: Snapshot["view"]["tab"]) => {
-    // 로그 탭을 고르면 나란히 보던 로그 패널은 접는다.
-    if (tab === "log") setSplitLog(false);
+    // 다른 탭으로 넘어가면 나란히 보던 로그 패널은 접는다.
+    if (tab !== "chat") setSplitLog(false);
     if (data?.session) patchView({ tab });
     else setLocalView(tab);
   };
-  const setShowCamp = (camp: boolean) =>
-    data?.session ? patchView({ camp }) : setLocalCamp(camp);
+  const setShowCamp = (camp: boolean) => {
+    // 캠프를 열어도 대화 옆의 로그 패널은 접어 둔다.
+    if (camp) setSplitLog(false);
+    return data?.session ? patchView({ camp }) : setLocalCamp(camp);
+  };
   const setLogJob = (jobId: string | null) => patchView({ logJobId: jobId });
 
   // 넓은 창에서는 업무 로그를 대화 옆에 나란히 열고, 좁은 창에서는 로그 탭으로 넘긴다.

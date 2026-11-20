@@ -3,6 +3,7 @@ import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { actions, type ChatEvent, type Completion } from "./actions";
 import { CodexConnection } from "./codex";
+import { classifyModelFailure } from "./model-errors";
 import { runLocal } from "./local";
 import { CrewStore } from "./store";
 import { CrewWorkflow } from "./workflow";
@@ -113,8 +114,11 @@ async function startApp() {
         );
       }
     } catch (error) {
-      status = controller.signal.aborted ? "stopped" : "failed";
-      if (status === "failed")
+      const limited =
+        !controller.signal.aborted && classifyModelFailure(error) === "limit";
+      status = controller.signal.aborted || limited ? "stopped" : "failed";
+      if (limited) failure = "비서 모델이 한도에 도달했어요.";
+      else if (status === "failed")
         failure = (
           error instanceof Error ? error.message : String(error)
         ).slice(0, 400);

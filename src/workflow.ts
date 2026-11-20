@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { resolve, sep } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import {
   planFiles,
@@ -12,6 +13,7 @@ import {
 } from "./actions";
 import type { CodexConnection } from "./codex";
 import { decideLocal } from "./local";
+import { classifyModelFailure, ModelLimitError } from "./model-errors";
 import type { CrewStore } from "./store";
 import {
   inspectFile,
@@ -404,7 +406,35 @@ export class CrewWorkflow {
         if (!this.active.has(job.id)) return;
         const current = this.store.getJob(job.id);
         const note = error instanceof Error ? error.message : String(error);
-        if (controller.signal.aborted)
+        if (controller.signal.reason instanceof ModelLimitError) {
+          const saved = [
+            ...new Set(
+              this.store
+                .readRecoveryJournal(job.id)
+                .filter(({ savedAt }) => savedAt)
+                .map(({ path }) => path),
+            ),
+          ];
+          const remaining =
+            current.state === "reviewing"
+              ? "남은 검증"
+              : current.state === "developing"
+                ? "남은 파일 작업과 검증"
+                : "계획 확인과 후속 작업";
+          this.store.recordJob(
+            current,
+            "stopped",
+            "비서 · 모델 사용 한도로 정지",
+            current.plan,
+            null,
+            controller.signal.reason.message +
+              (saved.length
+                ? " 저장한 파일: " + saved.join(", ") + ". "
+                : " 이 실행에서 아직 파일을 저장하지 않았어요. ") +
+              remaining +
+              "은 이어갈 때 진행합니다.",
+          );
+        } else if (controller.signal.aborted)
           this.store.recordJob(
             current,
             "stopped",
@@ -551,37 +581,113 @@ export class CrewWorkflow {
           "\n\n" +
           prompt
         : prompt;
-    let output: z.infer<T>;
-    let threadId: string | null = null;
-    if (member.provider === "local") {
-      output = await decideLocal(system, withPrevious(), schema, signal);
-    } else {
-      let raw = "";
-      await this.codex.run(
-        project,
-        previous?.threadId ?? null,
-        system + "\n\n" + (previous?.threadId ? prompt : withPrevious()),
-        signal,
-        (text) => {
-          raw += text;
-        },
-        (thread) => {
-          threadId = thread;
-        },
-        z.json().parse(z.toJSONSchema(schema)),
-        () => system + "\n\n" + withPrevious(),
-      );
-      output = schema.parse(JSON.parse(raw));
+    const step = createHash("sha256")
+      .update(
+        JSON.stringify([
+          job.request,
+          member.id,
+          member.provider,
+          system,
+          prompt,
+        ]),
+      )
+      .digest("hex");
+    let threadId =
+      member.provider === "codex" ? (previous?.threadId ?? null) : null;
+    for (;;) {
+      signal.throwIfAborted();
+      try {
+        let output: z.infer<T>;
+        if (member.provider === "local") {
+          output = await decideLocal(system, withPrevious(), schema, signal);
+        } else {
+          let raw = "";
+          const pending = this.store.readPendingModelTurn(job.id, step);
+          const resumeId = pending?.threadId ?? threadId;
+          await this.codex.run(
+            project,
+            resumeId,
+            system + "\n\n" + (resumeId ? prompt : withPrevious()),
+            signal,
+            (text) => {
+              raw += text;
+            },
+            (thread) => {
+              threadId = thread;
+              if (!signal.aborted && this.active.has(job.id))
+                this.store.rememberAgentThread(job.id, member.id, thread);
+            },
+            z.json().parse(z.toJSONSchema(schema)),
+            () => {
+              signal.throwIfAborted();
+              this.store.log(
+                job.sessionId,
+                member.name +
+                  " · 이전 Codex 세션 " +
+                  resumeId +
+                  "을 불러올 수 없어 저장한 맥락으로 새 실행 연결",
+                job.id,
+              );
+              return system + "\n\n" + withPrevious();
+            },
+            {
+              resumeTurn: pending?.turnId ?? null,
+              onTurn: (thread, turn) => {
+                if (!signal.aborted)
+                  this.store.savePendingModelTurn(job.id, step, thread, turn);
+              },
+            },
+          );
+          output = schema.parse(JSON.parse(raw));
+        }
+        signal.throwIfAborted();
+        if (member.provider === "local" && previous?.threadId)
+          this.store.log(
+            job.sessionId,
+            member.name +
+              " · Codex 세션 " +
+              previous.threadId +
+              "에서 로컬 모델로 전환 · 저장한 맥락 사용",
+            job.id,
+          );
+        this.store.saveAgentContext(
+          job.id,
+          member.id,
+          threadId,
+          JSON.stringify(output),
+        );
+        this.store.clearModelRetry(job.id, step);
+        return output;
+      } catch (error) {
+        signal.throwIfAborted();
+        const failure = classifyModelFailure(error);
+        if (failure === "limit") {
+          this.store.clearModelRetry(job.id, step);
+          const limit = new ModelLimitError(
+            member.name + " 담당 모델이 한도에 도달했어요.",
+          );
+          this.active.get(job.id)?.abort(limit);
+          throw limit;
+        }
+        if (failure !== "connection") {
+          this.store.clearModelRetry(job.id, step);
+          throw error;
+        }
+        const count = this.store.scheduleModelRetry(
+          job,
+          step,
+          member.name,
+          maxRetries,
+        );
+        if (count === null)
+          throw new Error(
+            member.name +
+              "의 모델 연결을 자동 재시도한 뒤에도 복구하지 못했어요.",
+          );
+        this.notify();
+        await delay(150 * 2 ** (count - 1), undefined, { signal });
+      }
     }
-    signal.throwIfAborted();
-    if (this.active.has(job.id))
-      this.store.saveAgentContext(
-        job.id,
-        member.id,
-        threadId,
-        JSON.stringify(output),
-      );
-    return output;
   }
 
   private async plan(job: Job, project: Project, signal: AbortSignal) {

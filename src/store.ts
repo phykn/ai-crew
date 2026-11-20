@@ -31,7 +31,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 16)
+    if (migration.user_version > 17)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -239,6 +239,23 @@ export class CrewStore {
           ORDER BY c.rowid DESC LIMIT 1
         ) WHERE j.state IN ('stopped', 'failed', 'developing', 'reviewing', 'stopping');
         PRAGMA user_version = 16;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 17) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE model_retries (
+          job_id TEXT NOT NULL REFERENCES jobs(id),
+          step TEXT NOT NULL,
+          count INTEGER NOT NULL,
+          PRIMARY KEY(job_id, step)
+        );
+        CREATE TABLE pending_model_turns (
+          job_id TEXT NOT NULL REFERENCES jobs(id), step TEXT NOT NULL,
+          thread_id TEXT NOT NULL, turn_id TEXT NOT NULL, PRIMARY KEY(job_id, step)
+        );
+        PRAGMA user_version = 17;
         COMMIT;
       `);
     }
@@ -978,6 +995,74 @@ export class CrewStore {
       .get(jobId, memberId) as
       | { threadId: string | null; result: string }
       | undefined;
+  }
+
+  rememberAgentThread(jobId: string, memberId: string, threadId: string) {
+    this.db
+      .prepare(
+        `
+      INSERT INTO agent_context (job_id, role, thread_id, result) VALUES (?, ?, ?, '')
+      ON CONFLICT(job_id, role) DO UPDATE SET thread_id = excluded.thread_id
+    `,
+      )
+      .run(jobId, memberId, threadId);
+  }
+
+  scheduleModelRetry(job: Job, step: string, label: string, limit: number) {
+    return this.transaction(() => {
+      const row = this.db
+        .prepare(
+          `
+        INSERT INTO model_retries VALUES (?, ?, 1)
+        ON CONFLICT(job_id, step) DO UPDATE SET count = count + 1
+        WHERE count < ? RETURNING count
+      `,
+        )
+        .get(job.id, step, limit);
+      if (!row) return null;
+      const count = Number(row.count);
+      this.log(
+        job.sessionId,
+        label + " · 모델 연결 재시도 " + count + "/" + limit,
+        job.id,
+      );
+      return count;
+    });
+  }
+
+  readPendingModelTurn(jobId: string, step: string) {
+    return this.db
+      .prepare(
+        "SELECT thread_id AS threadId, turn_id AS turnId FROM pending_model_turns WHERE job_id = ? AND step = ?",
+      )
+      .get(jobId, step) as { threadId: string; turnId: string } | undefined;
+  }
+
+  savePendingModelTurn(
+    jobId: string,
+    step: string,
+    threadId: string,
+    turnId: string,
+  ) {
+    this.db
+      .prepare(
+        `INSERT INTO pending_model_turns VALUES (?, ?, ?, ?)
+      ON CONFLICT(job_id, step) DO UPDATE SET thread_id = excluded.thread_id, turn_id = excluded.turn_id`,
+      )
+      .run(jobId, step, threadId, turnId);
+  }
+
+  clearModelRetry(jobId: string, step: string) {
+    this.transaction(() => {
+      this.db
+        .prepare("DELETE FROM model_retries WHERE job_id = ? AND step = ?")
+        .run(jobId, step);
+      this.db
+        .prepare(
+          "DELETE FROM pending_model_turns WHERE job_id = ? AND step = ?",
+        )
+        .run(jobId, step);
+    });
   }
 
   saveAgentContext(

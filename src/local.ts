@@ -8,6 +8,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import type { Project } from "./actions";
+import { ModelConnectionError, ModelLimitError } from "./model-errors";
 
 const modelList = z.object({
   data: z.array(
@@ -25,7 +26,15 @@ async function connectLocal(signal: AbortSignal) {
       signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
       redirect: "error",
     });
-    if (!result.ok) throw new Error("로컬 모델 목록을 불러오지 못했어요.");
+    if (!result.ok) {
+      if (result.status === 429 || result.status === 402)
+        throw new ModelLimitError("로컬 모델이 사용 한도를 알렸어요.");
+      if (result.status === 408 || result.status >= 500)
+        throw new ModelConnectionError(
+          "로컬 모델 서버에 일시적으로 연결할 수 없어요.",
+        );
+      throw new Error("로컬 모델 목록을 불러오지 못했어요.");
+    }
     const { data } = modelList.parse(await result.json());
     model =
       data.find((item) => item.loaded)?.id ??
@@ -62,6 +71,8 @@ export async function decideLocal<T extends z.ZodType>(
     maxRetries: 0,
     abortSignal: signal,
   });
+  if (result.finishReason === "length")
+    throw new ModelLimitError("로컬 모델이 응답 길이 한도에 도달했어요.");
   return schema.parse(
     result.toolCalls.find((call) => call.toolName === "submit_result")?.input,
   );
@@ -112,6 +123,8 @@ export async function runLocal(
   for await (const part of reply.fullStream) {
     if (part.type === "error") throw part.error;
     if (part.type === "abort") signal.throwIfAborted();
+    if (part.type === "finish" && part.finishReason === "length")
+      throw new ModelLimitError("로컬 모델이 응답 길이 한도에 도달했어요.");
     if (part.type === "text-delta") {
       answered ||= !!part.text.trim();
       emit(part.text);

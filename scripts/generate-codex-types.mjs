@@ -16,6 +16,7 @@ const pending = [
   ...[
     "ThreadStartParams",
     "ThreadResumeParams",
+    "ThreadTurnsListParams",
     "TurnStartParams",
     "TurnInterruptParams",
     "CommandExecParams",

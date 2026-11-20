@@ -4,10 +4,12 @@ import { existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { z } from "zod";
 import type { Project } from "./actions";
+import { ModelConnectionError, ModelLimitError } from "./model-errors";
 
 import type { InitializeParams } from "./codex-protocol/InitializeParams";
 import type { ThreadStartParams } from "./codex-protocol/v2/ThreadStartParams";
 import type { ThreadResumeParams } from "./codex-protocol/v2/ThreadResumeParams";
+import type { ThreadTurnsListParams } from "./codex-protocol/v2/ThreadTurnsListParams";
 import type { TurnStartParams } from "./codex-protocol/v2/TurnStartParams";
 import type { TurnInterruptParams } from "./codex-protocol/v2/TurnInterruptParams";
 import type { CommandExecParams } from "./codex-protocol/v2/CommandExecParams";
@@ -17,6 +19,7 @@ type RequestParams = {
   initialize: InitializeParams;
   "thread/start": ThreadStartParams;
   "thread/resume": ThreadResumeParams;
+  "thread/turns/list": ThreadTurnsListParams;
   "turn/start": TurnStartParams;
   "turn/interrupt": TurnInterruptParams;
   "command/exec": CommandExecParams;
@@ -35,11 +38,48 @@ const deltaSchema = z.object({
   turnId: z.string(),
   delta: z.string(),
 });
+const turnError = z.object({
+  message: z.string(),
+  codexErrorInfo: z.unknown().optional(),
+});
+const transportError = z.object({ httpStatusCode: z.number().nullable() });
+function readTurnError(error: z.infer<typeof turnError> | null | undefined) {
+  const message = error?.message || "Codex 응답이 실패했어요.";
+  const info = error?.codexErrorInfo;
+  if (
+    typeof info === "string" &&
+    [
+      "contextWindowExceeded",
+      "sessionBudgetExceeded",
+      "usageLimitExceeded",
+      "rateLimitExceeded",
+    ].includes(info)
+  )
+    return new ModelLimitError(message);
+  if (info === "serverOverloaded" || info === "internalServerError")
+    return new ModelConnectionError(message);
+  if (info && typeof info === "object") {
+    const decoded = z.record(z.string(), z.unknown()).parse(info);
+    for (const kind of [
+      "httpConnectionFailed",
+      "responseStreamConnectionFailed",
+      "responseStreamDisconnected",
+    ]) {
+      if (!(kind in decoded)) continue;
+      const status = transportError.safeParse(decoded[kind]).data
+        ?.httpStatusCode;
+      if (status === 429 || status === 402) return new ModelLimitError(message);
+      if (!status || status === 408 || status >= 500)
+        return new ModelConnectionError(message);
+    }
+  }
+  return new Error(message);
+}
 const turnResult = z.object({
   turn: z.object({
     id: z.string(),
     status: z.string(),
-    error: z.object({ message: z.string() }).nullable().optional(),
+    error: turnError.nullable().optional(),
   }),
 });
 const turnNotification = turnResult.extend({ threadId: z.string() });
@@ -65,6 +105,8 @@ export class CodexConnection {
     if (this.process !== process) return;
     this.process = undefined;
     this.initialized = undefined;
+    if (process.exitCode === null && process.signalCode === null)
+      process.kill();
     for (const { reject } of this.replies.values()) reject(reason);
     this.replies.clear();
     for (const notify of this.listeners) notify("disconnect", reason);
@@ -86,7 +128,10 @@ export class CodexConnection {
       this.disconnect(process, new Error("Codex CLI를 실행할 수 없어요.")),
     );
     process.on("exit", () =>
-      this.disconnect(process, new Error("Codex 연결이 종료됐어요.")),
+      this.disconnect(
+        process,
+        new ModelConnectionError("Codex 연결이 종료됐어요."),
+      ),
     );
     createInterface({ input: process.stdout }).on("line", (line) => {
       let raw: unknown;
@@ -135,7 +180,8 @@ export class CodexConnection {
   }
 
   private write(payload: object) {
-    if (!this.process) throw new Error("Codex 연결이 종료됐어요.");
+    if (!this.process)
+      throw new ModelConnectionError("Codex 연결이 종료됐어요.");
     this.process.stdin.write(JSON.stringify(payload) + "\n");
   }
 
@@ -190,6 +236,10 @@ export class CodexConnection {
     rememberThread: (id: string) => void,
     outputSchema?: TurnStartParams["outputSchema"],
     recover?: () => string,
+    tracking?: {
+      resumeTurn: string | null;
+      onTurn: (threadId: string, turnId: string) => void;
+    },
   ) {
     await this.connect();
     signal.throwIfAborted();
@@ -219,6 +269,56 @@ export class CodexConnection {
           throw error;
         signal.throwIfAborted();
         prompt = recover();
+      }
+    }
+    if (thread && tracking?.resumeTurn) {
+      const history = z
+        .object({
+          data: z.array(
+            turnResult.shape.turn.extend({
+              items: z.array(
+                z.object({
+                  type: z.string(),
+                  text: z.unknown().optional(),
+                  phase: z.unknown().optional(),
+                }),
+              ),
+            }),
+          ),
+        })
+        .parse(
+          await this.rpc("thread/turns/list", {
+            threadId: thread,
+            limit: 25,
+            itemsView: "full",
+          }),
+        );
+      signal.throwIfAborted();
+      const existing = history.data.find(
+        ({ id }) => id === tracking.resumeTurn,
+      );
+      if (existing?.status === "completed") {
+        const messages = existing.items.filter(
+          ({ type, text }) =>
+            type === "agentMessage" && typeof text === "string",
+        );
+        const text = (
+          messages.findLast(({ phase }) => phase === "final_answer") ??
+          messages.at(-1)
+        )?.text;
+        if (typeof text !== "string" || !text)
+          throw new Error("완료된 Codex 실행에서 결과를 복구할 수 없어요.");
+        rememberThread(thread);
+        emit(text);
+        return;
+      }
+      if (existing?.status === "inProgress")
+        throw new ModelConnectionError(
+          "이전 Codex 실행의 종료를 기다리고 있어요.",
+        );
+      if (existing?.status === "failed") {
+        const error = readTurnError(existing.error);
+        if (error instanceof ModelLimitError) throw error;
       }
     }
     thread ??= threadResult.parse(
@@ -280,9 +380,7 @@ export class CodexConnection {
           return;
         const { turn } = result.data;
         finish(
-          turn.status === "failed"
-            ? new Error(turn.error?.message || "Codex 응답이 실패했어요.")
-            : undefined,
+          turn.status === "failed" ? readTurnError(turn.error) : undefined,
         );
       }
     };
@@ -298,6 +396,7 @@ export class CodexConnection {
         }),
       ).turn;
       turnId = turn.id;
+      tracking?.onTurn(activeThread, turnId);
       for (const event of early) off(...event);
       if (signal.aborted) interrupt();
       await complete;

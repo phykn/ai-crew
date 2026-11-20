@@ -901,3 +901,172 @@ test.each(["written", "external", "copy-only"] as const)(
     }
   },
 );
+
+test.each(["recovers", "exhausted", "limited"] as const)(
+  "model connection %s without replaying writes or exceeding the retry allowance",
+  async (scenario) => {
+    const folder = realpathSync(
+      mkdtempSync(join(tmpdir(), "crew-model-retry-")),
+    );
+    const database = join(folder, ".crew.sqlite");
+    let store = new CrewStore(database);
+    let workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+    let calls = 0;
+    try {
+      vi.mocked(decideLocal).mockImplementation(async (system) => {
+        if (system.startsWith("Plan text-file")) {
+          calls++;
+          if (scenario === "limited") throw new Error("Usage limit exceeded");
+          if (scenario === "exhausted" || calls === 1)
+            throw new TypeError("fetch failed", {
+              cause: Object.assign(new Error("socket"), { code: "ECONNRESET" }),
+            });
+          return {
+            paths: ["file.txt"],
+            directories: [],
+            moves: [],
+            goal: "파일 추가",
+            criterion: "문구 확인",
+          };
+        }
+        return { passed: true, note: "확인했어요." };
+      });
+      store.openFolder(folder);
+      const session = store.snapshot().session!;
+      const { id } = workflow.delegate(session.id, randomUUID(), "파일 추가");
+      const expected =
+        scenario === "recovers"
+          ? "approval"
+          : scenario === "limited"
+            ? "stopped"
+            : "failed";
+      await vi.waitFor(() => expect(store.getJob(id).state).toBe(expected), {
+        timeout: 3000,
+      });
+      expect(calls).toBe(
+        scenario === "recovers" ? 2 : scenario === "limited" ? 1 : 4,
+      );
+      expect(store.readChanges(session.id)).toHaveLength(0);
+      expect(
+        store
+          .snapshot()
+          .activity.filter(({ text }) => text.includes("모델 연결 재시도")),
+      ).toHaveLength(
+        scenario === "recovers" ? 1 : scenario === "limited" ? 0 : 3,
+      );
+      if (scenario === "limited")
+        expect(store.getMessages(session.id).at(-1)?.text).toContain(
+          "모델이 한도에 도달",
+        );
+      if (scenario === "exhausted") {
+        workflow.close();
+        store.close();
+        store = new CrewStore(database);
+        workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+        workflow.resume(id);
+        await vi.waitFor(() => {
+          expect(calls).toBe(5);
+          expect(store.getJob(id).state).toBe("failed");
+        });
+        expect(
+          store
+            .snapshot()
+            .activity.filter(({ text }) => text.includes("모델 연결 재시도")),
+        ).toHaveLength(3);
+      }
+    } finally {
+      workflow.close();
+      store.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
+  },
+);
+
+test("a disconnected Codex role resumes its new thread before falling back to the saved handoff", async () => {
+  const folder = realpathSync(
+    mkdtempSync(join(tmpdir(), "crew-codex-reconnect-")),
+  );
+  const store = new CrewStore(":memory:");
+  const codex = new CodexConnection();
+  const workflow = new CrewWorkflow(store, codex, () => {});
+  try {
+    store.openFolder(folder);
+    const session = store.snapshot().session!;
+    store.updateMember(session.projectId, "plan", { provider: "codex" });
+    const calls = vi.spyOn(codex, "run");
+    calls.mockImplementationOnce(
+      async (
+        _project,
+        saved,
+        _prompt,
+        _signal,
+        emit,
+        remember,
+        _schema,
+        _recover,
+        tracking,
+      ) => {
+        expect(saved).toBeNull();
+        remember("new-thread");
+        tracking?.onTurn("new-thread", "interrupted-turn");
+        emit('{"truncated":');
+        throw Object.assign(new Error("connection reset"), {
+          code: "ECONNRESET",
+        });
+      },
+    );
+    calls.mockImplementationOnce(
+      async (
+        _project,
+        saved,
+        _prompt,
+        _signal,
+        emit,
+        remember,
+        _schema,
+        recover,
+        tracking,
+      ) => {
+        expect(saved).toBe("new-thread");
+        expect(tracking?.resumeTurn).toBe("interrupted-turn");
+        expect(recover?.()).toContain("파일 추가");
+        remember("recovered-thread");
+        emit(
+          JSON.stringify({
+            paths: ["file.txt"],
+            moves: [],
+            directories: [],
+            goal: "파일 추가",
+            criterion: "파일 확인",
+          }),
+        );
+      },
+    );
+    vi.mocked(decideLocal).mockResolvedValue({
+      passed: true,
+      note: "확인했어요.",
+    });
+    const { id } = workflow.delegate(session.id, randomUUID(), "파일 추가");
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("approval"));
+    expect(calls).toHaveBeenCalledTimes(2);
+    expect(store.getAgentContext(id, "plan")?.threadId).toBe(
+      "recovered-thread",
+    );
+    expect(store.snapshot().activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          jobId: id,
+          text: expect.stringContaining("모델 연결 재시도 1/3"),
+        }),
+        expect.objectContaining({
+          jobId: id,
+          text: expect.stringContaining("이전 Codex 세션 new-thread"),
+        }),
+      ]),
+    );
+  } finally {
+    workflow.close();
+    store.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});

@@ -131,18 +131,19 @@ try {
   ).toHaveCount(1);
   await expect(page.locator(".current-jobs .job")).toContainText("승인 대기");
   await question.getByRole("button", { name: "승인 업무 로그 열기" }).click();
-  await expect(
-    page.getByRole("region", { name: "권한 승인", exact: true }),
-  ).toHaveCount(0);
+  // 넓은 창에서는 대화를 닫지 않고 오른쪽에 업무 로그를 나란히 연다.
+  await expect(page.locator(".split-log")).toBeVisible();
+  await expect(question).toContainText("notes.txt");
   await expect(
     page.getByText("승인 수동 · notes.txt · 결정 기록 없음", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "업무로 돌아가기" }).click();
+  await expect(page.locator(".split-log")).toHaveCount(0);
   await expect(question).toContainText("notes.txt");
   await application.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setSize(440, 620),
   );
-  await expect(page.locator(".compose-tools .folder")).toBeVisible();
+  await expect(page.locator(".toolbar .project-toggle")).toBeVisible();
   await expect(page.getByRole("combobox", { name: "승인 모드" })).toBeVisible();
   const sessionsButton = page.getByRole("button", {
     name: "세션 목록",

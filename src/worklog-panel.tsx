@@ -10,6 +10,7 @@ type WorklogPanelProps = {
   run: (action: Action, resetDraft?: boolean) => Promise<boolean>;
   setLogJob: (jobId: string | null) => void;
   setView: (tab: Snapshot["view"]["tab"]) => void;
+  close?: () => void;
 };
 
 export function WorklogPanel({
@@ -19,6 +20,7 @@ export function WorklogPanel({
   run,
   setLogJob,
   setView,
+  close,
 }: WorklogPanelProps) {
   const activity =
     data?.activity.filter((entry) => !logJob || entry.jobId === logJob) || [];
@@ -32,7 +34,10 @@ export function WorklogPanel({
             ← 전체 기록
           </button>
           {selectedLogJob && (
-            <button className="log-link" onClick={() => setView("chat")}>
+            <button
+              className="log-link"
+              onClick={() => (close ? close() : setView("chat"))}
+            >
               업무로 돌아가기
             </button>
           )}

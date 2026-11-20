@@ -365,6 +365,7 @@ export type Session = {
   workflowId: string | null;
 };
 export type Completion =
+  | "queued"
   | "running"
   | "stopping"
   | "complete"

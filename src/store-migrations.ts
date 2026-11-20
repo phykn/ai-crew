@@ -482,7 +482,7 @@ export function initStoreSchema(db: DatabaseSync) {
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",
     );
     db.exec(
-      "UPDATE messages SET state = 'stopped' WHERE state IN ('running', 'stopping');",
+      "UPDATE messages SET state = 'stopped' WHERE state IN ('running', 'stopping', 'queued');",
     );
     db.exec(
       "UPDATE tool_approvals SET decision = 'deny', actor = COALESCE(actor, '앱 종료') WHERE decision IS NULL;",

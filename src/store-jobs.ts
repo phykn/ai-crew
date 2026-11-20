@@ -40,7 +40,12 @@ export class StoreJobs extends StoreWorkspace {
     });
   }
 
-  beginResponse(sessionId: string, requestId: string, text: string) {
+  beginResponse(
+    sessionId: string,
+    requestId: string,
+    text: string,
+    state: "running" | "queued" = "running",
+  ) {
     const prior = this.db
       .prepare("SELECT session_id, text FROM requests WHERE id = ?")
       .get(requestId);
@@ -55,7 +60,7 @@ export class StoreJobs extends StoreWorkspace {
         "INSERT INTO messages (id, session_id, role, text, state) VALUES (?, ?, ?, ?, ?)",
       );
       add.run(requestId, sessionId, "user", text, "complete");
-      add.run(responseId, sessionId, "assistant", "", "running");
+      add.run(responseId, sessionId, "assistant", "", state);
       this.db
         .prepare("INSERT INTO requests VALUES (?, ?, ?, ?)")
         .run(requestId, sessionId, text, responseId);
@@ -69,6 +74,15 @@ export class StoreJobs extends StoreWorkspace {
     return responseId;
   }
 
+  /** 앞선 답변이 끝난 뒤 기다리던 응답을 시작한다. */
+  startResponse(id: string) {
+    this.db
+      .prepare(
+        "UPDATE messages SET state = 'running' WHERE id = ? AND state = 'queued'",
+      )
+      .run(id);
+  }
+
   append(id: string, delta: string) {
     this.db
       .prepare(
@@ -80,7 +94,7 @@ export class StoreJobs extends StoreWorkspace {
   finish(id: string, state: Completion, error: string | null = null) {
     this.db
       .prepare(
-        "UPDATE messages SET state = ?, error = ? WHERE id = ? AND state IN ('running', 'stopping')",
+        "UPDATE messages SET state = ?, error = ? WHERE id = ? AND state IN ('running', 'stopping', 'queued')",
       )
       .run(state, error, id);
   }

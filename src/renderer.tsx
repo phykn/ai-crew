@@ -48,6 +48,7 @@ function Workspace() {
   const [menu, setMenu] = useState<
     "projects" | "sessions" | "notifications" | null
   >(null);
+  const [splitLog, setSplitLog] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [settingsMember, setSettingsMember] = useState<string | null>(null);
@@ -124,6 +125,38 @@ function Workspace() {
     if (area && following.current) area.scrollTop = area.scrollHeight;
   }, [data?.messages, view]);
 
+  // 열린 메뉴는 바깥 클릭이나 Escape로 닫는다.
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (!target?.closest?.(".menu,[aria-expanded]")) setMenu(null);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [menu]);
+
+  // 창이 좁아지면 나란히 보던 업무 로그를 로그 탭으로 옮긴다.
+  useEffect(() => {
+    if (!splitLog) return;
+    const narrow = window.matchMedia("(max-width: 840px)");
+    const sync = () => {
+      if (!narrow.matches) return;
+      setSplitLog(false);
+      setView("log");
+    };
+    sync();
+    narrow.addEventListener("change", sync);
+    return () => narrow.removeEventListener("change", sync);
+  }, [splitLog]);
+
   function patchView(patch: Partial<Snapshot["view"]>) {
     const session = dataRef.current?.session;
     if (!session) return;
@@ -132,11 +165,27 @@ function Workspace() {
       .then((snapshot) => apply(snapshot))
       .catch((problem: Error) => setError(problem.message));
   }
-  const setView = (tab: Snapshot["view"]["tab"]) =>
-    data?.session ? patchView({ tab }) : setLocalView(tab);
+  const setView = (tab: Snapshot["view"]["tab"]) => {
+    // 로그 탭을 고르면 나란히 보던 로그 패널은 접는다.
+    if (tab === "log") setSplitLog(false);
+    if (data?.session) patchView({ tab });
+    else setLocalView(tab);
+  };
   const setShowCamp = (camp: boolean) =>
     data?.session ? patchView({ camp }) : setLocalCamp(camp);
   const setLogJob = (jobId: string | null) => patchView({ logJobId: jobId });
+
+  // 넓은 창에서는 업무 로그를 대화 옆에 나란히 열고, 좁은 창에서는 로그 탭으로 넘긴다.
+  function openLog(jobId: string) {
+    if (!dataRef.current?.session) return;
+    if (window.matchMedia("(max-width: 840px)").matches) {
+      setSplitLog(false);
+      patchView({ logJobId: jobId, tab: "log" });
+      return;
+    }
+    setSplitLog(true);
+    patchView({ logJobId: jobId, tab: "chat" });
+  }
   const setMemorySection = (section: Snapshot["view"]["memorySection"]) =>
     data?.session
       ? patchView({ memorySection: section })
@@ -160,6 +209,7 @@ function Workspace() {
   async function navigate(action: Action) {
     setMenu(null);
     setLogJob(null);
+    setSplitLog(false);
     setFocusedApprovalId(null);
     setAddingMember(false);
     setEditingMember(null);
@@ -194,13 +244,7 @@ function Workspace() {
   async function send(event: FormEvent) {
     event.preventDefault();
     const text = (revision?.text ?? draft).trim();
-    if (
-      !data?.session ||
-      !text ||
-      sending ||
-      (running && (revision || !findChatCommand(text)))
-    )
-      return;
+    if (!data?.session || !text || sending) return;
     setSending(true);
     following.current = true;
     const request = {
@@ -252,15 +296,11 @@ function Workspace() {
 
   return (
     <main
-      className={showCamp ? "workspace camp-visible" : "workspace"}
+      className={
+        (showCamp ? "workspace camp-visible" : "workspace") +
+        (splitLog && view === "chat" ? " split-visible" : "")
+      }
       style={{ "--panel-width": panelWidth + "px" } as CSSProperties}
-      onClick={(event) => {
-        if (!(event.target as Element).closest(".menu,[aria-expanded]"))
-          setMenu(null);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") setMenu(null);
-      }}
     >
       <CampPanel
         data={data}
@@ -346,7 +386,8 @@ function Workspace() {
           navigate={navigate}
           run={run}
         />
-        {view === "workflow" ? (
+        <div className="pane">
+          {view === "workflow" ? (
           data && (
             <WorkflowPanel
               data={data}
@@ -404,11 +445,10 @@ function Workspace() {
             revisionJob={revisionJob}
             sending={sending}
             composeText={composeText}
-            clearing={clearing}
             commandSuggestions={commandSuggestions}
             error={error}
-            menu={menu}
-            setMenu={setMenu}
+            showCamp={showCamp}
+            setShowCamp={setShowCamp}
             messages={messages}
             following={following}
             composer={composer}
@@ -417,13 +457,38 @@ function Workspace() {
             send={send}
             navigate={navigate}
             run={run}
-            setView={setView}
-            setLogJob={setLogJob}
+            openLog={openLog}
             setToolFocus={setToolFocus}
             setFocusedApprovalId={setFocusedApprovalId}
           />
         )}
+        </div>
       </section>
+      {splitLog && view === "chat" && (
+        <aside className="split-log" aria-label="업무 로그">
+          <div className="split-log-head">
+            <strong>업무 로그</strong>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="업무 로그 닫기"
+              title="업무 로그 닫기"
+              onClick={() => setSplitLog(false)}
+            >
+              ✕
+            </button>
+          </div>
+          <WorklogPanel
+            data={data}
+            logJob={logJob}
+            selectedLogJob={selectedLogJob}
+            run={run}
+            setLogJob={setLogJob}
+            setView={setView}
+            close={() => setSplitLog(false)}
+          />
+        </aside>
+      )}
     </main>
   );
 }

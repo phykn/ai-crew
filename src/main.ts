@@ -9,6 +9,7 @@ import {
 } from "./actions";
 import { ActionRunner } from "./app-actions";
 import { appTools } from "./app-tools";
+import { ChatQueue } from "./chat-queue";
 import { findChatCommand } from "./chat-commands";
 import { CodexConnection } from "./codex";
 import { classifyModelFailure } from "./model-errors";
@@ -48,6 +49,7 @@ async function startApp() {
     string,
     { id: string; request: string; controller: AbortController }
   >();
+  const waiting = new ChatQueue();
   let window: BrowserWindow | null;
   let closing = false;
   const workflow = new CrewWorkflow(store, codex, () => publish(null), mcp);
@@ -72,6 +74,7 @@ async function startApp() {
         (message) =>
           message.id !== id &&
           message.text &&
+          !waiting.requests(sessionId).includes(message.id) &&
           (message.role === "user" ||
             message.state === "complete" ||
             message.state === "stopped"),
@@ -192,8 +195,24 @@ async function startApp() {
           failure,
         );
         publish(null);
+        const next = waiting.shift(sessionId);
+        if (next) {
+          startResponse(sessionId, next);
+          publish(null);
+        }
       }
     }
+  }
+
+  /** 응답 하나를 시작한다. 답변 중에 보낸 메시지는 앞선 답변이 끝난 뒤 여기서 시작한다. */
+  function startResponse(
+    sessionId: string,
+    { responseId, requestId, text }: { responseId: string; requestId: string; text: string },
+  ) {
+    store.startResponse(responseId);
+    const controller = new AbortController();
+    runs.set(sessionId, { id: responseId, request: requestId, controller });
+    void generate(sessionId, responseId, text, controller);
   }
 
   const applyModelConnections = (
@@ -229,9 +248,11 @@ async function startApp() {
     send: (action) => {
       const command = findChatCommand(action.text);
       const current = runs.get(action.sessionId);
-      if (current && current.request !== action.requestId && !command)
-        throw new Error("이 대화에서 이미 답변을 생성하고 있어요.");
+      if (current?.request === action.requestId) return;
       if (command === "/clear") {
+        // 새 대화를 열면 앞 대화에 쌓인 대기 메시지는 접는다.
+        for (const pending of waiting.take(action.sessionId))
+          store.finish(pending.responseId, "stopped");
         store.clearSession(action.sessionId, action.requestId);
         return;
       }
@@ -242,6 +263,23 @@ async function startApp() {
         )
       )
         throw new Error("크루에서 비서를 재고용해 주세요.");
+      if (current) {
+        // 답변 중에 보낸 메시지는 앞선 답변이 끝난 뒤 이어서 답한다.
+        const responseId = store.beginResponse(
+          action.sessionId,
+          action.requestId,
+          action.text,
+          "queued",
+        );
+        if (responseId)
+          waiting.add(action.sessionId, {
+            responseId,
+            requestId: action.requestId,
+            text: action.text,
+          });
+        publish(null);
+        return;
+      }
       if (
         workflow.routeFollowup(
           action.sessionId,
@@ -255,22 +293,22 @@ async function startApp() {
         action.requestId,
         action.text,
       );
-      if (id) {
-        const controller = new AbortController();
-        runs.set(action.sessionId, {
-          id,
-          request: action.requestId,
-          controller,
+      if (id)
+        startResponse(action.sessionId, {
+          responseId: id,
+          requestId: action.requestId,
+          text: action.text,
         });
-        void generate(action.sessionId, id, action.text, controller);
-      }
     },
     stop: (sessionId, responseId) => {
       const run = runs.get(sessionId);
-      if (run?.id === responseId && !run.controller.signal.aborted) {
-        store.finish(run.id, "stopping");
-        run.controller.abort();
-      }
+      if (!run || run.id !== responseId || run.controller.signal.aborted) return;
+      store.finish(run.id, "stopping");
+      run.controller.abort();
+      // 멈추면 기다리던 메시지도 함께 접는다.
+      for (const pending of waiting.take(sessionId))
+        store.finish(pending.responseId, "stopped");
+      publish(null);
     },
   });
 

@@ -198,6 +198,14 @@ async function startApp() {
           )
         )
           throw new Error("크루에서 비서를 재고용해 주세요.");
+        if (
+          workflow.routeFollowup(
+            action.sessionId,
+            action.requestId,
+            action.text,
+          )
+        )
+          break;
         const id = store.beginResponse(
           action.sessionId,
           action.requestId,
@@ -222,6 +230,13 @@ async function startApp() {
         break;
       case "job.resume":
         workflow.resume(action.jobId);
+        break;
+      case "job.followup.select":
+        workflow.selectFollowup(
+          action.sessionId,
+          action.requestId,
+          action.jobId,
+        );
         break;
       case "job.revise":
         workflow.revise(
@@ -289,5 +304,6 @@ async function startApp() {
     codex.close();
     store.close();
   });
+  workflow.restoreFollowups();
   await showWindow();
 }

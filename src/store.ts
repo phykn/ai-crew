@@ -31,7 +31,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 17)
+    if (migration.user_version > 18)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -256,6 +256,20 @@ export class CrewStore {
           thread_id TEXT NOT NULL, turn_id TEXT NOT NULL, PRIMARY KEY(job_id, step)
         );
         PRAGMA user_version = 17;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 18) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE work_followups (
+          id TEXT PRIMARY KEY REFERENCES requests(id),
+          session_id TEXT NOT NULL REFERENCES sessions(id),
+          text TEXT NOT NULL, candidate_ids TEXT NOT NULL,
+          needs_detail INTEGER NOT NULL, job_id TEXT REFERENCES jobs(id),
+          state TEXT NOT NULL
+        );
+        PRAGMA user_version = 18;
         COMMIT;
       `);
     }
@@ -646,6 +660,140 @@ export class CrewStore {
     return job;
   }
 
+  stageFollowup(
+    sessionId: string,
+    id: string,
+    text: string,
+    candidates: string[],
+    needsDetail: boolean,
+  ) {
+    this.transaction(() => {
+      const prior = this.db
+        .prepare("SELECT session_id, text FROM requests WHERE id = ?")
+        .get(id);
+      if (prior) {
+        if (prior.session_id !== sessionId || prior.text !== text)
+          throw new Error("다른 전송에 쓰인 요청이에요.");
+        return;
+      }
+      this.db
+        .prepare(
+          "INSERT INTO messages (id, session_id, role, text, state) VALUES (?, ?, 'user', ?, 'complete')",
+        )
+        .run(randomUUID(), sessionId, text);
+      this.db
+        .prepare("INSERT INTO requests (id, session_id, text) VALUES (?, ?, ?)")
+        .run(id, sessionId, text);
+      this.db
+        .prepare(
+          "INSERT INTO work_followups (id, session_id, text, candidate_ids, needs_detail, state) VALUES (?, ?, ?, ?, ?, 'selecting')",
+        )
+        .run(
+          id,
+          sessionId,
+          text,
+          JSON.stringify(candidates),
+          Number(needsDetail),
+        );
+      this.saveDraft(sessionId, "");
+    });
+  }
+
+  selectFollowup(sessionId: string, id: string, jobId: string | null) {
+    return this.transaction(() => {
+      const item = this.db
+        .prepare(
+          "SELECT state, job_id, candidate_ids FROM work_followups WHERE id = ? AND session_id = ?",
+        )
+        .get(id, sessionId);
+      if (!item) throw new Error("이 세션의 추가 지시를 찾을 수 없어요.");
+      if (item.state !== "selecting") {
+        if (item.job_id === jobId) return false;
+        throw new Error("이미 처리한 추가 지시예요.");
+      }
+      if (!jobId) {
+        this.db
+          .prepare("UPDATE work_followups SET state = 'cancelled' WHERE id = ?")
+          .run(id);
+        return false;
+      }
+      if (
+        !(JSON.parse(String(item.candidate_ids)) as string[]).includes(jobId) ||
+        this.getJob(jobId).sessionId !== sessionId
+      )
+        throw new Error("질문에 표시된 업무를 선택해 주세요.");
+      this.db
+        .prepare(
+          "UPDATE work_followups SET state = 'queued', job_id = ? WHERE id = ?",
+        )
+        .run(jobId, id);
+      this.log(sessionId, "사용자 · 이 업무에 추가 지시 연결", jobId);
+      return true;
+    });
+  }
+
+  applyQueuedFollowup(job: Job) {
+    return this.transaction(() => {
+      const item = this.db
+        .prepare(
+          "SELECT id, text, needs_detail FROM work_followups WHERE job_id = ? AND state = 'queued' ORDER BY rowid LIMIT 1",
+        )
+        .get(job.id);
+      if (!item) return null;
+      this.db
+        .prepare("UPDATE work_followups SET state = 'applied' WHERE id = ?")
+        .run(item.id);
+      if (item.needs_detail) {
+        this.insertJobQuestion(
+          job,
+          "이 업무에서 어떻게 바꿀까요? " + (job.plan?.goal ?? job.request),
+        );
+        return "clarification";
+      }
+      this.db
+        .prepare("INSERT INTO job_revisions VALUES (?, ?, ?, ?, NULL)")
+        .run(
+          item.id,
+          job.id,
+          job.request,
+          job.plan && JSON.stringify(job.plan),
+        );
+      this.db
+        .prepare(
+          "UPDATE jobs SET request = ?, state = 'planning', plan = NULL, approval_id = NULL, execution_plan_id = NULL WHERE id = ?",
+        )
+        .run(item.text, job.id);
+      this.log(
+        job.sessionId,
+        "비서 → 플랜 · 선택한 업무에 추가 지시 반영",
+        job.id,
+      );
+      return "planning";
+    });
+  }
+
+  readFollowups(sessionId: string) {
+    return this.db
+      .prepare(
+        "SELECT id, text, candidate_ids FROM work_followups WHERE session_id = ? AND state = 'selecting' ORDER BY rowid",
+      )
+      .all(sessionId)
+      .map(({ id, text, candidate_ids }) => ({
+        id: String(id),
+        text: String(text),
+        candidateIds: JSON.parse(String(candidate_ids)) as string[],
+      }));
+  }
+
+  queuedFollowupJobs() {
+    return this.db
+      .prepare(
+        "SELECT DISTINCT job_id FROM work_followups WHERE state = 'queued' AND job_id IS NOT NULL",
+      )
+      .all()
+      .map(({ job_id }) => String(job_id));
+  }
+
   readQueuedJobs() {
     return this.db
       .prepare("SELECT id FROM jobs WHERE state = 'queued' ORDER BY rowid")
@@ -654,17 +802,19 @@ export class CrewStore {
   }
 
   askJobQuestion(job: Job, text: string) {
-    this.transaction(() => {
-      this.db
-        .prepare("INSERT INTO job_questions VALUES (?, ?, ?)")
-        .run(randomUUID(), job.id, text);
-      this.db
-        .prepare(
-          "UPDATE jobs SET state = 'clarification', approval_id = NULL WHERE id = ?",
-        )
-        .run(job.id);
-      this.log(job.sessionId, "비서 · 사용자 확인 요청 · " + text, job.id);
-    });
+    this.transaction(() => this.insertJobQuestion(job, text));
+  }
+
+  private insertJobQuestion(job: Job, text: string) {
+    this.db
+      .prepare("INSERT INTO job_questions VALUES (?, ?, ?)")
+      .run(randomUUID(), job.id, text);
+    this.db
+      .prepare(
+        "UPDATE jobs SET state = 'clarification', approval_id = NULL WHERE id = ?",
+      )
+      .run(job.id);
+    this.log(job.sessionId, "비서 · 사용자 확인 요청 · " + text, job.id);
   }
 
   reviseJob(job: Job, requestId: string, text: string, questionId?: string) {
@@ -1262,6 +1412,7 @@ export class CrewStore {
       session,
       messages: session ? this.getMessages(session.id) : [],
       jobs: session ? this.readJobs(session.id) : [],
+      followups: session ? this.readFollowups(session.id) : [],
       members: current ? this.readMembers(current.id) : [],
       assignees: session
         ? (this.db

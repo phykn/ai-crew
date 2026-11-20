@@ -222,6 +222,7 @@ function Workspace() {
   const approval = data?.jobs.find((job) => job.state === "approval");
   const revisionJob = data?.jobs.find((job) => job.id === revision?.id);
   const firstQuestion = data?.jobs.find((job) => job.clarification);
+  const followup = data?.followups[0];
   const composeText = revision?.text ?? draft;
   const clearing = !revision && composeText.trim() === "/clear";
   const currentJobs =
@@ -773,6 +774,50 @@ function Workspace() {
               )}
             </div>
             <div className="footer">
+              {followup && data?.session && (
+                <section className="decision" aria-label="추가 지시 업무 선택">
+                  <div>
+                    <p>어느 업무에 적용할까요?</p>
+                    <small>{followup.text}</small>
+                    <div className="decision-actions">
+                      {followup.candidateIds.map((id) => {
+                        const job = data.jobs.find((item) => item.id === id);
+                        return (
+                          job && (
+                            <button
+                              type="button"
+                              key={id}
+                              onClick={() =>
+                                void run({
+                                  type: "job.followup.select",
+                                  sessionId: data.session!.id,
+                                  requestId: followup.id,
+                                  jobId: id,
+                                })
+                              }
+                            >
+                              {job.plan?.goal ?? job.request}
+                            </button>
+                          )
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void run({
+                            type: "job.followup.select",
+                            sessionId: data.session!.id,
+                            requestId: followup.id,
+                            jobId: null,
+                          })
+                        }
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              )}
               {firstQuestion?.clarification && !revision?.questionId && (
                 <section className="decision" aria-label="비서의 확인 질문">
                   <div>

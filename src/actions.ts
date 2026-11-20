@@ -119,6 +119,12 @@ export const actions = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("job.stop"), jobId: identifier }),
   z.strictObject({ type: z.literal("job.resume"), jobId: identifier }),
   z.strictObject({
+    type: z.literal("job.followup.select"),
+    sessionId: identifier,
+    requestId: identifier,
+    jobId: identifier.nullable(),
+  }),
+  z.strictObject({
     type: z.literal("job.revise"),
     jobId: identifier,
     sessionId: identifier,
@@ -253,6 +259,7 @@ export type Snapshot = {
   messages: Message[];
   activity: Activity[];
   jobs: Job[];
+  followups: { id: string; text: string; candidateIds: string[] }[];
   changes: WorkChange[];
 };
 export type ChatEvent = {

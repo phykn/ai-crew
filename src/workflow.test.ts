@@ -32,7 +32,7 @@ test("peer consultation and a follow-up share a job with separate approvals", as
     let styleTurns = 0;
     let reviewTurns = 0;
     vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
-      if (system.startsWith("Plan text-file")) {
+      if (system.startsWith("Plan only the changes")) {
         if (followUp) expect(prompt).toContain('"previousPath":"notice.txt"');
         if (replan && !followUp)
           expect(prompt).toContain("검증할 문구를 명시해 주세요.");
@@ -146,6 +146,8 @@ test("peer consultation and a follow-up share a job with separate approvals", as
     workflow.answer(id, approval, true);
     workflow.answer(id, approval, true);
     await vi.waitFor(() => expect(store.getJob(id).state).toBe("complete"));
+    workflow.stop(id);
+    expect(store.getJob(id).state).toBe("complete");
     expect(readFileSync(file, "utf8")).toBe("After\n");
     const [firstChange] = store.readChanges(sessionId);
     expect(firstChange).toMatchObject({
@@ -237,7 +239,7 @@ test("overlapping jobs replan and checks stay attached to the version they revie
       const target = { First: "One", Second: "Two", Third: "Three" }[
         String(request)
       ];
-      if (system.startsWith("Plan text-file"))
+      if (system.startsWith("Plan only the changes"))
         return { paths: ["notice.txt"], goal: request, criterion: target };
       if (system.startsWith("Implement only")) {
         if (request === "First") await firstEdit.promise;
@@ -358,7 +360,7 @@ test("stopping one queued role request leaves work ahead and behind it intact", 
   const requested: string[] = [];
   try {
     vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
-      if (system.startsWith("Plan text-file")) {
+      if (system.startsWith("Plan only the changes")) {
         const { request } = JSON.parse(prompt);
         requested.push(request);
         if (request === "First") await release.promise;
@@ -426,7 +428,7 @@ test("unresolved peer guidance waits for the current user question across restar
   try {
     vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
       const clarified = prompt.includes("사용자 답변: Final");
-      if (system.startsWith("Plan text-file"))
+      if (system.startsWith("Plan only the changes"))
         return {
           paths: ["notice.txt"],
           goal: "문구 변경",
@@ -517,7 +519,7 @@ test("a coordinated edit reserves all files and rejects an out-of-scope write be
     let batchPass = 0;
     vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
       const { request, path, files } = JSON.parse(prompt.split("\n\n").at(-1)!);
-      if (system.startsWith("Plan text-file"))
+      if (system.startsWith("Plan only the changes"))
         return {
           paths:
             request === "Nested"
@@ -705,7 +707,7 @@ test("moving a file reserves both endpoints, preserves bytes, and never overwrit
   try {
     vi.mocked(decideLocal).mockImplementation(async (system, input) => {
       const { request } = JSON.parse(input.split("\n\n").at(-1)!);
-      if (system.startsWith("Plan text-file"))
+      if (system.startsWith("Plan only the changes"))
         return {
           goal: request,
           criterion: "preserve bytes",
@@ -863,7 +865,7 @@ test.each(["written", "external", "copy-only"] as const)(
       ]);
 
       vi.mocked(decideLocal).mockImplementation(async (system) => {
-        expect(system).not.toMatch(/^(Plan text-file|Implement only)/);
+        expect(system).not.toMatch(/^(Plan only the changes|Implement only)/);
         if (system.startsWith("Choose an independent"))
           return {
             kind: "text",
@@ -914,7 +916,7 @@ test.each(["recovers", "exhausted", "limited"] as const)(
     let calls = 0;
     try {
       vi.mocked(decideLocal).mockImplementation(async (system) => {
-        if (system.startsWith("Plan text-file")) {
+        if (system.startsWith("Plan only the changes")) {
           calls++;
           if (scenario === "limited") throw new Error("Usage limit exceeded");
           if (scenario === "exhausted" || calls === 1)
@@ -1065,6 +1067,181 @@ test("a disconnected Codex role resumes its new thread before falling back to th
       ]),
     );
   } finally {
+    workflow.close();
+    store.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test.each([
+  { timing: "before completion", clear: false },
+  { timing: "after completion", clear: false },
+  { timing: "after completion", clear: true },
+] as const)(
+  "the chosen follow-up affects only that job when selected $timing (clear=$clear)",
+  async ({ timing, clear }) => {
+    const folder = realpathSync(mkdtempSync(join(tmpdir(), "crew-followup-")));
+    const database = join(folder, ".crew.sqlite");
+    writeFileSync(join(folder, "first.txt"), "Before\n");
+    writeFileSync(join(folder, "second.txt"), "Other\n");
+    let store = new CrewStore(database);
+    let workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+    try {
+      vi.mocked(decideLocal).mockImplementation(async (system, input) => {
+        if (system.startsWith("Plan only the changes"))
+          return {
+            paths: [input.includes("Second") ? "second.txt" : "first.txt"],
+            moves: [],
+            directories: [],
+            goal: input.includes("Second") ? "Second" : "First",
+            criterion: "확인",
+          };
+        if (system.startsWith("Implement only"))
+          return {
+            content: "After",
+            ending: "preserve",
+            consult: "none",
+            question: "",
+          };
+        if (system.startsWith("Choose an independent"))
+          return {
+            kind: "text",
+            expected: "After",
+            exact: true,
+            ending: "preserve",
+            reason: "",
+          };
+        return { passed: true, note: "확인했어요.", findings: [] };
+      });
+      store.openFolder(folder);
+      const { id: sessionId } = store.snapshot().session!;
+      const first = workflow.delegate(sessionId, randomUUID(), "First").id;
+      const second = workflow.delegate(sessionId, randomUUID(), "Second").id;
+      await vi.waitFor(() => {
+        expect(store.getJob(first).state).toBe("approval");
+        expect(store.getJob(second).state).toBe("approval");
+      });
+      const request = randomUUID();
+      const instruction = clear
+        ? "그거 first.txt 첫 줄을 Final로 바꿔줘"
+        : "그거 다시 해줘";
+      expect(workflow.routeFollowup(sessionId, request, instruction)).toBe(
+        true,
+      );
+      expect(workflow.routeFollowup(sessionId, request, instruction)).toBe(
+        true,
+      );
+      expect(store.snapshot().followups).toEqual([
+        { id: request, text: instruction, candidateIds: [first, second] },
+      ]);
+      const otherBefore = store.getJob(second);
+      workflow.close();
+      store.close();
+      store = new CrewStore(database);
+      workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+      const select = () => workflow.selectFollowup(sessionId, request, first);
+      expect(() =>
+        workflow.selectFollowup(randomUUID(), request, first),
+      ).toThrow();
+      if (timing === "before completion") {
+        select();
+        expect(store.getJob(first).state).toBe("approval");
+      }
+      workflow.answer(first, store.getJob(first).approvalId!, true);
+      if (timing === "after completion") {
+        await vi.waitFor(() =>
+          expect(store.getJob(first).state).toBe("complete"),
+        );
+        select();
+      }
+      await vi.waitFor(() =>
+        expect(store.getJob(first).state).toBe(
+          clear ? "approval" : "clarification",
+        ),
+      );
+      select();
+      if (clear) {
+        expect(store.getJob(first).request).toBe(instruction);
+        expect(store.previousJobInstruction(first)?.request).toBe("First");
+      } else {
+        expect(store.getJob(first).clarification?.text).toContain(
+          "이 업무에서 어떻게 바꿀까요?",
+        );
+      }
+      expect(store.getJob(second)).toEqual(otherBefore);
+      expect(store.readChanges(sessionId)).toMatchObject([
+        { jobId: first, path: "first.txt" },
+      ]);
+      expect(readFileSync(join(folder, "second.txt"), "utf8")).toBe("Other\n");
+      expect(
+        store.getMessages(sessionId).filter(({ text }) => text === instruction),
+      ).toHaveLength(1);
+      expect(store.snapshot().followups).toEqual([]);
+    } finally {
+      workflow.close();
+      store.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
+  },
+);
+
+test("stopping during development records a late response without writing it", async () => {
+  const folder = realpathSync(mkdtempSync(join(tmpdir(), "crew-stop-turn-")));
+  const store = new CrewStore(":memory:");
+  const workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+  const release = Promise.withResolvers<void>();
+  const began = Promise.withResolvers<void>();
+  try {
+    vi.mocked(decideLocal).mockImplementation(async (system) => {
+      if (system.startsWith("Plan only the changes"))
+        return {
+          paths: ["note.txt"],
+          moves: [],
+          directories: [],
+          goal: "추가",
+          criterion: "값",
+        };
+      if (system.startsWith("Implement only")) {
+        began.resolve();
+        await release.promise;
+        return {
+          content: "Late",
+          ending: "as-written",
+          consult: "none",
+          question: "",
+        };
+      }
+      return { passed: true, note: "확인했어요." };
+    });
+    store.openFolder(folder);
+    const session = store.snapshot().session!;
+    const { id } = workflow.delegate(session.id, randomUUID(), "파일 추가");
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("approval"));
+    workflow.answer(id, store.getJob(id).approvalId!, true);
+    await began.promise;
+    const followup = randomUUID();
+    expect(workflow.routeFollowup(session.id, followup, "그거 다시 해줘")).toBe(
+      true,
+    );
+    workflow.selectFollowup(session.id, followup, id);
+    workflow.stop(id);
+    expect(store.getJob(id).state).toBe("stopping");
+    release.resolve();
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("stopped"));
+    workflow.restoreFollowups();
+    expect(store.getJob(id).state).toBe("stopped");
+    expect(store.readChanges(session.id)).toEqual([]);
+    expect(() => readFileSync(join(folder, "note.txt"))).toThrow();
+    expect(store.snapshot().activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          jobId: id,
+          text: expect.stringContaining("중단 이후 응답 도착"),
+        }),
+      ]),
+    );
+  } finally {
+    release.resolve();
     workflow.close();
     store.close();
     rmSync(folder, { recursive: true, force: true });

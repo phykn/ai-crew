@@ -234,6 +234,14 @@ try {
     }),
   ).toBeVisible();
   await page.getByRole("button", { name: "대화", exact: true }).click();
+  await send("그거 다시 해줘");
+  const followup = page.getByRole("region", { name: "추가 지시 업무 선택" });
+  await expect(followup).toContainText("그거 다시 해줘");
+  await followup.getByRole("button").first().click();
+  await expect(
+    page.getByRole("region", { name: "비서의 확인 질문" }),
+  ).toContainText("이 업무에서 어떻게 바꿀까요?");
+  expect((await stat(archived)).mtimeMs).toBe(fileBeforeRecovery.mtimeMs);
   if (process.env.AI_CREW_TEST_CODEX === "1") {
     await page.locator(".roster summary").click();
     await page

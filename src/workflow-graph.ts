@@ -180,6 +180,25 @@ export function validateGraph(graph: WorkflowGraph) {
   return problems;
 }
 
+/** 실행 조건이 비어 있으면 항상 실행하고, 있으면 요청에 그 말이 나올 때만 실행한다. */
+export function stageApplies(stage: WorkflowStage, request: string) {
+  const condition = stage.condition.trim();
+  if (!condition) return true;
+  const words = condition
+    .split(/[,，]/)
+    .map((word) => word.trim().toLowerCase())
+    .filter(Boolean);
+  const text = request.toLowerCase();
+  return words.some((word) => text.includes(word));
+}
+
+/** 검증 단계는 리뷰·스타일·테스트 역할을 맡은 단계다. */
+export function verificationStages(graph: WorkflowGraph) {
+  return workflowOrder(graph)
+    .map((id) => graph.stages.find((stage) => stage.id === id)!)
+    .filter(({ roleId }) => roleId === "review" || roleId === "style" || roleId === "test");
+}
+
 export function workflowOrder(graph: WorkflowGraph) {
   const previous = new Map(graph.stages.map(({ id }) => [id, 0]));
   for (const edge of graph.edges)

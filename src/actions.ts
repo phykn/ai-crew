@@ -407,7 +407,8 @@ export type ReviewFinding = {
   excerpt: string;
 };
 export type WorkCheck = {
-  role: "review" | "style" | "test";
+  role: string;
+  label: string;
   passed: boolean;
   unavailable: boolean;
   note: string;

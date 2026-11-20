@@ -67,7 +67,7 @@ function CheckList({ checks }: { checks: WorkCheck[] }) {
     <ul>
       {checks.map((check) => (
         <li key={check.role}>
-          {roles.find(({ id }) => id === check.role)?.title} ·{" "}
+          {check.label || roles.find(({ id }) => id === check.role)?.title} ·{" "}
           {check.passed ? "통과" : check.unavailable ? "미검증" : "실패"}
           {check.command && (
             <>

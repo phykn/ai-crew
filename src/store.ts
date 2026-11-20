@@ -64,7 +64,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 32)
+    if (migration.user_version > 33)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -507,6 +507,14 @@ export class CrewStore {
         );
         CREATE INDEX notifications_by_session ON notifications(session_id);
         PRAGMA user_version = 32;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 33) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE work_checks ADD COLUMN label TEXT NOT NULL DEFAULT '';
+        PRAGMA user_version = 33;
         COMMIT;
       `);
     }
@@ -1066,6 +1074,18 @@ export class CrewStore {
          WHERE w.id = ? ORDER BY v.version DESC LIMIT 1`,
       )
       .get(id) as (Omit<Workflow, "graph"> & { graph: string }) | undefined;
+    if (!row) return undefined;
+    return { ...row, graph: JSON.parse(row.graph) as WorkflowGraph };
+  }
+
+  getWorkflowVersion(id: string, version: number) {
+    const row = this.db
+      .prepare(
+        `SELECT w.id, w.name, v.version, v.graph, v.author, v.saved_at AS savedAt
+         FROM workflows w JOIN workflow_versions v ON v.workflow_id = w.id
+         WHERE w.id = ? AND v.version = ?`,
+      )
+      .get(id, version) as (Omit<Workflow, "graph"> & { graph: string }) | undefined;
     if (!row) return undefined;
     return { ...row, graph: JSON.parse(row.graph) as WorkflowGraph };
   }
@@ -2098,7 +2118,7 @@ export class CrewStore {
   readVerificationCheckpoint(
     jobId: string,
     version: string,
-    role: RoleId,
+    role: string,
     path = "",
   ) {
     const row = this.db
@@ -2114,7 +2134,7 @@ export class CrewStore {
   saveVerificationCheckpoint(
     jobId: string,
     version: string,
-    role: RoleId,
+    role: string,
     result: object,
     path = "",
   ) {
@@ -2155,7 +2175,7 @@ export class CrewStore {
     job: Job,
     changeId: string,
     batchId: string,
-    role: "review" | "style" | "test",
+    role: string,
     label: string,
     result: {
       passed: boolean;
@@ -2186,7 +2206,7 @@ export class CrewStore {
       const saved = this.db
         .prepare(
           `INSERT OR IGNORE INTO work_checks
-          SELECT id, ?, ?, ?, ?, ?, ?, ?, ? FROM work_changes
+          SELECT id, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM work_changes
           WHERE id = ? AND job_id = ? AND saved_at IS NOT NULL RETURNING change_id`,
         )
         .get(
@@ -2198,6 +2218,7 @@ export class CrewStore {
           new Date().toISOString(),
           batchId,
           JSON.stringify(findings),
+          label,
           changeId,
           job.id,
         );
@@ -2224,7 +2245,7 @@ export class CrewStore {
       afterText: string;
     })[];
     const checks = this.db
-      .prepare(`SELECT role, passed, unavailable, note, command, checked_at AS checkedAt, batch_id AS batchId, findings
+      .prepare(`SELECT role, label, passed, unavailable, note, command, checked_at AS checkedAt, batch_id AS batchId, findings
       FROM work_checks WHERE change_id = ? ORDER BY rowid`);
     type CheckRow = Omit<
       WorkChange["checks"][number],

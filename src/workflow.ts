@@ -87,13 +87,14 @@ const endingSchema = z.enum([
   "one-line-break",
   "no-line-break",
 ]);
-type TestResult = {
-  passed: boolean;
-  note: string;
-  unavailable?: boolean;
-  command?: string;
-  endingCorrection?: z.infer<typeof endingSchema>;
-};
+const testResultSchema = z.object({
+  passed: z.boolean(),
+  note: z.string(),
+  unavailable: z.boolean().optional(),
+  command: z.string().optional(),
+  endingCorrection: endingSchema.optional(),
+});
+type TestResult = z.infer<typeof testResultSchema>;
 const verificationSchema = z.strictObject({
   kind: z.enum(["text", "javascript", "unavailable"]),
   expected: z
@@ -339,13 +340,27 @@ export class CrewWorkflow {
     const job = this.store.getJob(id);
     if (job.state !== "stopped" && job.state !== "failed") return;
     if (this.active.has(id)) return;
-    this.store.recordJob(
-      job,
-      "planning",
-      "비서 → 플랜 · 현재 파일 상태에서 이어가기",
-      null,
-    );
-    this.start(job, "planning");
+    if (job.plan && this.store.readRecoveryJournal(id).length) {
+      if (this.hasReservation(job, this.store.readQueuedJobs()))
+        throw new Error(
+          "다른 업무가 작업 경로를 사용 중이에요. 완료된 뒤 다시 이어가 주세요.",
+        );
+      this.store.recordJob(
+        job,
+        "recovering",
+        "비서 · 저장 기록과 실제 파일 확인",
+      );
+      this.reserved.set(job.id, this.reservation(job));
+      this.start(job, "recovering");
+    } else {
+      this.store.recordJob(
+        job,
+        "planning",
+        "비서 → 플랜 · 현재 파일 상태에서 이어가기",
+        null,
+      );
+      this.start(job, "planning");
+    }
   }
 
   revise(
@@ -369,14 +384,16 @@ export class CrewWorkflow {
     this.active.clear();
   }
 
-  private start(job: Job, phase: "planning" | "developing") {
+  private start(job: Job, phase: "planning" | "developing" | "recovering") {
     const controller = new AbortController();
     this.active.set(job.id, controller);
     const project = this.store.getProject(job.projectId);
     const work =
       phase === "planning"
         ? this.plan(job, project, controller.signal)
-        : this.develop(job, project, controller.signal);
+        : phase === "recovering"
+          ? this.recover(job, project, controller.signal)
+          : this.develop(job, project, controller.signal);
     let authorized: string | undefined;
     let replan = false;
     void work
@@ -419,7 +436,7 @@ export class CrewWorkflow {
       .finally(() => {
         if (this.active.get(job.id) !== controller) return;
         this.active.delete(job.id);
-        if (phase === "developing" && job.plan) {
+        if (phase !== "planning" && job.plan) {
           this.reserved.delete(job.id);
           this.dispatchQueuedJobs();
         }
@@ -679,6 +696,112 @@ export class CrewWorkflow {
     return auto ? approvalId : undefined;
   }
 
+  private async recover(job: Job, project: Project, signal: AbortSignal) {
+    const plan = job.plan!;
+    const journal = this.store.readRecoveryJournal(job.id);
+    const changeIds = new Map<string, string>();
+    const files: {
+      path: string;
+      hash: string | null;
+      content: string | null;
+      before: string | null;
+    }[] = [];
+    const uncertain: string[] = [];
+    const incompleteMoves: string[] = [];
+    for (const { path, baseline } of planFiles(plan)) {
+      signal.throwIfAborted();
+      const move = plan.moves?.find(({ to }) => to === path);
+      const entries = journal.filter((entry) => entry.path === path);
+      const latest = entries.at(-1);
+      try {
+        const current = await inspectFile(project.root, path);
+        const source = move ? await inspectFile(project.root, move.from) : null;
+        signal.throwIfAborted();
+        const sourceRemoved = !source?.hash;
+        let recovered =
+          latest && current.hash === latest.afterHash && sourceRemoved
+            ? latest
+            : undefined;
+        if (!recovered && latest && !latest.savedAt) {
+          const prior = entries.at(-2);
+          if (
+            prior?.savedAt &&
+            sourceRemoved &&
+            current.hash === prior.afterHash
+          )
+            recovered = prior;
+        }
+        if (recovered) {
+          if (!recovered.savedAt)
+            this.store.confirmChange(job, recovered.id, recovered.afterHash);
+          changeIds.set(path, recovered.id);
+        } else if (
+          !entries.some(({ savedAt }) => savedAt) &&
+          current.hash === baseline &&
+          (!move || source?.hash === move.baseline)
+        ) {
+          if (move) incompleteMoves.push(move.from + " → " + path);
+        } else {
+          uncertain.push(move ? move.from + " → " + path : path);
+        }
+        files.push({
+          path,
+          ...current,
+          before: entries.length ? entries[0].beforeText : current.content,
+        });
+      } catch (error) {
+        if (signal.aborted) throw error;
+        uncertain.push(move ? move.from + " → " + path : path);
+      }
+    }
+    if (uncertain.length)
+      throw new ClarificationRequired(
+        "저장 여부를 확인할 수 없는 경로가 있어요. " +
+          uncertain.join(", ") +
+          " 파일의 현재 상태를 확인해 주세요. 어느 변경을 유지하고 무엇을 이어갈까요?",
+      );
+    if (!changeIds.size) {
+      const current = this.store.getJob(job.id);
+      this.store.recordJob(
+        current,
+        "planning",
+        "비서 → 플랜 · 반영된 변경 없이 새 계획 작성",
+        null,
+      );
+      this.notify();
+      return this.plan(current, project, signal);
+    }
+    if (incompleteMoves.length)
+      throw new ClarificationRequired(
+        "저장된 변경은 보존했어요. 아직 이동되지 않은 경로는 " +
+          incompleteMoves.join(", ") +
+          "예요. 남은 이동을 이어갈까요?",
+      );
+
+    this.store.recordJob(
+      job,
+      "reviewing",
+      "비서 · 저장한 파일을 다시 쓰지 않고 남은 검증 시작",
+    );
+    this.notify();
+    const batchId = [...changeIds.values()].at(-1)!;
+    const result = await this.verifyChangeSet(
+      job,
+      project,
+      files,
+      changeIds,
+      batchId,
+      signal,
+    );
+    if (result.failures.length)
+      throw new ClarificationRequired(
+        "저장한 파일은 보존했지만 남은 검증을 통과하지 못했어요. " +
+          result.failures.join(" / ").slice(0, 650) +
+          " 어떤 부분을 수정할까요?",
+      );
+    this.completeChangeSet(job, changeIds);
+  }
+
   private async develop(job: Job, project: Project, signal: AbortSignal) {
     const plan = job.plan!;
     const targets = planFiles(plan);
@@ -932,164 +1055,272 @@ export class CrewWorkflow {
       );
       this.notify();
 
-      const evidence = JSON.stringify({
-        request: job.request,
-        plan,
-        before: sources[0]?.content ?? baseline[0].content,
-        after: saved[0].content,
-        files: saved.map(({ path, content, hash }, index) => ({
-          path,
-          hash,
+      const result = await this.verifyChangeSet(
+        job,
+        project,
+        saved.map((file, index) => ({
+          ...file,
           before: sources[index]?.content ?? baseline[index].content,
-          movedFrom: moves.get(path)?.from,
-          after: content,
         })),
-      });
-      const review = (role: "review" | "style", prompt: string) =>
-        this.decide(
-          job,
-          project,
-          role,
-          prompt +
-            " Return a brief Korean note. For concrete findings include the exact relative path and inclusive one-based line numbers from the saved after text. Keep a finding under twelve lines. Do not invent locations for whole-file remarks.",
-          evidence,
-          fileReviewSchema,
-          signal,
-        );
-      const [reviewed, styled, tested] = await Promise.allSettled([
-        review(
-          "review",
-          "Check whether the change satisfies the requested behavior. Do not accept scope creep.",
-        ),
-        review(
-          "style",
-          "Check code style and unnecessary changes. Evaluate prose clarity for non-code files.",
-        ),
-        this.verifyFiles(
-          project,
-          job,
-          saved.map(({ path, content }, index) => ({
-            path,
-            before: sources[index]?.content ?? baseline[index].content,
-            content,
-            preservedMove: Boolean(moves.get(path) && !moves.get(path)?.edit),
-          })),
-          signal,
-        ),
-      ]);
-      signal.throwIfAborted();
-
-      failures = [];
-      let incomplete = false;
-      const roles = [
-        ["review", "리뷰"],
-        ["style", "스타일"],
-        ["test", "테스트"],
-      ] as const;
-      for (const [index, file] of saved.entries()) {
-        const testCheck =
-          tested.status === "fulfilled" ? tested.value[index] : null;
-        if (
-          testCheck?.status === "fulfilled" &&
-          testCheck.value.endingCorrection
-        )
-          endingCorrections.set(file.path, testCheck.value.endingCorrection);
-        for (const [checkIndex, check] of [
-          reviewed,
-          styled,
-          tested.status === "fulfilled" ? tested.value[index] : tested,
-        ].entries()) {
-          const [role, label] = roles[checkIndex];
-          const result =
-            check.status === "fulfilled"
-              ? check.value
-              : {
-                  passed: false,
-                  unavailable: true,
-                  note:
-                    "검증을 실행하지 못했어요. " +
-                    (check.reason instanceof Error
-                      ? check.reason.message.slice(0, 240)
-                      : ""),
-                };
-          const changeId = changeIds.get(file.path);
-          const fileReview =
-            checkIndex === 0 ? reviewed : checkIndex === 1 ? styled : null;
-          if (changeId)
-            this.store.recordCheck(job, changeId, batchId!, role, label, {
-              ...result,
-              findings:
-                fileReview?.status === "fulfilled"
-                  ? (fileReview.value.findings ?? [])
-                      .filter(({ path }) => path === file.path)
-                      .map(({ startLine, endLine, note }) => ({
-                        startLine,
-                        endLine,
-                        note,
-                      }))
-                  : [],
-            });
-          else
-            this.store.log(
-              job.sessionId,
-              label + " · " + file.path + " · 변경 없음 · " + result.note,
-              job.id,
-            );
-          if (!result.passed)
-            failures.push(label + " · " + file.path + " · " + result.note);
-          if ("unavailable" in result && result.unavailable) incomplete = true;
-        }
-      }
-      const afterReview = await readFiles();
-      const sourcesAfterReview = await readSources();
-      signal.throwIfAborted();
-      const externallyChanged = afterReview.filter(
-        (file, index) => file.hash !== saved[index].hash,
+        changeIds,
+        batchId!,
+        signal,
       );
-      for (const [index, source] of sourcesAfterReview.entries())
-        if (source?.hash)
-          externallyChanged.push({
-            ...source,
-            path: moves.get(targets[index].path)!.from,
-          });
-      if (externallyChanged.length) {
-        for (const { path, hash } of externallyChanged)
-          this.store.log(
-            job.sessionId,
-            "외부 변경 · 작성자 미확인 · " +
-              path +
-              " · " +
-              (hash ?? "파일 없음"),
-            job.id,
-          );
-        throw new Error(
-          "검증 중 파일이 바뀌었어요. 이전 결과는 업무 로그에서 확인할 수 있어요.",
-        );
-      }
-      if (!failures.length) {
-        this.store.recordJob(
-          job,
-          "complete",
-          "비서 · 세 검증 통과",
-          plan,
-          null,
-          [...changeIds.keys()]
-            .map((path) => {
-              const move = moves.get(path);
-              return move ? move.from + " → " + path : path;
-            })
-            .join(", ") +
-            " 파일을 변경했어요. 리뷰·스타일·테스트를 같은 변경 버전에서 통과했어요.",
-        );
-        return;
-      }
-      if (incomplete)
+      failures = result.failures;
+      for (const [path, ending] of result.endingCorrections)
+        endingCorrections.set(path, ending);
+      if (!failures.length) return this.completeChangeSet(job, changeIds);
+      if (result.incomplete)
         throw new Error("파일을 변경했어요. " + failures.join(" / "));
       original = saved;
     }
     throw new Error(
       "수정·재검증을 3회 마쳤지만 통과하지 못했어요. " + failures.join(" / "),
     );
+  }
+
+  private completeChangeSet(job: Job, changeIds: Map<string, string>) {
+    const plan = job.plan!;
+    const paths = [...changeIds.keys()].map((path) => {
+      const move = plan.moves?.find(({ to }) => to === path);
+      return move ? move.from + " → " + path : path;
+    });
+    this.store.recordJob(
+      job,
+      "complete",
+      "비서 · 세 검증 통과",
+      plan,
+      null,
+      paths.join(", ") +
+        " 파일을 변경했어요. 리뷰·스타일·테스트를 같은 변경 버전에서 통과했어요.",
+    );
+  }
+
+  private async verifyChangeSet(
+    job: Job,
+    project: Project,
+    files: {
+      path: string;
+      hash: string | null;
+      content: string | null;
+      before: string | null;
+    }[],
+    changeIds: Map<string, string>,
+    batchId: string,
+    signal: AbortSignal,
+  ) {
+    const plan = job.plan!;
+    const moves = new Map((plan.moves ?? []).map((move) => [move.to, move]));
+    const version = createHash("sha256")
+      .update(
+        JSON.stringify([
+          job.request,
+          plan,
+          files.map(({ path, hash }) => [
+            path,
+            hash,
+            changeIds.get(path) ?? null,
+          ]),
+        ]),
+      )
+      .digest("hex");
+    const evidence = JSON.stringify({
+      request: job.request,
+      plan,
+      before: files[0].before,
+      after: files[0].content,
+      files: files.map(({ path, content, hash, before }) => ({
+        path,
+        hash,
+        before,
+        movedFrom: moves.get(path)?.from,
+        after: content,
+      })),
+    });
+    const review = async (role: "review" | "style", prompt: string) => {
+      const cached = fileReviewSchema.safeParse(
+        this.store.readVerificationCheckpoint(job.id, version, role),
+      );
+      if (cached.success) {
+        this.store.log(
+          job.sessionId,
+          (role === "review" ? "리뷰" : "스타일") +
+            " · 같은 파일 버전의 완료 기록 사용",
+          job.id,
+        );
+        return cached.data;
+      }
+      const output = await this.decide(
+        job,
+        project,
+        role,
+        prompt +
+          " Return a brief Korean note. For concrete findings include the exact relative path and inclusive one-based line numbers from the saved after text. Keep a finding under twelve lines. Do not invent locations for whole-file remarks.",
+        evidence,
+        fileReviewSchema,
+        signal,
+      );
+      signal.throwIfAborted();
+      if (output.passed)
+        this.store.saveVerificationCheckpoint(job.id, version, role, {
+          ...output,
+          findings: output.findings ?? [],
+        });
+      return output;
+    };
+    const verifyTests = async () => {
+      const cached = files.map(({ path }) =>
+        testResultSchema.safeParse(
+          this.store.readVerificationCheckpoint(job.id, version, "test", path),
+        ),
+      );
+      const pending = files.flatMap(({ path, before, content }, index) =>
+        cached[index].success
+          ? []
+          : [
+              {
+                path,
+                before,
+                content,
+                preservedMove: Boolean(
+                  moves.get(path) && !moves.get(path)?.edit,
+                ),
+              },
+            ],
+      );
+      const results = pending.length
+        ? await this.verifyFiles(project, job, pending, signal)
+        : [];
+      signal.throwIfAborted();
+      let next = 0;
+      return files.map(({ path }, index): PromiseSettledResult<TestResult> => {
+        const existing = cached[index];
+        if (existing.success) {
+          this.store.log(
+            job.sessionId,
+            "테스트 · " + path + " · 같은 파일 버전의 완료 기록 사용",
+            job.id,
+          );
+          return { status: "fulfilled", value: existing.data };
+        }
+        const result = results[next++];
+        if (result.status === "fulfilled" && result.value.passed)
+          this.store.saveVerificationCheckpoint(
+            job.id,
+            version,
+            "test",
+            result.value,
+            path,
+          );
+        return result;
+      });
+    };
+    const [reviewed, styled, tested] = await Promise.allSettled([
+      review(
+        "review",
+        "Check whether the change satisfies the requested behavior. Do not accept scope creep.",
+      ),
+      review(
+        "style",
+        "Check code style and unnecessary changes. Evaluate prose clarity for non-code files.",
+      ),
+      verifyTests(),
+    ]);
+    signal.throwIfAborted();
+
+    const failures: string[] = [];
+    const endingCorrections = new Map<string, z.infer<typeof endingSchema>>();
+    let incomplete = false;
+    const roles = [
+      ["review", "리뷰"],
+      ["style", "스타일"],
+      ["test", "테스트"],
+    ] as const;
+    for (const [index, file] of files.entries()) {
+      const testCheck =
+        tested.status === "fulfilled" ? tested.value[index] : null;
+      if (testCheck?.status === "fulfilled" && testCheck.value.endingCorrection)
+        endingCorrections.set(file.path, testCheck.value.endingCorrection);
+      for (const [checkIndex, check] of [
+        reviewed,
+        styled,
+        tested.status === "fulfilled" ? tested.value[index] : tested,
+      ].entries()) {
+        const [role, label] = roles[checkIndex];
+        const result =
+          check.status === "fulfilled"
+            ? check.value
+            : {
+                passed: false,
+                unavailable: true,
+                note:
+                  "검증을 실행하지 못했어요. " +
+                  (check.reason instanceof Error
+                    ? check.reason.message.slice(0, 240)
+                    : ""),
+              };
+        const changeId = changeIds.get(file.path);
+        const fileReview =
+          checkIndex === 0 ? reviewed : checkIndex === 1 ? styled : null;
+        if (changeId)
+          this.store.recordCheck(job, changeId, batchId, role, label, {
+            ...result,
+            findings:
+              fileReview?.status === "fulfilled"
+                ? (fileReview.value.findings ?? [])
+                    .filter(({ path }) => path === file.path)
+                    .map(({ startLine, endLine, note }) => ({
+                      startLine,
+                      endLine,
+                      note,
+                    }))
+                : [],
+          });
+        else
+          this.store.log(
+            job.sessionId,
+            label + " · " + file.path + " · 변경 없음 · " + result.note,
+            job.id,
+          );
+        if (!result.passed)
+          failures.push(label + " · " + file.path + " · " + result.note);
+        if ("unavailable" in result && result.unavailable) incomplete = true;
+      }
+    }
+    const afterReview = await Promise.all(
+      files.map(async ({ path }) => ({
+        path,
+        ...(await inspectFile(project.root, path)),
+      })),
+    );
+    const sourcesAfterReview = await Promise.all(
+      files.map(({ path }) => {
+        const move = moves.get(path);
+        return move ? inspectFile(project.root, move.from) : null;
+      }),
+    );
+    signal.throwIfAborted();
+    const externallyChanged = afterReview.filter(
+      (file, index) => file.hash !== files[index].hash,
+    );
+    for (const [index, source] of sourcesAfterReview.entries())
+      if (source?.hash)
+        externallyChanged.push({
+          ...source,
+          path: moves.get(files[index].path)!.from,
+        });
+    if (externallyChanged.length) {
+      for (const { path, hash } of externallyChanged)
+        this.store.log(
+          job.sessionId,
+          "외부 변경 · 작성자 미확인 · " + path + " · " + (hash ?? "파일 없음"),
+          job.id,
+        );
+      throw new Error(
+        "검증 중 파일이 바뀌었어요. 이전 결과는 업무 로그에서 확인할 수 있어요.",
+      );
+    }
+    return { failures, incomplete, endingCorrections };
   }
 
   private async consult(

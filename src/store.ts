@@ -31,7 +31,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 15)
+    if (migration.user_version > 16)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -221,8 +221,29 @@ export class CrewStore {
         COMMIT;
       `);
     }
+    if (migration.user_version < 16) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE jobs ADD COLUMN execution_plan_id TEXT REFERENCES work_plans(id);
+        CREATE TABLE verification_checkpoints (
+          job_id TEXT NOT NULL REFERENCES jobs(id),
+          version TEXT NOT NULL,
+          role TEXT NOT NULL,
+          path TEXT NOT NULL,
+          result TEXT NOT NULL,
+          PRIMARY KEY (job_id, version, role, path)
+        );
+        UPDATE jobs AS j SET execution_plan_id = (
+          SELECT p.id FROM work_plans p JOIN work_changes c ON c.plan_id = p.id
+          WHERE p.job_id = j.id AND p.request = j.request AND p.plan = j.plan
+          ORDER BY c.rowid DESC LIMIT 1
+        ) WHERE j.state IN ('stopped', 'failed', 'developing', 'reviewing', 'stopping');
+        PRAGMA user_version = 16;
+        COMMIT;
+      `);
+    }
     this.db.exec(
-      "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'stopping');",
+      "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",
     );
     this.db.exec(
       "UPDATE messages SET state = 'stopped' WHERE state IN ('running', 'stopping');",
@@ -668,7 +689,7 @@ export class CrewStore {
         .run(randomUUID(), job.sessionId, text, job.id);
       this.db
         .prepare(
-          "UPDATE jobs SET request = ?, state = 'planning', plan = NULL, approval_id = NULL WHERE id = ?",
+          "UPDATE jobs SET request = ?, state = 'planning', plan = NULL, approval_id = NULL, execution_plan_id = NULL WHERE id = ?",
         )
         .run(
           questionId
@@ -730,6 +751,57 @@ export class CrewStore {
         movedFrom ?? null,
       );
     return id;
+  }
+
+  readRecoveryJournal(jobId: string) {
+    return this.db
+      .prepare(
+        `
+      SELECT c.id, c.path, c.after_hash AS afterHash, c.before_text AS beforeText, c.saved_at AS savedAt
+      FROM work_changes c JOIN jobs j ON j.id = c.job_id AND c.plan_id = j.execution_plan_id
+      WHERE j.id = ? ORDER BY c.rowid
+    `,
+      )
+      .all(jobId) as {
+      id: string;
+      path: string;
+      afterHash: string;
+      beforeText: string | null;
+      savedAt: string | null;
+    }[];
+  }
+
+  readVerificationCheckpoint(
+    jobId: string,
+    version: string,
+    role: RoleId,
+    path = "",
+  ) {
+    const row = this.db
+      .prepare(
+        `
+      SELECT result FROM verification_checkpoints WHERE job_id = ? AND version = ? AND role = ? AND path = ?
+    `,
+      )
+      .get(jobId, version, role, path);
+    return row ? (JSON.parse(String(row.result)) as unknown) : undefined;
+  }
+
+  saveVerificationCheckpoint(
+    jobId: string,
+    version: string,
+    role: RoleId,
+    result: object,
+    path = "",
+  ) {
+    this.db
+      .prepare(
+        `
+      INSERT INTO verification_checkpoints VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(job_id, version, role, path) DO NOTHING
+    `,
+      )
+      .run(jobId, version, role, path, JSON.stringify(result));
   }
 
   confirmChange(job: Job, changeId: string, hash: string) {
@@ -1051,9 +1123,20 @@ export class CrewStore {
     this.transaction(() => {
       this.db
         .prepare(
-          "UPDATE jobs SET state = ?, plan = ?, approval_id = ? WHERE id = ?",
+          `UPDATE jobs SET execution_plan_id = CASE
+            WHEN ? = 'developing' AND state IN ('approval', 'queued') THEN approval_id
+            WHEN ? IN ('planning', 'complete', 'denied') THEN NULL
+            ELSE execution_plan_id END,
+            state = ?, plan = ?, approval_id = ? WHERE id = ?`,
         )
-        .run(state, plan ? JSON.stringify(plan) : null, approval, job.id);
+        .run(
+          state,
+          state,
+          state,
+          plan ? JSON.stringify(plan) : null,
+          approval,
+          job.id,
+        );
       this.log(job.sessionId, note, job.id);
       if (report)
         this.db

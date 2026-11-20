@@ -20,6 +20,7 @@ import "./workspace.css";
 
 const sprites = [sprite0, sprite1, sprite2, sprite3];
 const phase = {
+  recovering: "파일 상태 확인 중",
   clarification: "답변 대기",
   planning: "플랜",
   approval: "승인 대기",
@@ -663,6 +664,7 @@ function Workspace() {
                       "reviewing",
                       "approval",
                       "queued",
+                      "recovering",
                       "clarification",
                     ].includes(job.state) && (
                       <button

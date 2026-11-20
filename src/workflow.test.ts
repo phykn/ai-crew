@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -802,3 +802,102 @@ test("moving a file reserves both endpoints, preserves bytes, and never overwrit
     rmSync(folder, { recursive: true, force: true });
   }
 });
+
+test.each(["written", "external", "copy-only"] as const)(
+  "reopening a %s write reconciles the journal before any further work",
+  async (scenario) => {
+    const folder = realpathSync(mkdtempSync(join(tmpdir(), "crew-recover-")));
+    const database = join(folder, ".crew.sqlite");
+    const source = join(folder, "source.txt");
+    const file = join(folder, "notice.txt");
+    const hash = (content: string) =>
+      createHash("sha256").update(content).digest("hex");
+    let store = new CrewStore(database);
+    let workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+    try {
+      const move = scenario === "copy-only";
+      const before = "Before\n";
+      const after = move ? before : "After\n";
+      writeFileSync(move ? source : file, before);
+      store.openFolder(folder);
+      const { id: sessionId } = store.snapshot().session!;
+      const job = store.createJob(sessionId, randomUUID(), "파일 변경");
+      const plan = {
+        path: "notice.txt",
+        baseline: move ? null : hash(before),
+        goal: "파일 변경",
+        criterion: after,
+        ...(move
+          ? {
+              moves: [
+                {
+                  from: "source.txt",
+                  to: "notice.txt",
+                  baseline: hash(before),
+                  edit: false,
+                },
+              ],
+            }
+          : {}),
+      };
+      const approval = store.proposeWorkPlan(job, plan);
+      store.recordJob(job, "approval", "승인 요청", plan, approval);
+      const approved = store.getJob(job.id);
+      store.recordJob(approved, "developing", "수정 승인", plan, approval);
+      const changeId = store.prepareChange(
+        approved,
+        "notice.txt",
+        { hash: hash(before), content: before },
+        { hash: hash(after), content: after },
+        move ? "source.txt" : undefined,
+      );
+      const onDisk = scenario === "external" ? "External edit\n" : after;
+      writeFileSync(file, onDisk);
+      workflow.close();
+      store.close();
+      store = new CrewStore(database);
+      workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+      expect(store.getJob(job.id).state).toBe("stopped");
+      expect(store.readRecoveryJournal(job.id)).toMatchObject([
+        { id: changeId, savedAt: null },
+      ]);
+
+      vi.mocked(decideLocal).mockImplementation(async (system) => {
+        expect(system).not.toMatch(/^(Plan text-file|Implement only)/);
+        if (system.startsWith("Choose an independent"))
+          return {
+            kind: "text",
+            expected: "After",
+            exact: true,
+            ending: "preserve",
+            reason: "",
+          };
+        return { passed: true, note: "복구 검증", findings: [] };
+      });
+      workflow.resume(job.id);
+      await vi.waitFor(() =>
+        expect(store.getJob(job.id).state).toBe(
+          scenario === "written" ? "complete" : "clarification",
+        ),
+      );
+      expect(readFileSync(file, "utf8")).toBe(onDisk);
+      expect(store.snapshot().jobs).toHaveLength(1);
+      if (scenario === "written") {
+        const [change] = store.readChanges(sessionId);
+        expect(change.id).toBe(changeId);
+        expect(change.checks).toHaveLength(3);
+      } else {
+        expect(store.getJob(job.id).clarification?.text).toContain(
+          "저장 여부를 확인할 수 없는 경로가 있어요",
+        );
+        expect(decideLocal).not.toHaveBeenCalled();
+        expect(store.readChanges(sessionId)).toEqual([]);
+      }
+      if (move) expect(readFileSync(source, "utf8")).toBe(before);
+    } finally {
+      workflow.close();
+      store.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
+  },
+);

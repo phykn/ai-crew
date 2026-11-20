@@ -172,6 +172,7 @@ export type Activity = {
   recordedAt: string | null;
 };
 export type JobState =
+  | "recovering"
   | "clarification"
   | "planning"
   | "approval"

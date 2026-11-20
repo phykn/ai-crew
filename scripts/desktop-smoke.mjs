@@ -1,5 +1,12 @@
 import { _electron as electron, expect } from "@playwright/test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
@@ -164,6 +171,69 @@ try {
   await expect(readFile(join(workspace, "archived.txt"), "utf8")).resolves.toBe(
     "Summary\n",
   );
+  const archived = join(workspace, "archived.txt");
+  const fileBeforeRecovery = await stat(archived);
+  await application.close();
+  const recoveryDatabase = new DatabaseSync(join(directory, "crew.sqlite"));
+  try {
+    const change = recoveryDatabase
+      .prepare(
+        "SELECT id, job_id, plan_id FROM work_changes WHERE moved_from = 'summary.txt' AND path = 'archived.txt'",
+      )
+      .get();
+    expect(change?.plan_id).toBeTruthy();
+    const verification = recoveryDatabase
+      .prepare(
+        "SELECT version FROM verification_checkpoints WHERE job_id = ? AND role = 'test' AND path = 'archived.txt'",
+      )
+      .get(change.job_id);
+    expect(verification?.version).toBeTruthy();
+    expect(
+      recoveryDatabase
+        .prepare(
+          "DELETE FROM verification_checkpoints WHERE job_id = ? AND version = ? AND role = 'style'",
+        )
+        .run(change.job_id, verification.version).changes,
+    ).toBe(1);
+    recoveryDatabase
+      .prepare("DELETE FROM work_checks WHERE change_id = ?")
+      .run(change.id);
+    recoveryDatabase
+      .prepare("UPDATE work_changes SET saved_at = NULL WHERE id = ?")
+      .run(change.id);
+    recoveryDatabase
+      .prepare(
+        "UPDATE jobs SET state = 'developing', execution_plan_id = ? WHERE id = ?",
+      )
+      .run(change.plan_id, change.job_id);
+  } finally {
+    recoveryDatabase.close();
+  }
+  application = await electron.launch({ executablePath: executable, env });
+  page = await application.firstWindow();
+  page.on("pageerror", (error) => errors.push(error.message));
+  const resume = page.getByRole("button", { name: "이어가기", exact: true });
+  await expect(resume).toBeVisible();
+  await resume.click();
+  await expect(
+    page.getByText("summary.txt → archived.txt 파일을 변경했어요.", {
+      exact: false,
+    }),
+  ).toHaveCount(2, { timeout: 45000 });
+  const fileAfterRecovery = await stat(archived);
+  expect(fileAfterRecovery.ino).toBe(fileBeforeRecovery.ino);
+  expect(fileAfterRecovery.mtimeMs).toBe(fileBeforeRecovery.mtimeMs);
+  expect(await readFile(archived, "utf8")).toBe("Summary\n");
+  await page.getByRole("button", { name: "로그", exact: true }).click();
+  await expect(
+    page.getByText("리뷰 · 같은 파일 버전의 완료 기록 사용", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("테스트 · archived.txt · 같은 파일 버전의 완료 기록 사용", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "대화", exact: true }).click();
   if (process.env.AI_CREW_TEST_CODEX === "1") {
     await page.locator(".roster summary").click();
     await page
@@ -218,7 +288,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "PASS packaged Electron: folder, Qwen chat and tool, restart, context, stop, /clear, approved writes, follow-ups and file move",
+    "PASS packaged Electron: Qwen workflow, approved edits and move, and restart recovery without rewriting",
   );
 } finally {
   await application?.close().catch(() => {});

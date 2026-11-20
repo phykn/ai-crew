@@ -27,6 +27,8 @@ test("peer consultation and a follow-up share a job with separate approvals", as
   try {
     let followUp = false;
     let replan = false;
+    let styleTurns = 0;
+    let reviewTurns = 0;
     vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
       if (system.startsWith("Plan one")) {
         if (followUp) expect(prompt).toContain('"previousPath":"notice.txt"');
@@ -44,8 +46,50 @@ test("peer consultation and a follow-up share a job with separate approvals", as
       }
       if (system.startsWith("Reply directly")) {
         expect(readFileSync(file, "utf8")).toBe("Before\n");
+        if (prompt.includes('"requester":"style"')) {
+          if (++reviewTurns === 1)
+            return {
+              kind: "consult",
+              peer: "development",
+              question: "개발 담당에게 먼저 확인",
+              answer: "",
+            };
+          expect(prompt).toContain("순환 요청이 보류");
+          return {
+            kind: "answer",
+            peer: "none",
+            question: "",
+            answer: "파일 끝에 줄바꿈을 유지하세요.",
+          };
+        }
         expect(prompt).toContain("줄바꿈을 유지할까요?");
-        return { answer: "줄바꿈 한 개를 유지하세요." };
+        if (++styleTurns === 1)
+          return {
+            kind: "clarify",
+            peer: "none",
+            question: "승인 범위가 어디까지인가요?",
+            answer: "",
+          };
+        if (styleTurns === 2) {
+          expect(prompt).toContain("notice.txt 한 파일");
+          return {
+            kind: "consult",
+            peer: "review",
+            question: "리뷰 기준을 확인해 주세요.",
+            answer: "",
+          };
+        }
+        expect(prompt).toContain("파일 끝에 줄바꿈을 유지하세요.");
+        return {
+          kind: "answer",
+          peer: "none",
+          question: "",
+          answer: "줄바꿈 한 개를 유지하세요.",
+        };
+      }
+      if (system.startsWith("Answer a clarification")) {
+        expect(prompt).toContain("승인 범위가 어디까지인가요?");
+        return { answer: "notice.txt 한 파일" };
       }
       if (system.startsWith("Implement only")) {
         if (followUp)
@@ -119,6 +163,17 @@ test("peer consultation and a follow-up share a job with separate approvals", as
     expect(
       activity.filter((text) => text.startsWith("스타일 → 개발")),
     ).toHaveLength(1);
+    expect(activity).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("보완 질문 · 승인 범위가 어디까지인가요?"),
+        expect.stringContaining("보완 내용 · notice.txt 한 파일"),
+        expect.stringContaining("스타일 → 리뷰 · notice.txt"),
+        expect.stringContaining("리뷰 → 개발 순환 요청 보류"),
+        expect.stringContaining(
+          "리뷰 → 스타일 · 파일 끝에 줄바꿈을 유지하세요.",
+        ),
+      ]),
+    );
 
     const originalReport = store
       .getMessages(sessionId)
@@ -319,6 +374,87 @@ test("stopping one queued role request leaves work ahead and behind it intact", 
     expect(requested).toEqual(["First", "Fourth", "Third"]);
   } finally {
     release.resolve();
+    workflow.close();
+    store.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("unresolved peer guidance waits for the current user question across restart", async () => {
+  const folder = realpathSync(mkdtempSync(join(tmpdir(), "crew-clarify-")));
+  const file = join(folder, "notice.txt");
+  const database = join(folder, ".crew.sqlite");
+  writeFileSync(file, "Before\n");
+  let store = new CrewStore(database);
+  let workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+  try {
+    vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
+      const clarified = prompt.includes("사용자 답변: Final");
+      if (system.startsWith("Plan one"))
+        return {
+          path: "notice.txt",
+          goal: "문구 변경",
+          criterion: clarified ? "Final" : "새 문구",
+        };
+      if (system.startsWith("Implement only"))
+        return {
+          content: clarified ? "Final" : "Guessed",
+          ending: "preserve",
+          consult: clarified ? "none" : "style",
+          question: clarified ? "" : "쓸 문구를 확인해 주세요.",
+        };
+      if (system.startsWith("Reply directly"))
+        return {
+          kind: "blocked",
+          peer: "none",
+          question: "",
+          answer: "어떤 문구로 바꿀까요?",
+        };
+      if (system.startsWith("Choose an independent"))
+        return {
+          kind: "text",
+          expected: "Final",
+          exact: true,
+          ending: "preserve",
+          reason: "",
+        };
+      return { passed: true, note: "확인했어요." };
+    });
+    store.openFolder(folder);
+    const sessionId = store.snapshot().session!.id;
+    const { id } = workflow.delegate(sessionId, randomUUID(), "문구를 바꿔줘");
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("approval"));
+    const previousApproval = store.getJob(id).approvalId!;
+    workflow.answer(id, previousApproval, true);
+    await vi.waitFor(() =>
+      expect(store.getJob(id).state).toBe("clarification"),
+    );
+    const question = store.getJob(id).clarification!;
+    expect(question.text).toBe("어떤 문구로 바꿀까요?");
+    expect(readFileSync(file, "utf8")).toBe("Before\n");
+    expect(store.readChanges(sessionId)).toEqual([]);
+    workflow.close();
+    store.close();
+    store = new CrewStore(database);
+    workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+    expect(store.getJob(id).clarification).toEqual(question);
+    const request = randomUUID();
+    expect(() =>
+      workflow.revise(id, sessionId, request, "Final", randomUUID()),
+    ).toThrow();
+    workflow.revise(id, sessionId, request, "Final", question.id);
+    workflow.revise(id, sessionId, request, "Final", question.id);
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("approval"));
+    workflow.answer(id, previousApproval, true);
+    expect(readFileSync(file, "utf8")).toBe("Before\n");
+    workflow.answer(id, store.getJob(id).approvalId!, true);
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("complete"));
+    expect(readFileSync(file, "utf8")).toBe("Final\n");
+    expect(
+      store.getMessages(sessionId).filter(({ role }) => role === "user"),
+    ).toHaveLength(1);
+    expect(store.getJob(id).clarification).toBeNull();
+  } finally {
     workflow.close();
     store.close();
     rmSync(folder, { recursive: true, force: true });

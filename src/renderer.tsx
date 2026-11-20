@@ -18,6 +18,7 @@ import "./workspace.css";
 
 const sprites = [sprite0, sprite1, sprite2, sprite3];
 const phase = {
+  clarification: "답변 대기",
   planning: "플랜",
   approval: "승인 대기",
   queued: "같은 파일 작업 대기",
@@ -51,9 +52,11 @@ function Workspace() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
-  const [revision, setRevision] = useState<{ id: string; text: string } | null>(
-    null,
-  );
+  const [revision, setRevision] = useState<{
+    id: string;
+    text: string;
+    questionId?: string;
+  } | null>(null);
   const [logJob, setLogJob] = useState<string | null>(null);
   const [view, setView] = useState<"chat" | "log">("chat");
   const [menu, setMenu] = useState<"projects" | "sessions" | null>(null);
@@ -161,7 +164,14 @@ function Workspace() {
       text,
     };
     if (revision) {
-      if (await run({ type: "job.revise", jobId: revision.id, ...request }))
+      if (
+        await run({
+          type: "job.revise",
+          jobId: revision.id,
+          questionId: revision.questionId,
+          ...request,
+        })
+      )
         setRevision(null);
     } else {
       await run({ type: "chat.send", ...request }, true);
@@ -175,6 +185,7 @@ function Workspace() {
   );
   const approval = data?.jobs.find((job) => job.state === "approval");
   const revisionJob = data?.jobs.find((job) => job.id === revision?.id);
+  const firstQuestion = data?.jobs.find((job) => job.clarification);
   const composeText = revision?.text ?? draft;
   const clearing = !revision && composeText.trim() === "/clear";
   const currentJobs =
@@ -598,12 +609,29 @@ function Workspace() {
                       {job.plan?.goal || job.request}
                     </button>
                     <small>{phase[job.state]}</small>
+                    {job.clarification && (
+                      <button
+                        className="job-action"
+                        type="button"
+                        onClick={() => {
+                          setRevision({
+                            id: job.id,
+                            text: "",
+                            questionId: job.clarification!.id,
+                          });
+                          composer.current?.focus();
+                        }}
+                      >
+                        답변
+                      </button>
+                    )}
                     {[
                       "planning",
                       "developing",
                       "reviewing",
                       "approval",
                       "queued",
+                      "clarification",
                     ].includes(job.state) && (
                       <button
                         className="job-action"
@@ -711,6 +739,28 @@ function Workspace() {
               )}
             </div>
             <div className="footer">
+              {firstQuestion?.clarification && !revision?.questionId && (
+                <section className="decision" aria-label="비서의 확인 질문">
+                  <div>
+                    <p>{firstQuestion.clarification.text}</p>
+                    <small>{firstQuestion.plan?.goal}</small>
+                  </div>
+                  <button
+                    className="approved"
+                    type="button"
+                    onClick={() => {
+                      setRevision({
+                        id: firstQuestion.id,
+                        text: "",
+                        questionId: firstQuestion.clarification!.id,
+                      });
+                      composer.current?.focus();
+                    }}
+                  >
+                    답변
+                  </button>
+                </section>
+              )}
               {approval?.plan && approval.approvalId && (
                 <section className="decision" aria-label="권한 승인">
                   <div>
@@ -764,8 +814,11 @@ function Workspace() {
                 {revisionJob && (
                   <div className="revision-target">
                     <span title={revisionJob.plan?.goal ?? revisionJob.request}>
-                      추가 지시 ·{" "}
-                      {revisionJob.plan?.goal ?? revisionJob.request}
+                      {revision?.questionId
+                        ? (revisionJob.clarification?.text ??
+                          "질문이 바뀌었어요.")
+                        : "추가 지시 · " +
+                          (revisionJob.plan?.goal ?? revisionJob.request)}
                     </span>
                     <button
                       type="button"
@@ -784,9 +837,11 @@ function Workspace() {
                   rows={2}
                   disabled={!data?.session || sending}
                   placeholder={
-                    revision
-                      ? "이 업무에서 바꿀 내용을 알려 주세요…"
-                      : "비서에게 메시지 보내기…"
+                    revision?.questionId
+                      ? "비서의 질문에 답하기…"
+                      : revision
+                        ? "이 업무에서 바꿀 내용을 알려 주세요…"
+                        : "비서에게 메시지 보내기…"
                   }
                   onChange={(event) => {
                     if (revision)

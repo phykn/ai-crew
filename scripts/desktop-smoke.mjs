@@ -86,15 +86,27 @@ try {
   await roster.getByRole("button", { name: "플랜 고용", exact: true }).click();
   await page.locator(".roster summary").click();
   await send(
-    "프로젝트의 notes.txt 파일을 실제로 수정해줘. 기존 내용 Before를 After로 바꾸고 줄바꿈 한 개를 유지해줘.",
+    "프로젝트의 notes.txt 파일을 실제로 수정해줘. 기존 내용 Before를 After로 바꾸고 줄바꿈 한 개를 유지해줘. 수정하기 전에 스타일 담당자에게 마지막 줄바꿈 규칙을 확인해줘.",
   );
   const question = page.getByRole("region", { name: "권한 승인" });
   await expect(question).toContainText("notes.txt", { timeout: 45000 });
   expect(await readFile(projectFile, "utf8")).toBe("Before\n");
   await question.getByRole("button", { name: "허용" }).click();
-  await expect(page.getByText(/notes.txt 파일을 변경했어요/)).toBeVisible({
-    timeout: 45000,
+  const completed = page.getByText(/notes.txt 파일을 변경했어요/);
+  const clarification = page.getByRole("region", { name: "비서의 확인 질문" });
+  await expect(completed.or(clarification).first()).toBeVisible({
+    timeout: 90000,
   });
+  if (await clarification.isVisible()) {
+    expect(await readFile(projectFile, "utf8")).toBe("Before\n");
+    await clarification.getByRole("button", { name: "답변" }).click();
+    await send(
+      "네. notes.txt 전체 내용은 After와 바로 뒤의 줄바꿈 한 개입니다.",
+    );
+    await expect(question).toContainText("notes.txt", { timeout: 45000 });
+    await question.getByRole("button", { name: "허용" }).click();
+  }
+  await expect(completed).toBeVisible({ timeout: 90000 });
   expect(await readFile(projectFile, "utf8")).toBe("After\n");
   await page.getByRole("button", { name: "추가 지시" }).click();
   await expect(page.locator(".revision-target")).toBeVisible();
@@ -112,6 +124,10 @@ try {
     .click();
   const changeLog = page.locator(".change-log").first();
   await expect(page.getByText(/새 플랜 담당 배정/).first()).toBeVisible();
+  await expect(
+    page.getByText(/개발 → 스타일 · notes\.txt/).first(),
+  ).toBeVisible();
+  await expect(page.getByText(/스타일 → 개발 ·/).first()).toBeVisible();
   await changeLog.locator("summary").click();
   await expect(changeLog.getByText(/테스트 · 통과/)).toBeVisible();
   await page.getByRole("button", { name: "대화" }).click();

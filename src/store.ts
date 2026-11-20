@@ -28,7 +28,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 10)
+    if (migration.user_version > 12)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -157,6 +157,32 @@ export class CrewStore {
           member_id TEXT NOT NULL, PRIMARY KEY (job_id, role)
         );
         PRAGMA user_version = 10;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 11) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE peer_requests ADD COLUMN parent_id TEXT REFERENCES peer_requests(id);
+        ALTER TABLE peer_requests ADD COLUMN blocker TEXT;
+        CREATE TABLE peer_messages (
+          request_id TEXT NOT NULL REFERENCES peer_requests(id),
+          round INTEGER NOT NULL, kind TEXT NOT NULL, sender TEXT NOT NULL,
+          body TEXT NOT NULL, PRIMARY KEY(request_id, round, kind)
+        );
+        PRAGMA user_version = 11;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 12) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE job_questions (
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES jobs(id),
+          text TEXT NOT NULL
+        );
+        ALTER TABLE job_revisions ADD COLUMN question_id TEXT REFERENCES job_questions(id);
+        PRAGMA user_version = 12;
         COMMIT;
       `);
     }
@@ -515,13 +541,23 @@ export class CrewStore {
   readJobs(sessionId: string) {
     const rows = this.db
       .prepare(
-        "SELECT id, project_id AS projectId, session_id AS sessionId, request, state, approval_id AS approvalId, plan FROM jobs WHERE session_id = ? ORDER BY rowid",
+        `SELECT id, project_id AS projectId, session_id AS sessionId, request, state, approval_id AS approvalId, plan,
+          CASE WHEN j.state = 'clarification' THEN (
+            SELECT json_object('id', q.id, 'text', q.text) FROM job_questions q WHERE q.job_id = j.id ORDER BY q.rowid DESC LIMIT 1
+          ) END AS clarification
+         FROM jobs j WHERE session_id = ? ORDER BY rowid`,
       )
-      .all(sessionId) as (Omit<Job, "plan"> & { plan: string | null })[];
+      .all(sessionId) as (Omit<Job, "plan" | "clarification"> & {
+      plan: string | null;
+      clarification: string | null;
+    })[];
     return rows.map(
       (row): Job => ({
         ...row,
         plan: row.plan ? (JSON.parse(row.plan) as WorkPlan) : null,
+        clarification: row.clarification
+          ? (JSON.parse(row.clarification) as Job["clarification"])
+          : null,
       }),
     );
   }
@@ -551,30 +587,51 @@ export class CrewStore {
     return next && this.getJob(String(next.id));
   }
 
-  reviseJob(job: Job, requestId: string, text: string) {
+  askJobQuestion(job: Job, text: string) {
+    this.transaction(() => {
+      this.db
+        .prepare("INSERT INTO job_questions VALUES (?, ?, ?)")
+        .run(randomUUID(), job.id, text);
+      this.db
+        .prepare(
+          "UPDATE jobs SET state = 'clarification', approval_id = NULL WHERE id = ?",
+        )
+        .run(job.id);
+      this.log(job.sessionId, "비서 · 사용자 확인 요청 · " + text, job.id);
+    });
+  }
+
+  reviseJob(job: Job, requestId: string, text: string, questionId?: string) {
     return this.transaction(() => {
       const previous = this.db
         .prepare(
-          "SELECT requests.text, job_revisions.job_id FROM requests LEFT JOIN job_revisions ON request_id = requests.id WHERE requests.id = ?",
+          "SELECT requests.text, job_revisions.job_id, job_revisions.question_id FROM requests LEFT JOIN job_revisions ON request_id = requests.id WHERE requests.id = ?",
         )
         .get(requestId);
       if (previous) {
-        if (previous.job_id !== job.id || previous.text !== text)
+        if (
+          previous.job_id !== job.id ||
+          previous.text !== text ||
+          previous.question_id !== (questionId ?? null)
+        )
           throw new Error("다른 전송에 쓰인 요청이에요.");
         return false;
       }
-      if (job.state !== "complete")
+      if (questionId && job.clarification?.id !== questionId)
+        throw new Error("이미 바뀐 질문이에요. 현재 질문을 확인해 주세요.");
+      if (!questionId && job.state !== "complete")
         throw new Error("완료된 업무에 추가 지시를 보낼 수 있어요.");
       this.db
         .prepare("INSERT INTO requests (id, session_id, text) VALUES (?, ?, ?)")
         .run(requestId, job.sessionId, text);
       this.db
-        .prepare("INSERT INTO job_revisions VALUES (?, ?, ?, ?)")
+        .prepare("INSERT INTO job_revisions VALUES (?, ?, ?, ?, ?)")
         .run(
           requestId,
           job.id,
           job.request,
           job.plan && JSON.stringify(job.plan),
+          questionId ?? null,
         );
       this.db
         .prepare(
@@ -585,8 +642,23 @@ export class CrewStore {
         .prepare(
           "UPDATE jobs SET request = ?, state = 'planning', plan = NULL, approval_id = NULL WHERE id = ?",
         )
-        .run(text, job.id);
-      this.log(job.sessionId, "비서 → 플랜 · 완료 업무의 추가 지시", job.id);
+        .run(
+          questionId
+            ? job.request +
+                "\n\n비서의 확인 질문: " +
+                job.clarification!.text +
+                "\n사용자 답변: " +
+                text
+            : text,
+          job.id,
+        );
+      this.log(
+        job.sessionId,
+        questionId
+          ? "비서 → 플랜 · 사용자 확인 답변 전달"
+          : "비서 → 플랜 · 완료 업무의 추가 지시",
+        job.id,
+      );
       return true;
     });
   }
@@ -785,46 +857,116 @@ export class CrewStore {
   openPeerRequest(
     id: string,
     job: Job,
-    recipient: "style" | "review",
+    sender: RoleId,
+    recipient: RoleId,
     path: string,
     baseline: string | null,
     question: string,
+    parentId: string | null,
   ) {
     return this.transaction(() => {
-      const inserted = this.db
-        .prepare(
-          "INSERT OR IGNORE INTO peer_requests (id, job_id, sender, recipient, path, baseline, question) VALUES (?, ?, 'development', ?, ?, ?, ?)",
+      const cycle =
+        sender === recipient ||
+        (parentId &&
+          this.db
+            .prepare(
+              `
+        WITH RECURSIVE ancestors AS (
+          SELECT sender, recipient, parent_id FROM peer_requests WHERE id = ? AND job_id = ?
+          UNION ALL
+          SELECT p.sender, p.recipient, p.parent_id FROM peer_requests p JOIN ancestors a ON p.id = a.parent_id
         )
-        .run(id, job.id, recipient, path, baseline, question);
-      const role = recipient === "style" ? "스타일" : "리뷰";
-      if (inserted.changes)
+        SELECT 1 FROM ancestors WHERE sender = ? OR recipient = ? LIMIT 1
+      `,
+            )
+            .get(parentId, job.id, recipient, recipient));
+      if (cycle) {
+        const from = roles.find(({ id }) => id === sender)!.title;
+        const to = roles.find(({ id }) => id === recipient)!.title;
         this.log(
           job.sessionId,
-          "개발 → " + role + " · " + path + " · " + question,
+          "비서 · " +
+            from +
+            " → " +
+            to +
+            " 순환 요청 보류 · 기존 인계 범위에서 답변 요청",
           job.id,
         );
+        return { cyclic: true, answer: null, blocker: null };
+      }
+      const inserted = this.db
+        .prepare(
+          "INSERT OR IGNORE INTO peer_requests (id, job_id, sender, recipient, path, baseline, question, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(id, job.id, sender, recipient, path, baseline, question, parentId);
+      if (inserted.changes) {
+        const from = roles.find(({ id }) => id === sender)!.title;
+        const to = roles.find(({ id }) => id === recipient)!.title;
+        this.log(
+          job.sessionId,
+          from + " → " + to + " · " + path + " · " + question,
+          job.id,
+        );
+      }
       const row = this.db
-        .prepare("SELECT answer FROM peer_requests WHERE id = ?")
+        .prepare("SELECT answer, blocker FROM peer_requests WHERE id = ?")
         .get(id);
-      return row?.answer as string | null;
+      return {
+        cyclic: false,
+        answer: (row?.answer ?? null) as string | null,
+        blocker: (row?.blocker ?? null) as string | null,
+      };
     });
   }
 
-  answerPeerRequest(
-    id: string,
+  recordPeerMessage(
     job: Job,
-    recipient: "style" | "review",
-    answer: string,
+    id: string,
+    round: number,
+    kind: "question" | "supplement" | "guidance",
+    sender: RoleId,
+    body: string,
   ) {
     this.transaction(() => {
       const saved = this.db
         .prepare(
-          "UPDATE peer_requests SET answer = ? WHERE id = ? AND job_id = ? AND answer IS NULL",
+          `
+        INSERT OR IGNORE INTO peer_messages
+        SELECT id, ?, ?, ?, ? FROM peer_requests WHERE id = ? AND job_id = ? AND answer IS NULL AND blocker IS NULL
+      `,
         )
-        .run(answer, id, job.id);
-      const role = recipient === "style" ? "스타일" : "리뷰";
-      if (saved.changes)
-        this.log(job.sessionId, role + " → 개발 · " + answer, job.id);
+        .run(round, kind, sender, body, id, job.id);
+      if (saved.changes) {
+        const title = roles.find(({ id }) => id === sender)!.title;
+        this.log(
+          job.sessionId,
+          title +
+            " · " +
+            (kind === "question" ? "보완 질문" : "보완 내용") +
+            " · " +
+            body,
+          job.id,
+        );
+      }
+    });
+  }
+
+  answerPeerRequest(id: string, job: Job, text: string, blocked: boolean) {
+    this.transaction(() => {
+      const saved = this.db
+        .prepare(
+          "UPDATE peer_requests SET answer = ?, blocker = ? WHERE id = ? AND job_id = ? AND answer IS NULL AND blocker IS NULL RETURNING sender, recipient",
+        )
+        .get(blocked ? null : text, blocked ? text : null, id, job.id);
+      if (saved) {
+        const from = roles.find(({ id }) => id === saved.recipient)!.title;
+        const to = roles.find(({ id }) => id === saved.sender)!.title;
+        this.log(
+          job.sessionId,
+          from + " → " + to + " · " + (blocked ? "확인 필요 · " : "") + text,
+          job.id,
+        );
+      }
     });
   }
 

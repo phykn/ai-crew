@@ -123,6 +123,7 @@ export const actions = z.discriminatedUnion("type", [
     jobId: identifier,
     sessionId: identifier,
     requestId: identifier,
+    questionId: identifier.optional(),
     text: z.string().trim().min(1).max(32000),
   }),
 ]);
@@ -171,6 +172,7 @@ export type Activity = {
   recordedAt: string | null;
 };
 export type JobState =
+  | "clarification"
   | "planning"
   | "approval"
   | "queued"
@@ -211,6 +213,7 @@ export type Job = {
   request: string;
   state: JobState;
   approvalId: string | null;
+  clarification: { id: string; text: string } | null;
   plan: WorkPlan | null;
 };
 export type Snapshot = {

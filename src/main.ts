@@ -225,6 +225,7 @@ async function startApp() {
           action.sessionId,
           action.requestId,
           action.text,
+          action.questionId,
         );
         break;
       case "chat.stop": {

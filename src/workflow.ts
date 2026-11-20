@@ -1,5 +1,15 @@
 // The workflow the app drives: follow-ups, the job queue and the lifecycle of a
-// run. The steps live in the workflow-* modules above.
+// run. Each step lives one level up the chain, so `CrewWorkflow` carries the
+// same public methods as it did when everything was in this file.
+//
+//   WorkflowBase          run state, the model turn loop, retries
+//   WorkflowTools         the MCP tool gate
+//   WorkflowChecks        stage selection and file checks
+//   WorkflowVerification  change-set verification, peer consultation
+//   WorkflowPlanning      planning a request
+//   WorkflowDevelopment   developing a change set
+//   WorkflowRecovery      recovering a half-written job
+//   CrewWorkflow          follow-ups, the queue, start/stop/resume
 
 import { resolve, sep } from "node:path";
 import { planFiles, planTargets, type Job } from "./actions";

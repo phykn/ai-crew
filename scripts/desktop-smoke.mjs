@@ -90,6 +90,14 @@ try {
     timeout: 45000,
   });
   expect(await readFile(projectFile, "utf8")).toBe("Final\n");
+  await page
+    .getByRole("button", { name: "업무 로그", exact: true })
+    .last()
+    .click();
+  const changeLog = page.locator(".change-log").first();
+  await changeLog.locator("summary").click();
+  await expect(changeLog.getByText(/테스트 · 통과/)).toBeVisible();
+  await page.getByRole("button", { name: "대화" }).click();
   if (process.env.AI_CREW_TEST_CODEX === "1") {
     await page.locator(".roster summary").click();
     await page

@@ -9,6 +9,7 @@ import {
   type Job,
   type JobState,
   type WorkPlan,
+  type WorkChange,
   type Message,
   type Project,
   type Provider,
@@ -26,7 +27,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 8)
+    if (migration.user_version > 9)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -120,6 +121,25 @@ export class CrewStore {
         BEGIN;
         ALTER TABLE agent_context ADD COLUMN revision_id TEXT REFERENCES job_revisions(request_id);
         PRAGMA user_version = 8;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 9) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE work_changes (
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES jobs(id),
+          plan_id TEXT REFERENCES work_plans(id), path TEXT NOT NULL,
+          before_hash TEXT, after_hash TEXT NOT NULL, before_text TEXT,
+          after_text TEXT NOT NULL, saved_at TEXT
+        );
+        CREATE TABLE work_checks (
+          change_id TEXT NOT NULL REFERENCES work_changes(id), role TEXT NOT NULL,
+          passed INTEGER NOT NULL, unavailable INTEGER NOT NULL, note TEXT NOT NULL,
+          command TEXT, checked_at TEXT NOT NULL, PRIMARY KEY (change_id, role)
+        );
+        ALTER TABLE activity ADD COLUMN recorded_at TEXT;
+        PRAGMA user_version = 9;
         COMMIT;
       `);
     }
@@ -364,9 +384,9 @@ export class CrewStore {
   log(sessionId: string, text: string, jobId: string | null = null) {
     this.db
       .prepare(
-        "INSERT INTO activity (session_id, text, job_id) VALUES (?, ?, ?)",
+        "INSERT INTO activity (session_id, text, job_id, recorded_at) VALUES (?, ?, ?, ?)",
       )
-      .run(sessionId, text, jobId);
+      .run(sessionId, text, jobId, new Date().toISOString());
   }
 
   createJob(sessionId: string, requestId: string, request: string) {
@@ -469,6 +489,120 @@ export class CrewStore {
         request: row.request,
         plan: row.plan ? (JSON.parse(row.plan) as WorkPlan) : null,
       }
+    );
+  }
+
+  prepareChange(
+    job: Job,
+    before: { hash: string | null; content: string | null },
+    after: { hash: string; content: string },
+  ) {
+    const id = randomUUID();
+    this.db
+      .prepare(
+        `INSERT INTO work_changes (id, job_id, plan_id, path, before_hash, after_hash, before_text, after_text)
+         VALUES (?, ?, (SELECT id FROM work_plans WHERE id = ?), ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        job.id,
+        job.approvalId,
+        job.plan!.path,
+        before.hash,
+        after.hash,
+        before.content,
+        after.content,
+      );
+    return id;
+  }
+
+  confirmChange(job: Job, changeId: string, hash: string) {
+    this.transaction(() => {
+      const saved = this.db
+        .prepare(
+          `UPDATE work_changes SET saved_at = ?
+          WHERE id = ? AND job_id = ? AND after_hash = ? AND saved_at IS NULL RETURNING path`,
+        )
+        .get(new Date().toISOString(), changeId, job.id, hash);
+      if (saved)
+        this.log(
+          job.sessionId,
+          "개발 → 비서 · " + saved.path + " 저장 · " + hash,
+          job.id,
+        );
+    });
+  }
+
+  recordCheck(
+    job: Job,
+    changeId: string,
+    role: "review" | "style" | "test",
+    label: string,
+    result: {
+      passed: boolean;
+      note: string;
+      unavailable?: boolean;
+      command?: string;
+    },
+  ) {
+    this.transaction(() => {
+      const saved = this.db
+        .prepare(
+          `INSERT OR IGNORE INTO work_checks
+          SELECT id, ?, ?, ?, ?, ?, ? FROM work_changes
+          WHERE id = ? AND job_id = ? AND saved_at IS NOT NULL RETURNING change_id`,
+        )
+        .get(
+          role,
+          Number(result.passed),
+          Number(!!result.unavailable),
+          result.note,
+          result.command ?? null,
+          new Date().toISOString(),
+          changeId,
+          job.id,
+        );
+      if (saved) {
+        const change = this.db
+          .prepare("SELECT after_hash FROM work_changes WHERE id = ?")
+          .get(changeId);
+        this.log(
+          job.sessionId,
+          label + " · " + result.note + " · " + change!.after_hash,
+          job.id,
+        );
+      }
+    });
+  }
+
+  readChanges(sessionId: string) {
+    const changes = this.db
+      .prepare(
+        `SELECT c.id, c.job_id AS jobId, c.plan_id AS planId,
+      c.path, c.before_hash AS beforeHash, c.after_hash AS afterHash, c.saved_at AS savedAt
+      FROM work_changes c JOIN jobs j ON j.id = c.job_id
+      WHERE j.session_id = ? AND c.saved_at IS NOT NULL ORDER BY c.rowid DESC`,
+      )
+      .all(sessionId) as Omit<WorkChange, "checks">[];
+    const checks = this.db
+      .prepare(`SELECT role, passed, unavailable, note, command, checked_at AS checkedAt
+      FROM work_checks WHERE change_id = ? ORDER BY rowid`);
+    type CheckRow = Omit<
+      WorkChange["checks"][number],
+      "passed" | "unavailable"
+    > & {
+      passed: number;
+      unavailable: number;
+    };
+    return changes.map(
+      (change): WorkChange => ({
+        ...change,
+        checks: (checks.all(change.id) as CheckRow[]).map((check) => ({
+          ...check,
+          passed: Boolean(check.passed),
+          unavailable: Boolean(check.unavailable),
+        })),
+      }),
     );
   }
 
@@ -641,10 +775,11 @@ export class CrewStore {
         : null,
       messages: session ? this.getMessages(session.id) : [],
       jobs: session ? this.readJobs(session.id) : [],
+      changes: session ? this.readChanges(session.id) : [],
       activity: session
         ? (this.db
             .prepare(
-              "SELECT id, text, job_id AS jobId FROM activity WHERE session_id = ? ORDER BY id DESC LIMIT 100",
+              "SELECT id, text, job_id AS jobId, recorded_at AS recordedAt FROM activity WHERE session_id = ? ORDER BY id DESC LIMIT 100",
             )
             .all(session.id) as Activity[])
         : [],

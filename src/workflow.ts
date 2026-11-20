@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { Job, Project, RoleId, WorkPlan } from "./actions";
+import {
+  roles,
+  type Job,
+  type Project,
+  type RoleId,
+  type WorkPlan,
+} from "./actions";
 import type { CodexConnection } from "./codex";
 import { decideLocal } from "./local";
 import type { CrewStore } from "./store";
@@ -113,6 +119,7 @@ function applyFileEnding(
 export class CrewWorkflow {
   private active = new Map<string, AbortController>();
   private reserved = new Set<string>();
+  private agentTurns = new Map<string, Promise<void>>();
 
   constructor(
     private store: CrewStore,
@@ -160,6 +167,8 @@ export class CrewWorkflow {
           " · 수정 승인 · " +
           job.plan.path +
           "의 앞 업무가 끝날 때까지 대기",
+        job.plan,
+        job.approvalId,
       );
       return;
     }
@@ -170,7 +179,7 @@ export class CrewWorkflow {
   }
 
   private startDevelopment(job: Job, note: string) {
-    this.store.recordJob(job, "developing", note);
+    this.store.recordJob(job, "developing", note, job.plan, job.approvalId);
     this.reserved.add(job.projectId + ":" + job.plan!.path.toLowerCase());
     this.start(job, "developing");
   }
@@ -301,6 +310,57 @@ export class CrewWorkflow {
   }
 
   private async decide<T extends z.ZodType>(
+    job: Job,
+    project: Project,
+    role: RoleId,
+    system: string,
+    prompt: string,
+    schema: T,
+    signal: AbortSignal,
+  ) {
+    const key = project.id + ":" + role;
+    const previous = this.agentTurns.get(key);
+    const turn = Promise.withResolvers<void>();
+    const tail = previous ? previous.then(() => turn.promise) : turn.promise;
+    this.agentTurns.set(key, tail);
+    try {
+      signal.throwIfAborted();
+      if (previous) {
+        this.store.log(
+          job.sessionId,
+          (roles.find(({ id }) => id === role)?.title ?? role) +
+            " · 앞 요청을 마칠 때까지 대기",
+          job.id,
+        );
+        this.notify();
+        const interrupted = Promise.withResolvers<never>();
+        const abort = () => interrupted.reject(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
+        try {
+          await Promise.race([previous, interrupted.promise]);
+        } finally {
+          signal.removeEventListener("abort", abort);
+        }
+      }
+      signal.throwIfAborted();
+      return await this.runAgent(
+        job,
+        project,
+        role,
+        system,
+        prompt,
+        schema,
+        signal,
+      );
+    } finally {
+      turn.resolve();
+      void tail.then(() => {
+        if (this.agentTurns.get(key) === tail) this.agentTurns.delete(key);
+      });
+    }
+  }
+
+  private async runAgent<T extends z.ZodType>(
     job: Job,
     project: Project,
     role: RoleId,
@@ -497,6 +557,10 @@ export class CrewWorkflow {
         ];
         continue;
       }
+      const changeId = this.store.prepareChange(job, original, {
+        hash: createHash("sha256").update(content).digest("hex"),
+        content,
+      });
       await writeWorkspaceFile(
         project.root,
         plan.path,
@@ -508,11 +572,7 @@ export class CrewWorkflow {
       if (!this.active.has(job.id)) return;
       if (saved.content !== content)
         throw new Error("저장한 뒤 파일이 바뀌었어요.");
-      this.store.log(
-        job.sessionId,
-        "개발 → 비서 · " + plan.path + " 저장 · " + saved.hash,
-        job.id,
-      );
+      this.store.confirmChange(job, changeId, saved.hash!);
       signal.throwIfAborted();
       this.store.recordJob(
         job,
@@ -550,13 +610,11 @@ export class CrewWorkflow {
         this.verify(project, job, baseline.content, saved.content!, signal),
       ]);
       signal.throwIfAborted();
-      if ((await inspectFile(project.root, plan.path)).hash !== saved.hash)
-        throw new Error("검증 중 파일이 바뀌었어요.");
-      signal.throwIfAborted();
 
       failures = [];
       let incomplete = false;
       const labels = ["리뷰", "스타일", "테스트"];
+      const roles = ["review", "style", "test"] as const;
       for (const [index, check] of checks.entries()) {
         const result =
           check.status === "fulfilled"
@@ -571,10 +629,22 @@ export class CrewWorkflow {
                 unavailable: true,
               };
         const note = labels[index] + " · " + result.note;
-        this.store.log(job.sessionId, note + " · " + saved.hash, job.id);
+        this.store.recordCheck(
+          job,
+          changeId,
+          roles[index],
+          labels[index],
+          result,
+        );
         if (!result.passed) failures.push(note);
         if ("unavailable" in result && result.unavailable) incomplete = true;
       }
+      const reviewedVersion = (await inspectFile(project.root, plan.path)).hash;
+      signal.throwIfAborted();
+      if (reviewedVersion !== saved.hash)
+        throw new Error(
+          "검증 중 파일이 바뀌었어요. 이전 결과는 업무 로그에서 확인할 수 있어요.",
+        );
       if (!failures.length) {
         this.store.recordJob(
           job,
@@ -700,6 +770,7 @@ export class CrewWorkflow {
     const result = await this.codex.checkJavaScript(project, plan.path, signal);
     return {
       passed: result.exitCode === 0,
+      command: "node --check " + JSON.stringify(plan.path),
       note:
         result.exitCode === 0
           ? "node --check 통과"

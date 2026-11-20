@@ -246,6 +246,21 @@ summary:focus-visible {
   overflow-y: auto;
   padding: var(--space-4) var(--pane-inset);
 }
+.change-log {
+  border-bottom: 1px solid var(--line-control);
+  padding-block: var(--space-2);
+}
+.change-log summary {
+  cursor: pointer;
+}
+.change-log code,
+.activity-time {
+  color: var(--dim);
+  font-size: var(--font-detail);
+}
+.activity-time {
+  margin-inline-end: var(--space-2);
+}
 .transcript {
   display: flex;
   min-height: 100%;
@@ -274,11 +289,12 @@ summary:focus-visible {
   color: var(--dim);
   font-size: var(--font-detail);
 }
-.follow-up {
-  display: block;
+.report-actions {
+  display: flex;
+  gap: var(--space-3);
   margin-top: var(--space-2);
 }
-.follow-up,
+.report-actions button,
 .revision-target button {
   color: var(--warm);
   font-size: var(--font-detail);

@@ -179,6 +179,8 @@ function Workspace() {
     ) || [];
   const activity =
     data?.activity.filter((entry) => !logJob || entry.jobId === logJob) || [];
+  const changes =
+    data?.changes.filter((change) => !logJob || change.jobId === logJob) || [];
   const hasPlanning = data?.jobs.some((job) => job.state === "planning");
   const hasDeveloping = data?.jobs.some((job) => job.state === "developing");
   const visibleMessages =
@@ -400,8 +402,51 @@ function Workspace() {
                 ← 전체 기록
               </button>
             )}
+            {changes.map((change) => (
+              <details className="change-log" key={change.id}>
+                <summary>
+                  {change.path} <code>{change.afterHash.slice(0, 8)}</code>
+                </summary>
+                <p className="muted">
+                  {change.beforeHash
+                    ? change.beforeHash.slice(0, 8)
+                    : "신규 파일"}{" "}
+                  → {change.afterHash.slice(0, 8)} ·{" "}
+                  <time dateTime={change.savedAt}>
+                    {new Date(change.savedAt).toLocaleString()}
+                  </time>
+                </p>
+                <ul>
+                  {change.checks.map((check) => (
+                    <li key={check.role}>
+                      {roles.find(({ id }) => id === check.role)?.title} ·{" "}
+                      {check.passed
+                        ? "통과"
+                        : check.unavailable
+                          ? "미검증"
+                          : "실패"}
+                      {check.command && (
+                        <>
+                          {" "}
+                          · <code>{check.command}</code>
+                        </>
+                      )}
+                      {" · "}
+                      {check.note}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ))}
             {activity.map((entry) => (
-              <p key={entry.id}>{entry.text}</p>
+              <p key={entry.id}>
+                {entry.recordedAt && (
+                  <time className="activity-time" dateTime={entry.recordedAt}>
+                    {new Date(entry.recordedAt).toLocaleTimeString()}
+                  </time>
+                )}
+                {entry.text}
+              </p>
             ))}
             {!activity.length && (
               <p className="muted">아직 활동 기록이 없어요.</p>
@@ -481,30 +526,40 @@ function Workspace() {
                       {message.error && (
                         <small role="status">{message.error}</small>
                       )}
-                      {message.role === "assistant" &&
-                        message.jobId &&
-                        data?.jobs.some(
-                          (job) =>
-                            job.id === message.jobId &&
-                            job.state === "complete",
-                        ) &&
-                        data.messages.findLast(
-                          (item) =>
-                            item.role === "assistant" &&
-                            item.jobId === message.jobId,
-                        )?.id === message.id && (
+                      {message.role === "assistant" && message.jobId && (
+                        <div className="report-actions">
                           <button
                             type="button"
-                            className="follow-up"
-                            disabled={sending}
                             onClick={() => {
-                              setRevision({ id: message.jobId!, text: "" });
-                              composer.current?.focus();
+                              setLogJob(message.jobId);
+                              setView("log");
                             }}
                           >
-                            추가 지시
+                            업무 로그
                           </button>
-                        )}
+                          {data?.jobs.some(
+                            (job) =>
+                              job.id === message.jobId &&
+                              job.state === "complete",
+                          ) &&
+                            data.messages.findLast(
+                              (item) =>
+                                item.role === "assistant" &&
+                                item.jobId === message.jobId,
+                            )?.id === message.id && (
+                              <button
+                                type="button"
+                                disabled={sending}
+                                onClick={() => {
+                                  setRevision({ id: message.jobId!, text: "" });
+                                  composer.current?.focus();
+                                }}
+                              >
+                                추가 지시
+                              </button>
+                            )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -153,7 +153,12 @@ export type Message = {
   error: string | null;
   jobId: string | null;
 };
-export type Activity = { id: number; text: string; jobId: string | null };
+export type Activity = {
+  id: number;
+  text: string;
+  jobId: string | null;
+  recordedAt: string | null;
+};
 export type JobState =
   | "planning"
   | "approval"
@@ -170,6 +175,23 @@ export type WorkPlan = {
   goal: string;
   criterion: string;
   baseline: string | null;
+};
+export type WorkChange = {
+  id: string;
+  jobId: string;
+  planId: string | null;
+  path: string;
+  beforeHash: string | null;
+  afterHash: string;
+  savedAt: string;
+  checks: {
+    role: "review" | "style" | "test";
+    passed: boolean;
+    unavailable: boolean;
+    note: string;
+    command: string | null;
+    checkedAt: string;
+  }[];
 };
 export type Job = {
   id: string;
@@ -190,6 +212,7 @@ export type Snapshot = {
   messages: Message[];
   activity: Activity[];
   jobs: Job[];
+  changes: WorkChange[];
 };
 export type ChatEvent = {
   sessionId: string;

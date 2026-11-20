@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { CrewSettings } from "./crew-settings";
+import { MemoryPanel } from "./memory-panel";
 import { findChatCommand, suggestChatCommands } from "./chat-commands";
 import {
   approvalLabels,
@@ -40,6 +41,7 @@ const icons = {
   fire: "M13 2c1 6-4 7-2 11 2-1 3-3 3-6 4 3 6 6 5 10-1 4-5 6-9 5-5-1-7-5-6-9 1-2 2-4 5-7-1 5 0 6 1 6-1-4 4-6 3-10Z",
   chat: "M3 4h18v13H9l-5 4v-4H3Z",
   list: "M8 6h13M8 12h13M8 18h13M3 6h1m-1 6h1m-1 6h1",
+  book: "M12 5c-3-2-6-2-10-1v15c4-1 7-1 10 1 3-2 6-2 10-1V4c-4-1-7-1-10 1Zm0 0v15",
   menu: "M3 6h18M3 12h18M3 18h18",
   folder: "M3 7V5h6l2 2h10v12H3Z",
   send: "m3 11 18-8-7 18-3-8-8-2Zm8 2 10-10",
@@ -155,7 +157,8 @@ function Workspace() {
   const [focusedApprovalId, setFocusedApprovalId] = useState<string | null>(
     null,
   );
-  const [view, setView] = useState<"chat" | "log">("chat");
+  const [view, setView] = useState<"chat" | "log" | "memory">("chat");
+  const [memoryOwner, setMemoryOwner] = useState<string | null | undefined>(undefined);
   const [menu, setMenu] = useState<"projects" | "sessions" | null>(null);
   const [showCamp, setShowCamp] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
@@ -167,6 +170,7 @@ function Workspace() {
   const following = useRef(true);
 
   function apply(next: Snapshot, resetDraft = false) {
+    if (next.current?.id !== dataRef.current?.current?.id) setMemoryOwner(undefined);
     if (next.session?.id !== dataRef.current?.session?.id) setRevision(null);
     if (resetDraft || next.session?.id !== dataRef.current?.session?.id) {
       setDraft(next.session?.draft ?? "");
@@ -500,6 +504,12 @@ function Workspace() {
                     data={data}
                     run={run}
                     close={() => setSettingsMember(null)}
+                    openMemory={() => {
+                      setMemoryOwner(configuredMember.id);
+                      setSettingsMember(null);
+                      setView("memory");
+                      setShowCamp(false);
+                    }}
                     error={error}
                   />
                 )}
@@ -651,6 +661,21 @@ function Workspace() {
             <button
               type="button"
               className="icon-button"
+              aria-label="메모리"
+              title="메모리"
+              aria-current={view === "memory"}
+              onClick={() => {
+                setMenu(null);
+                setMemoryOwner(undefined);
+                setView("memory");
+                setShowCamp(false);
+              }}
+            >
+              <Icon name="book" />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
               aria-label="세션 목록"
               title="세션 목록"
               aria-expanded={menu === "sessions"}
@@ -700,7 +725,25 @@ function Workspace() {
             </div>
           )}
         </header>
-        {view === "log" ? (
+        {view === "memory" ? (
+          <MemoryPanel
+            data={data}
+            owner={memoryOwner}
+            select={setMemoryOwner}
+            remove={(memoryId) => data?.current
+              ? run({ type: "memory.remove", projectId: data.current.id, memoryId })
+              : Promise.resolve(false)}
+            source={(memory) => {
+              void navigate({ type: "session.open", sessionId: memory.sourceSessionId })
+                .then(() => {
+                  if (memory.sourceJobId && dataRef.current?.session?.id === memory.sourceSessionId) {
+                    setLogJob(memory.sourceJobId);
+                    setView("log");
+                  }
+                });
+            }}
+          />
+        ) : view === "log" ? (
           <div className="logs" aria-label="로그">
             {logJob && (
               <div className="job-log-header">

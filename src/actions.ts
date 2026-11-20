@@ -140,6 +140,17 @@ export const actions = z.discriminatedUnion("type", [
     skillId: identifier,
   }),
   z.strictObject({
+    type: z.literal("memory.add"),
+    sessionId: identifier,
+    ownerId: z.union([roleId, identifier]).nullable(),
+    body: z.string().trim().min(1).max(4000),
+  }),
+  z.strictObject({
+    type: z.literal("memory.remove"),
+    projectId: identifier,
+    memoryId: identifier,
+  }),
+  z.strictObject({
     type: z.literal("chat.send"),
     sessionId: identifier,
     requestId: identifier,
@@ -329,6 +340,7 @@ export type Snapshot = {
   mcpServers: McpEndpoint[];
   mcpGrants: McpGrant[];
   skills: CrewSkill[];
+  memories: CrewMemory[];
   assignees: { jobId: string; memberId: string; roleId: RoleId }[];
   messages: Message[];
   activity: Activity[];
@@ -344,6 +356,16 @@ export type Snapshot = {
   }[];
   followups: { id: string; text: string; candidateIds: string[] }[];
   changes: WorkChange[];
+};
+export type CrewMemory = {
+  id: string;
+  ownerId: string | null;
+  authorId: string | null;
+  authorName: string;
+  sourceSessionId: string;
+  sourceJobId: string | null;
+  body: string;
+  createdAt: string;
 };
 export type ModelDetails = {
   model?: string;

@@ -78,6 +78,11 @@ async function startApp() {
     let failure: string | null = null;
     const started = performance.now();
     const details: ModelDetails = {};
+    const instructions = crewInstructions(
+      assistant,
+      store.listSkills(project.id),
+      store.listMemories(project.id, assistant.id),
+    );
     const emit = (delta: string) => {
       if (closing || controller.signal.aborted) return;
       store.append(id, delta);
@@ -97,7 +102,7 @@ async function startApp() {
         await codex.run(
           project,
           previous,
-          previous ? text : withHistory(),
+          instructions + "\n\n" + (previous ? text : withHistory()),
           controller.signal,
           emit,
           (thread) => {
@@ -107,7 +112,7 @@ async function startApp() {
           () => {
             if (!closing)
               store.log(sessionId, "비서 · 저장한 대화에서 Codex 맥락 복구");
-            return withHistory();
+            return instructions + "\n\n" + withHistory();
           },
           undefined,
           details,
@@ -129,8 +134,16 @@ async function startApp() {
             assistant,
             controller.signal,
           ),
-          crewInstructions(assistant, store.listSkills(project.id)),
+          instructions,
           details,
+          (body, shared) => {
+            controller.signal.throwIfAborted();
+            store.saveMemory(sessionId, body, shared ? null : assistant.id, {
+              id: assistant.id,
+              name: assistant.name,
+            });
+            publish(null);
+          },
         );
       }
     } catch (error) {
@@ -243,6 +256,12 @@ async function startApp() {
         break;
       case "crew.skill.remove":
         store.removeSkill(action.projectId, action.memberId, action.skillId);
+        break;
+      case "memory.add":
+        store.saveMemory(action.sessionId, action.body, action.ownerId);
+        break;
+      case "memory.remove":
+        store.removeMemory(action.projectId, action.memoryId);
         break;
       case "chat.send": {
         const command = findChatCommand(action.text);

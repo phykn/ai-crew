@@ -408,6 +408,24 @@ try {
     0,
   );
   await page.locator(".roster > summary").click();
+  await send("/clear");
+  await send("앞으로 대화가 바뀌어도 쓸 설정이야. remember 도구로 너의 기억에 '작업 메모 예시 이름은 MEMORY-CREW-317'을 저장해줘.");
+  await expect(page.getByRole("button", { name: "응답 멈춤" })).toHaveCount(0);
+  await page.getByRole("button", { name: "메모리", exact: true }).click();
+  const memoryPanel = page.getByRole("region", { name: "메모리", exact: true });
+  const savedMemory = memoryPanel.locator("details").filter({ hasText: "MEMORY-CREW-317" });
+  await savedMemory.locator("summary").click();
+  await expect(savedMemory.getByRole("button", { name: "출처 대화 열기" })).toBeVisible();
+  await page.getByRole("button", { name: "대화", exact: true }).click();
+  await send("/clear");
+  await send("프로젝트에서 기억 중인 작업 메모 예시 이름을 코드 그대로 알려줘.");
+  await expect(answer()).toContainText("MEMORY-CREW-317", { timeout: 35000 });
+  await page.getByRole("button", { name: "메모리", exact: true }).click();
+  await savedMemory.locator("summary").click();
+  await savedMemory.getByRole("button", { name: "기억 삭제" }).click();
+  await savedMemory.getByRole("button", { name: "삭제 확인" }).click();
+  await expect(savedMemory).toHaveCount(0);
+  await page.getByRole("button", { name: "대화", exact: true }).click();
   if (process.env.AI_CREW_TEST_CODEX === "1") {
     await page.locator(".roster > summary").click();
     await page

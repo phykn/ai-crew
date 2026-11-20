@@ -697,8 +697,7 @@ export class CrewWorkflow {
     schema: T,
     signal: AbortSignal,
   ) {
-    system +=
-      "\n\n" + crewInstructions(member, this.store.listSkills(job.projectId));
+    const skills = this.store.listSkills(job.projectId);
     const previous = this.store.getAgentContext(job.id, member.id);
     const withPrevious = () =>
       previous?.result && member.roleId !== "test"
@@ -713,11 +712,16 @@ export class CrewWorkflow {
           job.request,
           member.id,
           member.provider,
-          system,
+          system + "\n\n" + crewInstructions(member, skills),
           prompt,
         ]),
       )
       .digest("hex");
+    system += "\n\n" + crewInstructions(
+      member,
+      skills,
+      this.store.listMemories(job.projectId, member.id),
+    );
     let threadId =
       member.provider === "codex" ? (previous?.threadId ?? null) : null;
     if (member.provider === "codex" && !threadId && previous?.result)

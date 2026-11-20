@@ -33,6 +33,10 @@ test("keeps projects, conversation, draft and selected model through restart", (
     store.updateMember(current!.id, member.id, { hired: false });
     store.updateMember(current!.id, member.id, { hired: false });
     const job = store.createJob(id, response, "파일 수정");
+    store.saveMemory(id, "개발 담당 확인 코드", "development", {
+      id: "development", name: "모루", jobId: job.id,
+    });
+    store.saveMemory(id, "공통 확인 코드", null);
     store.recordModelRun(id, job.id, { roleId: "development", provider: "local" }, 75.48, {
       model: "qwen-test", inputTokens: 31, outputTokens: 12,
     });
@@ -67,6 +71,10 @@ test("keeps projects, conversation, draft and selected model through restart", (
       result: '{"content":"answer"}',
     });
     expect(store.getAgentContext(job.id, "review")).toBeUndefined();
+    expect(store.listMemories(current!.id, "assistant").map(({ body }) => body)).toEqual(["공통 확인 코드"]);
+    const [shared, own] = store.listMemories(current!.id, "development");
+    expect(own).toMatchObject({ ownerId: "development", authorName: "모루", sourceJobId: job.id, body: "개발 담당 확인 코드" });
+    expect(shared.body).toBe("공통 확인 코드");
     expect(store.snapshot().modelRuns).toEqual([
       {
         id: 1, jobId: job.id, roleId: "development", provider: "local",
@@ -83,6 +91,9 @@ test("keeps projects, conversation, draft and selected model through restart", (
     ).toHaveLength(1);
     store.openFolder("/work/another-project");
     expect(store.snapshot().modelRuns).toEqual([]);
+    expect(store.snapshot().memories).toEqual([]);
+    store.removeMemory(store.snapshot().current!.id, own.id);
+    expect(store.listMemories(current!.id, "development")).toHaveLength(2);
     expect(() =>
       store.updateMember(store.snapshot().current!.id, member.id, {
         hired: true,
@@ -102,12 +113,15 @@ test("keeps projects, conversation, draft and selected model through restart", (
     expect(fresh.messages).toEqual([]);
     expect(fresh.jobs).toEqual([]);
     expect(fresh.modelRuns).toEqual([]);
+    expect(fresh.memories).toHaveLength(2);
     expect(fresh.current?.approvalMode).toBe("always");
     expect(fresh.members).toContainEqual(
       expect.objectContaining({ id: "assistant", provider: "codex" }),
     );
     store.openSession(id);
     expect(store.getMessages(id)).toHaveLength(2);
+    store.removeMemory(current!.id, own.id);
+    expect(store.listMemories(current!.id, "development")).toEqual([shared]);
     expect(store.snapshot().jobs).toContainEqual(
       expect.objectContaining({ id: job.id }),
     );

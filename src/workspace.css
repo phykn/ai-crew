@@ -444,6 +444,14 @@ summary:focus-visible {
 .model-usage li {
   overflow-wrap: anywhere;
 }
+.memory-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.memory-confirm {
+  display: inline-flex;
+  gap: var(--space-1);
+}
 .command-list {
   margin-bottom: var(--space-1);
   padding-bottom: var(--space-1);

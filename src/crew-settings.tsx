@@ -7,12 +7,14 @@ export function CrewSettings({
   data,
   run,
   close,
+  openMemory,
   error,
 }: {
   member: CrewMember;
   data: Snapshot;
   run: (action: Action) => Promise<boolean>;
   close: () => void;
+  openMemory: () => void;
   error: string;
 }) {
   const projectId = data.current!.id;
@@ -61,6 +63,7 @@ export function CrewSettings({
         <summary>정의 MD</summary>
         <pre>{crewDefinition(member.roleId)}</pre>
       </details>
+      <button type="button" onClick={openMemory}>기억 보기</button>
 
       <section aria-label="스킬">
         <header>

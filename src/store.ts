@@ -9,6 +9,7 @@ import {
   type ApprovalMode,
   type Completion,
   type CrewMember,
+  type CrewMemory,
   type CrewSkill,
   type McpEndpoint,
   type McpGrant,
@@ -37,7 +38,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 24)
+    if (migration.user_version > 25)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -352,6 +353,20 @@ export class CrewStore {
         );
         CREATE INDEX model_runs_by_session ON model_runs(session_id);
         PRAGMA user_version = 24;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 25) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE crew_memories (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+          owner_id TEXT, author_id TEXT, author_name TEXT NOT NULL,
+          source_session_id TEXT NOT NULL, source_job_id TEXT,
+          body TEXT NOT NULL, created_at TEXT NOT NULL
+        );
+        CREATE INDEX crew_memories_by_project ON crew_memories(project_id, owner_id);
+        PRAGMA user_version = 25;
         COMMIT;
       `);
     }
@@ -1807,6 +1822,49 @@ export class CrewStore {
     });
   }
 
+  listMemories(projectId: string, ownerId?: string) {
+    const fields = `id, owner_id AS ownerId, author_id AS authorId, author_name AS authorName,
+      source_session_id AS sourceSessionId, source_job_id AS sourceJobId, body, created_at AS createdAt`;
+    return (ownerId === undefined
+      ? this.db.prepare(`SELECT ${fields} FROM crew_memories WHERE project_id = ? ORDER BY rowid DESC`).all(projectId)
+      : this.db.prepare(`SELECT ${fields} FROM crew_memories WHERE project_id = ? AND (owner_id IS NULL OR owner_id = ?) ORDER BY rowid DESC LIMIT 16`).all(projectId, ownerId)
+    ) as CrewMemory[];
+  }
+
+  saveMemory(
+    sessionId: string,
+    body: string,
+    ownerId: string | null,
+    author?: { id: string; name: string; jobId?: string },
+  ) {
+    const { projectId } = this.getSession(sessionId);
+    if (ownerId && !this.readMembers(projectId).some(({ id }) => id === ownerId))
+      throw new Error("이 프로젝트의 담당자를 선택해 주세요.");
+    if (author?.jobId && this.getJob(author.jobId).sessionId !== sessionId)
+      throw new Error("이 세션의 업무를 선택해 주세요.");
+    const text = body.trim();
+    if (!text || text.length > 4000)
+      throw new Error("기억은 1자 이상 4,000자 이하로 적어 주세요.");
+    this.transaction(() => {
+      const duplicate = this.db.prepare(`
+        SELECT 1 FROM crew_memories WHERE project_id = ? AND owner_id IS ? AND body = ?
+      `).get(projectId, ownerId, text);
+      if (duplicate) return;
+      this.db.prepare(`
+        INSERT INTO crew_memories VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        randomUUID(), projectId, ownerId, author?.id ?? null,
+        author?.name ?? "사용자", sessionId, author?.jobId ?? null,
+        text, new Date().toISOString(),
+      );
+      this.log(sessionId, (author?.name ?? "사용자") + " · 기억 기록", author?.jobId);
+    });
+  }
+
+  removeMemory(projectId: string, id: string) {
+    this.db.prepare("DELETE FROM crew_memories WHERE project_id = ? AND id = ?").run(projectId, id);
+  }
+
   recordModelRun(
     sessionId: string,
     jobId: string | null,
@@ -1894,6 +1952,7 @@ export class CrewStore {
       mcpServers: current ? this.listMcpEndpoints(current.id) : [],
       mcpGrants: current ? this.listMcpGrants(current.id) : [],
       skills: current ? this.listSkills(current.id) : [],
+      memories: current ? this.listMemories(current.id) : [],
       assignees: session
         ? (this.db
             .prepare(

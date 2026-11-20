@@ -593,7 +593,9 @@ export class CrewWorkflow {
   private start(job: Job, phase: "planning" | "developing" | "recovering") {
     const controller = new AbortController();
     this.active.set(job.id, controller);
-    const project = this.store.getProject(job.projectId);
+    const base = this.store.getProject(job.projectId);
+    const fresh = this.store.getJob(job.id);
+    const project = fresh.worktree ? { ...base, root: fresh.worktree } : base;
     const work =
       phase === "planning"
         ? this.plan(job, project, controller.signal)
@@ -690,6 +692,10 @@ export class CrewWorkflow {
         this.applyQueuedFollowup(job.id);
         this.notify();
       });
+  }
+
+  isRunning(id: string) {
+    return this.active.has(id);
   }
 
   private async decide<T extends z.ZodType>(

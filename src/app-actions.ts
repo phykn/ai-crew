@@ -182,6 +182,15 @@ export class ActionRunner {
       case "view.set":
         store.setViewState(action.sessionId, action.patch);
         break;
+      case "job.workspace":
+        await this.prepareWorkspace(action.jobId);
+        break;
+      case "job.apply":
+        await this.applyJob(action.jobId);
+        break;
+      case "job.cleanup":
+        await store.cleanupWorkspace(action.jobId);
+        break;
       case "chat.send":
         await this.chat(action);
         break;
@@ -234,6 +243,17 @@ export class ActionRunner {
   private stopResponse: ((sessionId: string, responseId: string) => void) | null =
     null;
 
+  private async prepareWorkspace(jobId: string) {
+    const job = this.deps.store.getJob(jobId);
+    if (this.deps.workflow.isRunning(jobId))
+      throw new Error("업무가 실행 중이에요. 멈춘 뒤 격리를 선택해 주세요.");
+    await this.deps.store.prepareIsolatedWorkspace(job.id);
+  }
+
+  private async applyJob(jobId: string) {
+    await this.deps.store.applyJob(jobId);
+  }
+
   private async chat(action: Extract<Action, { type: "chat.send" }>) {
     if (!this.chatHandler) throw new Error("지금은 메시지를 보낼 수 없어요.");
     this.chatHandler(action);
@@ -265,6 +285,9 @@ const descriptions: Record<string, string> = {
   "workflow.select": "세션의 워크플로우를 선택해요.",
   "workflow.apply": "저장한 워크플로우를 진행 중 업무에 적용해요.",
   "view.set": "탭·캠프 보기·범례·패널 폭·연 업무·메모리 보기를 바꿔요.",
+  "job.workspace": "업무 전용 Git 브랜치와 워크트리를 만들어 격리 실행을 준비해요.",
+  "job.apply": "검증을 마친 업무 브랜치를 원본에 반영해요.",
+  "job.cleanup": "끝난 업무의 워크트리를 정리하고 기록은 남겨요.",
   "chat.send": "비서에게 메시지를 보내요.",
   "chat.stop": "응답 생성을 멈춰요.",
   "job.answer": "권한 요청에 허용·거절로 답해요.",

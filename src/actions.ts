@@ -183,6 +183,12 @@ export const actions = z.discriminatedUnion("type", [
     scope: z.enum(["current", "once"]),
   }),
   z.strictObject({
+    type: z.literal("job.workspace"),
+    jobId: identifier,
+  }),
+  z.strictObject({ type: z.literal("job.apply"), jobId: identifier }),
+  z.strictObject({ type: z.literal("job.cleanup"), jobId: identifier }),
+  z.strictObject({
     type: z.literal("view.set"),
     sessionId: identifier,
     patch: z.strictObject({
@@ -429,6 +435,11 @@ export type Job = {
   plan: WorkPlan | null;
   workflowId: string | null;
   workflowVersion: number | null;
+  worktree: string | null;
+  branch: string | null;
+  baseCommit: string | null;
+  applyState: "none" | "applied" | "blocked";
+  applyNote: string | null;
 };
 export type ViewState = {
   tab: "chat" | "log" | "memory" | "workflow";

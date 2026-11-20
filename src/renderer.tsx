@@ -1053,6 +1053,61 @@ function Workspace() {
                 {selectedLogJob && (
                   <h2>{selectedLogJob.plan?.goal ?? selectedLogJob.request}</h2>
                 )}
+                {selectedLogJob && (
+                  <div className="job-workspace">
+                    {selectedLogJob.worktree ? (
+                      <>
+                        <span className="muted">
+                          격리 작업공간 · {selectedLogJob.branch} @{" "}
+                          {selectedLogJob.baseCommit?.slice(0, 8)}
+                          {selectedLogJob.applyState === "applied"
+                            ? " · 반영됨"
+                            : selectedLogJob.applyState === "blocked"
+                              ? " · 반영 대기 · " +
+                                (selectedLogJob.applyNote ?? "")
+                              : ""}
+                        </span>
+                        {selectedLogJob.state === "complete" &&
+                          selectedLogJob.applyState !== "applied" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void run({
+                                  type: "job.apply",
+                                  jobId: selectedLogJob.id,
+                                })
+                              }
+                            >
+                              원본에 반영
+                            </button>
+                          )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void run({
+                              type: "job.cleanup",
+                              jobId: selectedLogJob.id,
+                            })
+                          }
+                        >
+                          작업공간 정리
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void run({
+                            type: "job.workspace",
+                            jobId: selectedLogJob.id,
+                          })
+                        }
+                      >
+                        격리 실행 준비
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             <ModelUsage runs={data?.modelRuns ?? []} jobId={logJob} />

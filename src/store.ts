@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { basename } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   planFiles,
@@ -35,6 +35,12 @@ import {
   type ViewState,
 } from "./actions";
 import { skillStates } from "./skill-status";
+import {
+  applyBranch,
+  createWorktree,
+  removeWorktree,
+  repositoryState,
+} from "./git-workspace";
 import { defaultGraph, remainingStages, validateGraph } from "./workflow-graph";
 
 export const defaultViewState = (): ViewState => ({
@@ -56,7 +62,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 30)
+    if (migration.user_version > 31)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -467,6 +473,18 @@ export class CrewStore {
           memory_owner_id TEXT
         );
         PRAGMA user_version = 30;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 31) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE jobs ADD COLUMN worktree TEXT;
+        ALTER TABLE jobs ADD COLUMN worktree_branch TEXT;
+        ALTER TABLE jobs ADD COLUMN base_commit TEXT;
+        ALTER TABLE jobs ADD COLUMN apply_state TEXT NOT NULL DEFAULT 'none';
+        ALTER TABLE jobs ADD COLUMN apply_note TEXT;
+        PRAGMA user_version = 31;
         COMMIT;
       `);
     }
@@ -1187,6 +1205,98 @@ export class CrewStore {
       );
   }
 
+  async prepareIsolatedWorkspace(jobId: string) {
+    const job = this.getJob(jobId);
+    if (job.worktree) return job;
+    if (["complete", "denied", "failed"].includes(job.state))
+      throw new Error("끝난 업무에는 작업공간을 만들 수 없어요.");
+    const project = this.getProject(job.projectId);
+    const branch = "crew/" + job.id.slice(0, 8);
+    const path = join(dirname(project.root), ".crew-" + job.id.slice(0, 8));
+    const created = await createWorktree(project.root, {
+      path,
+      branch,
+      base: "",
+    });
+    this.transaction(() => {
+      this.db
+        .prepare(
+          "UPDATE jobs SET worktree = ?, worktree_branch = ?, base_commit = ? WHERE id = ?",
+        )
+        .run(created.path, created.branch, created.base, job.id);
+      this.log(
+        job.sessionId,
+        "비서 · 격리 작업공간 준비 · " +
+          created.branch +
+          " @ " +
+          created.base.slice(0, 8),
+        job.id,
+      );
+    });
+    return this.getJob(job.id);
+  }
+
+  async applyJob(jobId: string) {
+    const job = this.getJob(jobId);
+    if (!job.worktree || !job.branch)
+      throw new Error("격리 작업공간이 없는 업무예요.");
+    if (job.state !== "complete")
+      throw new Error("검증을 마친 업무만 원본에 반영할 수 있어요.");
+    const project = this.getProject(job.projectId);
+    const state = await repositoryState(project.root);
+    const result = await applyBranch(project.root, {
+      branch: job.branch,
+      target: state.branch,
+      message: "crew: " + job.request.slice(0, 60),
+    });
+    return result.applied
+      ? this.recordApply(jobId, "applied", result.commit.slice(0, 8))
+      : this.recordApply(
+          jobId,
+          "blocked",
+          result.reason +
+            (result.conflicts.length
+              ? " · " + result.conflicts.join(", ")
+              : ""),
+        );
+  }
+
+  recordApply(jobId: string, state: "applied" | "blocked", note: string) {
+    const job = this.getJob(jobId);
+    this.transaction(() => {
+      this.db
+        .prepare("UPDATE jobs SET apply_state = ?, apply_note = ? WHERE id = ?")
+        .run(state, note, jobId);
+      this.log(
+        job.sessionId,
+        state === "applied"
+          ? "사용자 · 원본 반영 완료 · " + note
+          : "비서 · 원본 반영 대기 · " + note,
+        job.id,
+      );
+    });
+    return this.getJob(jobId);
+  }
+
+  async cleanupWorkspace(jobId: string) {
+    const job = this.getJob(jobId);
+    if (!job.worktree) return;
+    if (job.state === "developing" || job.state === "reviewing")
+      throw new Error("업무가 실행 중이에요. 멈춘 뒤 정리해 주세요.");
+    const project = this.getProject(job.projectId);
+    await removeWorktree(project.root, job.worktree);
+    this.transaction(() => {
+      this.db
+        .prepare("UPDATE jobs SET worktree = NULL WHERE id = ?")
+        .run(job.id);
+      this.log(
+        job.sessionId,
+        "사용자 · 작업공간 정리 · 기록은 남겨 둡니다",
+        job.id,
+      );
+    });
+  }
+
   private logMcpSetting(projectId: string, note: string) {
     const session = this.db
       .prepare("SELECT last_session FROM projects WHERE id = ?")
@@ -1559,6 +1669,8 @@ export class CrewStore {
       .prepare(
         `SELECT id, project_id AS projectId, session_id AS sessionId, request, state, approval_id AS approvalId, plan,
           workflow_id AS workflowId, workflow_version AS workflowVersion,
+          worktree, worktree_branch AS branch, base_commit AS baseCommit,
+          apply_state AS applyState, apply_note AS applyNote,
           CASE WHEN j.state = 'clarification' THEN (
             SELECT json_object('id', q.id, 'text', q.text) FROM job_questions q WHERE q.job_id = j.id ORDER BY q.rowid DESC LIMIT 1
           ) END AS clarification

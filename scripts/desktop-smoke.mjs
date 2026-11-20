@@ -91,6 +91,7 @@ try {
     roster.getByRole("button", { name: "새 플랜 담당", exact: true }),
   ).toBeVisible();
   await roster.getByRole("button", { name: "플랜 고용", exact: true }).click();
+  await roster.getByRole("button", { name: "개발 고용", exact: true }).click();
   await page.locator(".roster summary").click();
   await send(
     "프로젝트의 notes.txt 파일을 실제로 수정해줘. 기존 내용 Before를 After로 바꾸고 줄바꿈 한 개를 유지해줘. 수정하기 전에 스타일 담당자에게 마지막 줄바꿈 규칙을 확인해줘.",
@@ -115,6 +116,14 @@ try {
   }
   await expect(completed).toBeVisible({ timeout: 90000 });
   expect(await readFile(projectFile, "utf8")).toBe("After\n");
+  await page.locator(".roster summary").click();
+  await expect(
+    roster.getByRole("button", { name: "개발 미고용", exact: true }),
+  ).toBeVisible();
+  await expect(
+    roster.getByRole("button", { name: "개발 알바", exact: true }),
+  ).toHaveCount(0);
+  await page.locator(".roster summary").click();
   await page.getByRole("button", { name: "추가 지시" }).click();
   await expect(page.locator(".revision-target")).toBeVisible();
   await send(
@@ -140,6 +149,10 @@ try {
     .click();
   const changeLog = page.locator(".change-log").first();
   await expect(page.getByText(/새 플랜 담당 배정/).first()).toBeVisible();
+  await expect(page.getByText(/인사팀 · 개발 후보 준비/).first()).toBeVisible();
+  await expect(
+    page.getByText(/비서 · 개발 알바 업무 종료/).first(),
+  ).toBeVisible();
   await expect(
     page.getByText(/개발 → 스타일 · notes\.txt/).first(),
   ).toBeVisible();

@@ -143,6 +143,8 @@ export type CrewMember = {
   name: string;
   provider: Provider;
   hired: boolean;
+  assignmentJobId?: string;
+  specialty?: string;
 };
 export type ApprovalMode = z.infer<typeof approvalMode>;
 export type Project = {
@@ -198,6 +200,7 @@ export type WorkPlan = {
   files?: { path: string; baseline: string | null }[];
   directories?: string[];
   moves?: { from: string; to: string; baseline: string; edit: boolean }[];
+  specialist?: { specialty: string; permanent: boolean };
 };
 export function planFiles(plan: WorkPlan) {
   return plan.files ?? [{ path: plan.path, baseline: plan.baseline }];
@@ -233,6 +236,7 @@ export type WorkChange = {
   planId: string | null;
   path: string;
   movedFrom: string | null;
+  authorMemberId: string | null;
   beforeHash: string | null;
   afterHash: string;
   savedAt: string;

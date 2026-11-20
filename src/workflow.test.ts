@@ -1040,6 +1040,7 @@ test("a disconnected Codex role resumes its new thread before falling back to th
             directories: [],
             goal: "파일 추가",
             criterion: "파일 확인",
+            specialist: { specialty: "", permanent: false },
           }),
         );
       },
@@ -1240,6 +1241,181 @@ test("stopping during development records a late response without writing it", a
         }),
       ]),
     );
+  } finally {
+    release.resolve();
+    workflow.close();
+    store.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("staffing fills a vacant role and retires job-scoped hires without losing authorship", async () => {
+  const folder = realpathSync(mkdtempSync(join(tmpdir(), "crew-hiring-")));
+  const store = new CrewStore(":memory:");
+  const workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+  try {
+    vi.mocked(decideLocal).mockImplementation(async (system, input) => {
+      const revised = input.includes("Final");
+      if (system.startsWith("Plan only the changes"))
+        return {
+          paths: ["notice.txt"],
+          directories: [],
+          moves: [],
+          goal: "파일과 전문 검토",
+          criterion: revised ? "Final" : "Initial",
+          specialist: { specialty: "접근성", permanent: true },
+        };
+      if (system.startsWith("Implement only"))
+        return {
+          content: revised ? "Final" : "Initial",
+          ending: "as-written",
+          consult: "none",
+          question: "",
+        };
+      if (system.startsWith("Choose an independent"))
+        return {
+          kind: "text",
+          expected: revised ? "Final" : "Initial",
+          exact: true,
+          ending: "as-written",
+          reason: "",
+        };
+      return { passed: true, note: "확인했어요.", findings: [] };
+    });
+    store.openFolder(folder);
+    const session = store.snapshot().session!;
+    store.updateMember(session.projectId, "development", { hired: false });
+    const { id } = workflow.delegate(
+      session.id,
+      randomUUID(),
+      "Initial 문구와 정규 접근성 검토 담당",
+    );
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("approval"));
+    workflow.answer(id, store.getJob(id).approvalId!, true);
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("complete"));
+    const first = store.readChanges(session.id)[0];
+    const temp = store
+      .readMembers(session.projectId, "development")
+      .find(({ id }) => id === first.authorMemberId)!;
+    const specialist = store
+      .readMembers(session.projectId, "review")
+      .find(({ specialty }) => specialty === "접근성")!;
+    expect(temp).toMatchObject({
+      hired: false,
+      assignmentJobId: id,
+      provider: "local",
+    });
+    expect(specialist.hired).toBe(true);
+    expect(specialist.assignmentJobId).toBeUndefined();
+    expect(store.getAgentContext(id, temp.id)?.result).toContain("Initial");
+
+    workflow.revise(
+      id,
+      session.id,
+      randomUUID(),
+      "Final 문구로 바꾸고 접근성 검토",
+    );
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("approval"));
+    workflow.answer(id, store.getJob(id).approvalId!, true);
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("complete"));
+    const [latest, original] = store.readChanges(session.id);
+    expect(original.authorMemberId).toBe(temp.id);
+    expect(latest.authorMemberId).not.toBe(temp.id);
+    expect(store.getAssignee(id, "review", "접근성")).toBe(specialist.id);
+    expect(readFileSync(join(folder, "notice.txt"), "utf8")).toBe("Final");
+    expect(
+      store
+        .snapshot()
+        .activity.filter(({ text }) => text.includes("후보 준비")),
+    ).toHaveLength(3);
+    expect(
+      store
+        .snapshot()
+        .activity.filter(({ text }) => text.includes("업무 종료 · 미고용")),
+    ).toHaveLength(2);
+  } finally {
+    workflow.close();
+    store.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("dismissing an assigned developer twice preserves its running handoff and blocks future assignment", async () => {
+  const folder = realpathSync(mkdtempSync(join(tmpdir(), "crew-dismiss-")));
+  const store = new CrewStore(":memory:");
+  const workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  try {
+    vi.mocked(decideLocal).mockImplementation(async (system, input) => {
+      const revised = input.includes("Final");
+      if (system.startsWith("Plan only the changes"))
+        return {
+          paths: ["notice.txt"],
+          moves: [],
+          directories: [],
+          goal: "문구",
+          criterion: revised ? "Final" : "Initial",
+        };
+      if (system.startsWith("Implement only")) {
+        if (!revised) {
+          entered.resolve();
+          await release.promise;
+        }
+        return {
+          content: revised ? "Final" : "Initial",
+          ending: "as-written",
+          consult: "none",
+          question: "",
+        };
+      }
+      if (system.startsWith("Choose an independent"))
+        return {
+          kind: "text",
+          expected: revised ? "Final" : "Initial",
+          exact: true,
+          ending: "as-written",
+          reason: "",
+        };
+      return { passed: true, note: "확인했어요.", findings: [] };
+    });
+    store.openFolder(folder);
+    const session = store.snapshot().session!;
+    const { id } = workflow.delegate(
+      session.id,
+      randomUUID(),
+      "Initial 파일 작성",
+    );
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("approval"));
+    workflow.answer(id, store.getJob(id).approvalId!, true);
+    await entered.promise;
+    store.updateMember(session.projectId, "development", { hired: false });
+    store.updateMember(session.projectId, "development", { hired: false });
+    expect(store.getJob(id).state).toBe("developing");
+    release.resolve();
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("complete"));
+    expect(store.readChanges(session.id)[0].authorMemberId).toBe("development");
+    expect(
+      store
+        .snapshot()
+        .activity.filter(({ text }) => text.includes("새 배정 종료")),
+    ).toHaveLength(1);
+
+    workflow.revise(id, session.id, randomUUID(), "Final로 수정");
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("approval"));
+    workflow.answer(id, store.getJob(id).approvalId!, true);
+    await vi.waitFor(() => expect(store.getJob(id).state).toBe("complete"));
+    expect(
+      store.readChanges(session.id).map(({ authorMemberId }) => authorMemberId),
+    ).toEqual([expect.not.stringMatching(/^development$/), "development"]);
+    store.updateMember(session.projectId, "development", { hired: true });
+    expect(
+      store.readMembers(session.projectId, "development")[0],
+    ).toMatchObject({
+      hired: true,
+      provider: "local",
+      id: "development",
+    });
   } finally {
     release.resolve();
     workflow.close();

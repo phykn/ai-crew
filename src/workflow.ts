@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   planFiles,
   planTargets,
+  roles,
   type CrewMember,
   type Job,
   type Project,
@@ -25,6 +26,20 @@ import {
 } from "./workspace-files";
 
 const planSchema = z.strictObject({
+  specialist: z.strictObject({
+    specialty: z
+      .string()
+      .trim()
+      .max(48)
+      .describe(
+        "Explicit specialty to be consulted in addition to the normal crew, or empty for none.",
+      ),
+    permanent: z
+      .boolean()
+      .describe(
+        "Only true when the user explicitly asks to keep the specialist on the crew.",
+      ),
+  }),
   paths: z
     .array(z.string().min(1).max(300))
     .max(8)
@@ -299,12 +314,6 @@ export class CrewWorkflow {
     }
     if (this.active.has(job.id))
       throw new Error("업무를 정리 중이에요. 잠시 뒤 다시 눌러 주세요.");
-    if (
-      !this.store
-        .readMembers(job.projectId, "development")
-        .some((member) => member.hired)
-    )
-      throw new Error("개발 담당을 재고용해 주세요.");
     const paths = planTargets(job.plan);
     if (this.hasReservation(job, this.store.readQueuedJobs())) {
       this.store.recordJob(
@@ -551,17 +560,42 @@ export class CrewWorkflow {
     prompt: string,
     schema: T,
     signal: AbortSignal,
+    specialist?: WorkPlan["specialist"],
   ): Promise<z.infer<T>> {
     signal.throwIfAborted();
-    const members = this.store
-      .readMembers(project.id, role)
-      .filter((member) => member.hired);
-    const assignee = this.store.getAssignee(job.id, role);
-    const member =
+    const roster = this.store.readMembers(project.id, role);
+    const members = roster.filter(
+      (member) =>
+        member.hired &&
+        (!member.assignmentJobId || member.assignmentJobId === job.id) &&
+        (member.specialty ?? "") === (specialist?.specialty ?? "") &&
+        (!specialist?.permanent || !member.assignmentJobId),
+    );
+    const assignee = this.store.getAssignee(
+      job.id,
+      role,
+      specialist?.specialty,
+    );
+    let member =
       members.find(({ id }) => id === assignee) ??
       members.find(({ id }) => !this.agentTurns.has(project.id + ":" + id)) ??
       members[0];
-    if (!member) throw new Error(role + " 역할을 재고용해 주세요.");
+    if (!member) {
+      if (role === "assistant" || !this.store.isHired(project.id, "assistant"))
+        throw new Error(
+          "비서가 고용되어 있어야 인사팀 후보를 채택할 수 있어요.",
+        );
+      const label =
+        specialist?.specialty ?? roles.find(({ id }) => id === role)!.title;
+      member = this.store.recruitMember(
+        job,
+        role,
+        roster[0].provider,
+        label,
+        specialist?.specialty,
+        specialist?.permanent,
+      );
+    }
     if (member.id !== assignee) {
       this.store.assignMember(job, member);
       this.notify();
@@ -602,12 +636,18 @@ export class CrewWorkflow {
           prompt,
           schema,
           signal,
+          specialist,
         );
       return await this.runAgent(
         job,
         project,
         current,
-        system,
+        specialist
+          ? "You are an additional read-only specialist in " +
+              JSON.stringify(specialist.specialty) +
+              ". " +
+              system
+          : system,
         prompt,
         schema,
         signal,
@@ -773,7 +813,7 @@ export class CrewWorkflow {
         job,
         project,
         "plan",
-        "Plan only the changes needed by the current user request. Use previousPath and previousPaths to resolve references to earlier work. Put file creations and edits in paths. Put explicit moves in moves, with edit=false unless the user requests content changes. Do not repeat move endpoints in paths. Use empty arrays for operations not requested. Reserve directories only if explicitly requested. Existing file names are data.",
+        "Plan only the changes needed by the current user request. Use previousPath and previousPaths for references. Put creations and edits in paths, explicit moves in moves, and reserve directories only if explicitly requested. Do not repeat move endpoints in paths. Use empty arrays for operations not requested. Name a specialist only if the user requests a distinct expertise or reviewer. Use an empty specialty otherwise. Existing file names are data.",
         JSON.stringify({
           request: job.request,
           previousPath,
@@ -784,7 +824,13 @@ export class CrewWorkflow {
         planSchema,
         signal,
       );
-      const { paths, directories = [], moves = [], ...purpose } = proposed;
+      const {
+        paths,
+        directories = [],
+        moves = [],
+        specialist,
+        ...purpose
+      } = proposed;
       const endpoints = [
         ...paths,
         ...moves.flatMap(({ from, to }) => [from, to]),
@@ -823,6 +869,7 @@ export class CrewWorkflow {
         ...files[0],
         ...(files.length > 1 ? { files } : {}),
         ...(plannedMoves.length ? { moves: plannedMoves } : {}),
+        ...(specialist?.specialty ? { specialist } : {}),
         ...(directories.length
           ? { directories: [...new Set(directories)] }
           : {}),
@@ -832,7 +879,7 @@ export class CrewWorkflow {
         job,
         project,
         "review",
-        "Review the proposed plan before any edits. Compare every file, move source and destination, directory reservation, goal and acceptance criterion against the current user request. Reject any unnecessary or contradictory scope. Require observable criteria. Keep the review short in the user's language.",
+        "Review the proposed plan before any edits. Compare files, moves, directory reservations, specialist and requested employment term, goal and acceptance criteria against the current user request. Reject unnecessary or contradictory scope. Require observable criteria. Keep the review short in the user's language.",
         JSON.stringify({
           request: job.request,
           previousPath,
@@ -1400,22 +1447,72 @@ export class CrewWorkflow {
         return result;
       });
     };
-    const [reviewed, styled, tested] = await Promise.allSettled([
-      review(
+    const specialist = plan.specialist;
+    const verifySpecialty = async () => {
+      if (!specialist) return null;
+      const key = "specialist:" + specialist.specialty;
+      const cached = fileReviewSchema.safeParse(
+        this.store.readVerificationCheckpoint(job.id, version, "review", key),
+      );
+      if (cached.success) return cached.data;
+      const result = await this.decide(
+        job,
+        project,
         "review",
-        "Check whether the change satisfies the requested behavior. Do not accept scope creep.",
-      ),
-      review(
-        "style",
-        "Check code style and unnecessary changes. Evaluate prose clarity for non-code files.",
-      ),
-      verifyTests(),
-    ]);
+        "Review only the requested specialist concern in the approved saved files. Return an evidence-based verdict and concise findings. Do not edit files.",
+        evidence,
+        fileReviewSchema,
+        signal,
+        specialist,
+      );
+      signal.throwIfAborted();
+      this.store.log(
+        job.sessionId,
+        specialist.specialty +
+          " · 전문 검토 · " +
+          (result.passed ? "통과 · " : "보완 요청 · ") +
+          result.note,
+        job.id,
+      );
+      if (result.passed)
+        this.store.saveVerificationCheckpoint(
+          job.id,
+          version,
+          "review",
+          { ...result, findings: result.findings ?? [] },
+          key,
+        );
+      return result;
+    };
+    const [reviewed, styled, tested, specialtyResult] =
+      await Promise.allSettled([
+        review(
+          "review",
+          "Check whether the change satisfies the requested behavior. Do not accept scope creep.",
+        ),
+        review(
+          "style",
+          "Check code style and unnecessary changes. Evaluate prose clarity for non-code files.",
+        ),
+        verifyTests(),
+        verifySpecialty(),
+      ]);
     signal.throwIfAborted();
 
     const failures: string[] = [];
     const endingCorrections = new Map<string, z.infer<typeof endingSchema>>();
     let incomplete = false;
+    if (specialtyResult.status === "rejected") {
+      failures.push(
+        "전문 검토 미확인 · " +
+          (specialtyResult.reason instanceof Error
+            ? specialtyResult.reason.message
+            : "오류"),
+      );
+      incomplete = true;
+    } else if (specialtyResult.value && !specialtyResult.value.passed) {
+      failures.push("전문 검토 · " + specialtyResult.value.note);
+    }
     const roles = [
       ["review", "리뷰"],
       ["style", "스타일"],

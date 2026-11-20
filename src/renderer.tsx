@@ -282,99 +282,105 @@ function Workspace() {
                 크루 · {data.members.filter((member) => member.hired).length}
               </summary>
               <div className="crew-list">
-                {data.members.map((member) => {
-                  const role = roles.find(({ id }) => id === member.roleId)!;
-                  return (
-                    <div key={member.id} className="crew-row">
-                      <button
-                        type="button"
-                        className="employment"
-                        aria-label={
-                          role.title +
-                          " " +
-                          (member.hired ? "고용" : "미고용") +
-                          (member.id !== role.id ? " · " + member.name : "")
-                        }
-                        aria-pressed={member.hired}
-                        onClick={() => {
-                          if (data.current)
-                            void run({
-                              type: "crew.member.update",
-                              projectId: data.current.id,
-                              memberId: member.id,
-                              hired: !member.hired,
-                            });
-                        }}
-                      >
-                        {member.hired ? "고용" : "미고용"}
-                      </button>
-                      <span>
-                        {role.title} ·{" "}
-                        {editingMember === member.id ? (
-                          <input
-                            className="crew-name"
-                            autoFocus
-                            aria-label={role.title + " 별명"}
-                            maxLength={32}
-                            defaultValue={member.name}
-                            onKeyDown={(event) => {
-                              if (event.nativeEvent.isComposing) return;
-                              if (event.key === "Escape")
-                                event.currentTarget.value = member.name;
-                              if (
-                                event.key === "Escape" ||
-                                event.key === "Enter"
-                              )
-                                event.currentTarget.blur();
-                            }}
-                            onBlur={(event) => {
-                              const name = event.currentTarget.value.trim();
-                              setEditingMember(null);
-                              if (data.current && name && name !== member.name)
-                                void run({
-                                  type: "crew.member.update",
-                                  projectId: data.current.id,
-                                  memberId: member.id,
-                                  name,
-                                });
-                            }}
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            style={{ color: role.color }}
-                            onClick={() => setEditingMember(member.id)}
-                          >
-                            {member.name}
-                          </button>
-                        )}
-                      </span>
-                      <select
-                        aria-label={
-                          role.title +
-                          " 모델" +
-                          (member.id !== role.id ? " · " + member.name : "")
-                        }
-                        value={member.provider}
-                        onChange={(event) => {
-                          if (data.current)
-                            void run({
-                              type: "crew.member.update",
-                              projectId: data.current.id,
-                              memberId: member.id,
-                              provider:
-                                event.target.value === "codex"
-                                  ? "codex"
-                                  : "local",
-                            });
-                        }}
-                      >
-                        <option value="local">로컬 LLM</option>
-                        <option value="codex">Codex</option>
-                      </select>
-                    </div>
-                  );
-                })}
+                {data.members
+                  .filter((member) => member.hired || !member.assignmentJobId)
+                  .map((member) => {
+                    const role = roles.find(({ id }) => id === member.roleId)!;
+                    return (
+                      <div key={member.id} className="crew-row">
+                        <button
+                          type="button"
+                          className="employment"
+                          aria-label={
+                            role.title +
+                            " " +
+                            (member.hired ? "고용" : "미고용") +
+                            (member.id !== role.id ? " · " + member.name : "")
+                          }
+                          aria-pressed={member.hired}
+                          onClick={() => {
+                            if (data.current)
+                              void run({
+                                type: "crew.member.update",
+                                projectId: data.current.id,
+                                memberId: member.id,
+                                hired: !member.hired,
+                              });
+                          }}
+                        >
+                          {member.hired ? "고용" : "미고용"}
+                        </button>
+                        <span>
+                          {role.title} ·{" "}
+                          {editingMember === member.id ? (
+                            <input
+                              className="crew-name"
+                              autoFocus
+                              aria-label={role.title + " 별명"}
+                              maxLength={32}
+                              defaultValue={member.name}
+                              onKeyDown={(event) => {
+                                if (event.nativeEvent.isComposing) return;
+                                if (event.key === "Escape")
+                                  event.currentTarget.value = member.name;
+                                if (
+                                  event.key === "Escape" ||
+                                  event.key === "Enter"
+                                )
+                                  event.currentTarget.blur();
+                              }}
+                              onBlur={(event) => {
+                                const name = event.currentTarget.value.trim();
+                                setEditingMember(null);
+                                if (
+                                  data.current &&
+                                  name &&
+                                  name !== member.name
+                                )
+                                  void run({
+                                    type: "crew.member.update",
+                                    projectId: data.current.id,
+                                    memberId: member.id,
+                                    name,
+                                  });
+                              }}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              style={{ color: role.color }}
+                              onClick={() => setEditingMember(member.id)}
+                            >
+                              {member.name}
+                            </button>
+                          )}
+                        </span>
+                        <select
+                          aria-label={
+                            role.title +
+                            " 모델" +
+                            (member.id !== role.id ? " · " + member.name : "")
+                          }
+                          value={member.provider}
+                          onChange={(event) => {
+                            if (data.current)
+                              void run({
+                                type: "crew.member.update",
+                                projectId: data.current.id,
+                                memberId: member.id,
+                                provider:
+                                  event.target.value === "codex"
+                                    ? "codex"
+                                    : "local",
+                              });
+                          }}
+                        >
+                          <option value="local">로컬 LLM</option>
+                          <option value="codex">Codex</option>
+                        </select>
+                      </div>
+                    );
+                  })}
                 {addingMember ? (
                   <form
                     className="crew-add"
@@ -594,6 +600,14 @@ function Workspace() {
                     {new Date(change.savedAt).toLocaleString()}
                   </time>
                 </p>
+                {change.authorMemberId && (
+                  <p className="muted">
+                    작성 ·{" "}
+                    {data?.members.find(
+                      ({ id }) => id === change.authorMemberId,
+                    )?.name ?? change.authorMemberId}
+                  </p>
+                )}
                 <CheckList checks={change.checks} />
                 {change.previousChecks.length > 0 && (
                   <details>

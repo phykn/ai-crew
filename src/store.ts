@@ -31,7 +31,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 18)
+    if (migration.user_version > 19)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -273,6 +273,16 @@ export class CrewStore {
         COMMIT;
       `);
     }
+    if (migration.user_version < 19) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE crew_members ADD COLUMN assignment_job_id TEXT REFERENCES jobs(id);
+        ALTER TABLE crew_members ADD COLUMN specialty TEXT;
+        ALTER TABLE work_changes ADD COLUMN author_member_id TEXT;
+        PRAGMA user_version = 19;
+        COMMIT;
+      `);
+    }
     this.db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",
     );
@@ -401,7 +411,7 @@ export class CrewStore {
       .all(projectId);
     const members = this.db
       .prepare(
-        "SELECT id, role AS roleId, name, provider, hired FROM crew_members WHERE project_id = ? ORDER BY rowid",
+        "SELECT id, role AS roleId, name, provider, hired, assignment_job_id AS assignmentJobId, specialty FROM crew_members WHERE project_id = ? ORDER BY rowid",
       )
       .all(projectId) as (Omit<CrewMember, "hired"> & { hired: number })[];
     return roles
@@ -418,12 +428,65 @@ export class CrewStore {
           },
           ...members
             .filter((member) => member.roleId === role.id)
-            .map((member) => ({
+            .map(({ assignmentJobId, specialty, ...member }) => ({
               ...member,
               hired: Boolean(member.hired),
+              ...(assignmentJobId ? { assignmentJobId } : {}),
+              ...(specialty ? { specialty } : {}),
             })),
         ];
       });
+  }
+
+  recruitMember(
+    job: Job,
+    role: RoleId,
+    provider: Provider,
+    label: string,
+    specialty?: string,
+    permanent = false,
+  ) {
+    return this.transaction(() => {
+      const id = randomUUID();
+      const name = label + (permanent ? " 담당" : " 알바");
+      this.log(job.sessionId, "인사팀 · " + label + " 후보 준비", job.id);
+      this.db
+        .prepare(
+          `
+        INSERT INTO crew_members (id, project_id, role, name, provider, assignment_job_id, specialty)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+        )
+        .run(
+          id,
+          job.projectId,
+          role,
+          name,
+          provider,
+          permanent ? null : job.id,
+          specialty ?? null,
+        );
+      this.log(job.sessionId, "비서 · " + name + " 채택·고용", job.id);
+      return {
+        id,
+        name,
+        roleId: role,
+        provider,
+        hired: true,
+        ...(permanent ? {} : { assignmentJobId: job.id }),
+        ...(specialty ? { specialty } : {}),
+      } satisfies CrewMember;
+    });
+  }
+
+  private releaseTemporaryMembers(job: Job) {
+    const members = this.db
+      .prepare(
+        "UPDATE crew_members SET hired = 0 WHERE assignment_job_id = ? AND hired = 1 RETURNING name",
+      )
+      .all(job.id);
+    for (const { name } of members)
+      this.log(job.sessionId, "비서 · " + name + " 업무 종료 · 미고용", job.id);
   }
 
   addMember(projectId: string, member: Omit<CrewMember, "hired">) {
@@ -464,6 +527,8 @@ export class CrewStore {
       provider = member.provider,
       hired = member.hired,
     } = patch;
+    if (hired && !member.hired && member.assignmentJobId)
+      throw new Error("종료한 알바는 새 업무에 다시 배정할 수 없어요.");
     this.transaction(() => {
       if (member.id === member.roleId)
         this.db
@@ -478,8 +543,28 @@ export class CrewStore {
             "UPDATE crew_members SET name = ?, provider = ?, hired = ? WHERE id = ? AND project_id = ?",
           )
           .run(name, provider, Number(hired), memberId, projectId);
-      if (hired !== member.hired)
+      if (hired !== member.hired) {
         this.logMemberEmployment(projectId, name, hired);
+        if (!hired) {
+          const affected = this.db
+            .prepare(
+              `
+            SELECT j.id, j.session_id FROM job_assignees a JOIN jobs j ON j.id = a.job_id
+            WHERE a.member_id = ? AND j.project_id = ? AND j.state NOT IN ('complete','denied','failed','stopped')
+            GROUP BY j.id
+          `,
+            )
+            .all(memberId, projectId);
+          for (const { id, session_id } of affected)
+            this.log(
+              String(session_id),
+              "비서 · " +
+                name +
+                " 새 배정 종료 · 진행 단계 정리 후 다음 담당자에게 인계",
+              String(id),
+            );
+        }
+      }
     });
   }
 
@@ -494,22 +579,47 @@ export class CrewStore {
       );
   }
 
-  getAssignee(jobId: string, role: RoleId) {
+  getAssignee(jobId: string, role: RoleId, specialty?: string) {
     return this.db
       .prepare(
         "SELECT member_id FROM job_assignees WHERE job_id = ? AND role = ?",
       )
-      .get(jobId, role)?.member_id;
+      .get(jobId, specialty ? role + ":" + specialty : role)?.member_id;
   }
 
   assignMember(job: Job, member: CrewMember) {
     this.transaction(() => {
+      const previous = this.getAssignee(
+        job.id,
+        member.roleId,
+        member.specialty,
+      );
+      if (typeof previous === "string" && previous !== member.id) {
+        const prior = this.readMembers(job.projectId, member.roleId).find(
+          ({ id }) => id === previous,
+        );
+        this.log(
+          job.sessionId,
+          "비서 · " +
+            (prior?.name ?? previous) +
+            " → " +
+            member.name +
+            " 담당 인계",
+          job.id,
+        );
+      }
       this.db
         .prepare(
           `INSERT INTO job_assignees VALUES (?, ?, ?)
         ON CONFLICT(job_id, role) DO UPDATE SET member_id = excluded.member_id`,
         )
-        .run(job.id, member.roleId, member.id);
+        .run(
+          job.id,
+          member.specialty
+            ? member.roleId + ":" + member.specialty
+            : member.roleId,
+          member.id,
+        );
       const title = roles.find(({ id }) => id === member.roleId)?.title;
       this.log(
         job.sessionId,
@@ -903,8 +1013,8 @@ export class CrewStore {
     const id = randomUUID();
     this.db
       .prepare(
-        `INSERT INTO work_changes (id, job_id, plan_id, path, before_hash, after_hash, before_text, after_text, moved_from)
-         VALUES (?, ?, (SELECT id FROM work_plans WHERE id = ?), ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO work_changes (id, job_id, plan_id, path, before_hash, after_hash, before_text, after_text, moved_from, author_member_id)
+         VALUES (?, ?, (SELECT id FROM work_plans WHERE id = ?), ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -916,6 +1026,7 @@ export class CrewStore {
         before.content,
         after.content,
         movedFrom ?? null,
+        this.getAssignee(job.id, "development") ?? null,
       );
     return id;
   }
@@ -1056,7 +1167,8 @@ export class CrewStore {
     const changes = this.db
       .prepare(
         `SELECT c.id, c.job_id AS jobId, c.plan_id AS planId,
-      c.path, c.moved_from AS movedFrom, c.before_hash AS beforeHash, c.after_hash AS afterHash, c.saved_at AS savedAt, c.after_text AS afterText
+      c.path, c.moved_from AS movedFrom, c.author_member_id AS authorMemberId,
+      c.before_hash AS beforeHash, c.after_hash AS afterHash, c.saved_at AS savedAt, c.after_text AS afterText
       FROM work_changes c JOIN jobs j ON j.id = c.job_id
       WHERE j.session_id = ? AND c.saved_at IS NOT NULL ORDER BY c.rowid DESC`,
       )
@@ -1373,6 +1485,8 @@ export class CrewStore {
           job.id,
         );
       this.log(job.sessionId, note, job.id);
+      if (state === "complete" || state === "denied")
+        this.releaseTemporaryMembers(job);
       if (report)
         this.db
           .prepare(
@@ -1417,7 +1531,8 @@ export class CrewStore {
       assignees: session
         ? (this.db
             .prepare(
-              `SELECT a.job_id AS jobId, a.member_id AS memberId, a.role AS roleId
+              `SELECT a.job_id AS jobId, a.member_id AS memberId,
+                 CASE WHEN instr(a.role, ':') > 0 THEN substr(a.role, 1, instr(a.role, ':') - 1) ELSE a.role END AS roleId
             FROM job_assignees a JOIN jobs j ON j.id = a.job_id WHERE j.session_id = ?`,
             )
             .all(session.id) as Snapshot["assignees"])

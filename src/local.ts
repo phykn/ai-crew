@@ -78,12 +78,12 @@ export async function runLocal(
   const reply = streamText({
     model: await connectLocal(signal),
     system:
-      "You are the AI Crew secretary. Respond in the user's language. Use project_info when asked for the current project details. Call delegate_work only when the user explicitly asks to create or modify a project file. The planning step and approval will be shown separately. Never claim a delegated change is already done.",
+      "You are the AI Crew secretary. Respond in the user's language. Use project_info when asked for the current project details. Call delegate_work only when the user explicitly asks to create, modify, rename or move a project file. The planning step and approval will be shown separately. Never claim a delegated change is already done.",
     messages: history,
     tools: {
       delegate_work: tool({
         description:
-          "Ask the crew to plan an explicitly requested change to a project file.",
+          "Ask the crew to plan an explicitly requested creation, edit or move of a project file.",
         inputSchema: z.object({}),
         execute: async () => {
           signal.throwIfAborted();

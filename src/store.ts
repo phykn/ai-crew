@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
-  planFiles,
+  planTargets,
   roles,
   type Activity,
   type ApprovalMode,
@@ -31,7 +31,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 14)
+    if (migration.user_version > 15)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -210,6 +210,14 @@ export class CrewStore {
         BEGIN;
         ALTER TABLE work_checks ADD COLUMN findings TEXT NOT NULL DEFAULT '[]';
         PRAGMA user_version = 14;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 15) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE work_changes ADD COLUMN moved_from TEXT;
+        PRAGMA user_version = 15;
         COMMIT;
       `);
     }
@@ -702,12 +710,13 @@ export class CrewStore {
     path: string,
     before: { hash: string | null; content: string | null },
     after: { hash: string; content: string },
+    movedFrom?: string,
   ) {
     const id = randomUUID();
     this.db
       .prepare(
-        `INSERT INTO work_changes (id, job_id, plan_id, path, before_hash, after_hash, before_text, after_text)
-         VALUES (?, ?, (SELECT id FROM work_plans WHERE id = ?), ?, ?, ?, ?, ?)`,
+        `INSERT INTO work_changes (id, job_id, plan_id, path, before_hash, after_hash, before_text, after_text, moved_from)
+         VALUES (?, ?, (SELECT id FROM work_plans WHERE id = ?), ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -718,6 +727,7 @@ export class CrewStore {
         after.hash,
         before.content,
         after.content,
+        movedFrom ?? null,
       );
     return id;
   }
@@ -727,13 +737,17 @@ export class CrewStore {
       const saved = this.db
         .prepare(
           `UPDATE work_changes SET saved_at = ?
-          WHERE id = ? AND job_id = ? AND after_hash = ? AND saved_at IS NULL RETURNING path`,
+          WHERE id = ? AND job_id = ? AND after_hash = ? AND saved_at IS NULL RETURNING path, moved_from`,
         )
         .get(new Date().toISOString(), changeId, job.id, hash);
       if (saved)
         this.log(
           job.sessionId,
-          "개발 → 비서 · " + saved.path + " 저장 · " + hash,
+          "개발 → 비서 · " +
+            (saved.moved_from ? saved.moved_from + " → " : "") +
+            saved.path +
+            " 저장 · " +
+            hash,
           job.id,
         );
     });
@@ -803,7 +817,7 @@ export class CrewStore {
     const changes = this.db
       .prepare(
         `SELECT c.id, c.job_id AS jobId, c.plan_id AS planId,
-      c.path, c.before_hash AS beforeHash, c.after_hash AS afterHash, c.saved_at AS savedAt, c.after_text AS afterText
+      c.path, c.moved_from AS movedFrom, c.before_hash AS beforeHash, c.after_hash AS afterHash, c.saved_at AS savedAt, c.after_text AS afterText
       FROM work_changes c JOIN jobs j ON j.id = c.job_id
       WHERE j.session_id = ? AND c.saved_at IS NOT NULL ORDER BY c.rowid DESC`,
       )
@@ -857,12 +871,7 @@ export class CrewStore {
         .run(id, job.id, job.request, JSON.stringify(plan));
       this.log(
         job.sessionId,
-        "플랜 → 리뷰 · " +
-          planFiles(plan)
-            .map(({ path }) => path)
-            .join(", ") +
-          " · " +
-          plan.criterion,
+        "플랜 → 리뷰 · " + planTargets(plan) + " · " + plan.criterion,
         job.id,
       );
     });

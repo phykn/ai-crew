@@ -580,6 +580,7 @@ function Workspace() {
             {changes.map((change) => (
               <details className="change-log" key={change.id}>
                 <summary>
+                  {change.movedFrom ? change.movedFrom + " → " : ""}
                   {change.path} <code>{change.afterHash.slice(0, 8)}</code>
                 </summary>
                 <p className="muted">
@@ -796,7 +797,9 @@ function Workspace() {
                 <section className="decision" aria-label="권한 승인">
                   <div>
                     <p>
-                      {planFiles(approval.plan).length === 1 ? (
+                      {approval.plan.moves?.length ? (
+                        "이 경로로 파일을 옮길까요?"
+                      ) : planFiles(approval.plan).length === 1 ? (
                         <>
                           <strong>{approval.plan.path}</strong>{" "}
                           {approval.plan.baseline === null
@@ -807,13 +810,25 @@ function Workspace() {
                         "이 파일들을 변경할까요?"
                       )}
                     </p>
-                    {planFiles(approval.plan).length > 1 && (
+                    {(planFiles(approval.plan).length > 1 ||
+                      Boolean(approval.plan.moves?.length)) && (
                       <ul>
-                        {planFiles(approval.plan).map(({ path, baseline }) => (
-                          <li key={path}>
-                            {path} · {baseline === null ? "생성" : "수정"}
-                          </li>
-                        ))}
+                        {planFiles(approval.plan).map(({ path, baseline }) => {
+                          const move = approval.plan!.moves?.find(
+                            ({ to }) => to === path,
+                          );
+                          return (
+                            <li key={path}>
+                              {move
+                                ? move.from +
+                                  " → " +
+                                  path +
+                                  (move.edit ? " · 이동 및 수정" : " · 이동")
+                                : path +
+                                  (baseline === null ? " · 생성" : " · 수정")}
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                     {approval.plan.directories?.length ? (

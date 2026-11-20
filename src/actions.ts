@@ -190,9 +190,19 @@ export type WorkPlan = {
   baseline: string | null;
   files?: { path: string; baseline: string | null }[];
   directories?: string[];
+  moves?: { from: string; to: string; baseline: string; edit: boolean }[];
 };
 export function planFiles(plan: WorkPlan) {
   return plan.files ?? [{ path: plan.path, baseline: plan.baseline }];
+}
+export function planTargets(plan: WorkPlan) {
+  const files = planFiles(plan);
+  return files
+    .map(({ path }) => {
+      const move = plan.moves?.find(({ to }) => to === path);
+      return move ? move.from + " → " + path : path;
+    })
+    .join(", ");
 }
 export type ReviewFinding = {
   startLine: number;
@@ -215,6 +225,7 @@ export type WorkChange = {
   jobId: string;
   planId: string | null;
   path: string;
+  movedFrom: string | null;
   beforeHash: string | null;
   afterHash: string;
   savedAt: string;

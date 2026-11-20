@@ -83,9 +83,10 @@ export async function inspectFile(root: string, path: string) {
       const { bytesRead } = await file.read(bytes, 0, bytes.length, 0);
       if (bytesRead > maxBytes || bytes.subarray(0, bytesRead).includes(0))
         throw new Error("작은 텍스트 파일만 이 작업에서 수정할 수 있어요.");
-      const content = new TextDecoder("utf-8", { fatal: true }).decode(
-        bytes.subarray(0, bytesRead),
-      );
+      const content = new TextDecoder("utf-8", {
+        fatal: true,
+        ignoreBOM: true,
+      }).decode(bytes.subarray(0, bytesRead));
       return {
         target,
         mode: meta.mode & 0o777,
@@ -110,6 +111,7 @@ export async function writeWorkspaceFile(
   expected: string | null,
   content: string,
   signal: AbortSignal,
+  fileMode?: number,
 ) {
   const entry = await inspectFile(root, path);
   if (entry.hash !== expected)
@@ -118,10 +120,11 @@ export async function writeWorkspaceFile(
     );
   validateWorkspaceText(content);
   const temporary = resolve(dirname(entry.target), ".crew-" + randomUUID());
-  const file = await open(temporary, "wx", entry.mode);
+  const file = await open(temporary, "wx", fileMode ?? entry.mode);
   try {
     try {
       await file.writeFile(content, "utf8");
+      if (fileMode !== undefined) await file.chmod(fileMode);
       await file.sync();
     } finally {
       await file.close();
@@ -136,4 +139,26 @@ export async function writeWorkspaceFile(
       if (error.code !== "ENOENT") throw error;
     });
   }
+}
+
+export async function moveWorkspaceFile(
+  root: string,
+  from: string,
+  to: string,
+  expected: { sourceHash: string; destinationHash: string },
+  content: string,
+  signal: AbortSignal,
+) {
+  const source = await inspectFile(root, from);
+  if (source.hash !== expected.sourceHash)
+    throw new Error("이동할 원본이 승인 이후 바뀌었어요.");
+  await writeWorkspaceFile(root, to, null, content, signal, source.mode);
+  const destination = await inspectFile(root, to);
+  if (
+    destination.hash !== expected.destinationHash ||
+    (await inspectFile(root, from)).hash !== expected.sourceHash
+  )
+    throw new Error("이동 중 파일이 바뀌었어요. 원본 경로는 보존했어요.");
+  signal.throwIfAborted();
+  await unlink(source.target);
 }

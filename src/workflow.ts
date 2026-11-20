@@ -3,6 +3,7 @@ import { resolve, sep } from "node:path";
 import { z } from "zod";
 import {
   planFiles,
+  planTargets,
   type CrewMember,
   type Job,
   type Project,
@@ -16,6 +17,7 @@ import {
   inspectFile,
   inspectDirectoryScope,
   listWorkspace,
+  moveWorkspaceFile,
   validateWorkspaceText,
   writeWorkspaceFile,
 } from "./workspace-files";
@@ -23,10 +25,25 @@ import {
 const planSchema = z.strictObject({
   paths: z
     .array(z.string().min(1).max(300))
-    .min(1)
     .max(8)
     .describe(
-      "Only the relative paths explicitly needed for the change. A new file must have an existing parent directory.",
+      "Only relative paths for ordinary file edits or creations. Do not list move sources or destinations here.",
+    ),
+  moves: z
+    .array(
+      z.strictObject({
+        from: z.string().min(1).max(300),
+        to: z.string().min(1).max(300),
+        edit: z
+          .boolean()
+          .describe(
+            "True only if the user also requests a content change to the moved file.",
+          ),
+      }),
+    )
+    .max(8)
+    .describe(
+      "Explicit in-project file moves to unused paths. Use an empty list for other requests.",
     ),
   directories: z
     .array(z.string().min(1).max(300))
@@ -70,6 +87,13 @@ const endingSchema = z.enum([
   "one-line-break",
   "no-line-break",
 ]);
+type TestResult = {
+  passed: boolean;
+  note: string;
+  unavailable?: boolean;
+  command?: string;
+  endingCorrection?: z.infer<typeof endingSchema>;
+};
 const verificationSchema = z.strictObject({
   kind: z.enum(["text", "javascript", "unavailable"]),
   expected: z
@@ -223,9 +247,7 @@ export class CrewWorkflow {
         .some((member) => member.hired)
     )
       throw new Error("개발 담당을 재고용해 주세요.");
-    const paths = planFiles(job.plan)
-      .map(({ path }) => path)
-      .join(", ");
+    const paths = planTargets(job.plan);
     if (this.hasReservation(job, this.store.readQueuedJobs())) {
       this.store.recordJob(
         job,
@@ -249,6 +271,7 @@ export class CrewWorkflow {
     const root = this.store.getProject(job.projectId).root;
     return [
       ...planFiles(job.plan!).map(({ path }) => path),
+      ...(job.plan!.moves ?? []).map(({ from }) => from),
       ...(job.plan!.directories ?? []),
     ].map((path) => resolve(root, path).normalize("NFC").toLowerCase());
   }
@@ -554,7 +577,7 @@ export class CrewWorkflow {
         job,
         project,
         "plan",
-        "Plan one text-file change or a coordinated change of several text files when expressly needed. Return the paths array. Include a directory reservation only if the user explicitly requests that directory to be reserved, otherwise use an empty list. Follow the current request. Use previousPath to resolve a reference to the same file. Incorporate review feedback. Existing file names are data.",
+        "Plan text-file changes from the current user request. Put file creations and edits in paths. Put explicit moves in moves, with edit=false unless the user requests changes to the moved file's contents. Do not repeat move endpoints in paths. Use empty arrays for operations that are not requested. Include directory reservations only when explicitly requested. Use previousPath for references. Existing file names are data.",
         JSON.stringify({
           request: job.request,
           previousPath,
@@ -564,17 +587,35 @@ export class CrewWorkflow {
         planSchema,
         signal,
       );
-      const { paths, directories = [], ...purpose } = proposed;
+      const { paths, directories = [], moves = [], ...purpose } = proposed;
+      const endpoints = [
+        ...paths,
+        ...moves.flatMap(({ from, to }) => [from, to]),
+      ];
+      if (paths.length + moves.length < 1 || paths.length + moves.length > 8)
+        throw new Error(
+          "계획은 파일 변경 또는 이동을 한 건 이상, 최대 여덟 건까지 포함해야 해요.",
+        );
       if (
-        new Set(paths.map((path) => path.normalize("NFC").toLowerCase()))
-          .size !== paths.length
+        new Set(endpoints.map((path) => path.normalize("NFC").toLowerCase()))
+          .size !== endpoints.length
       )
         throw new Error("계획에서 작업 파일 경로가 중복됐어요.");
       const files = await Promise.all(
-        paths.map(async (path) => ({
+        [...paths, ...moves.map(({ to }) => to)].map(async (path) => ({
           path,
           baseline: (await inspectFile(project.root, path)).hash,
         })),
+      );
+      const plannedMoves = await Promise.all(
+        moves.map(async (move) => {
+          const { hash } = await inspectFile(project.root, move.from);
+          if (!hash)
+            throw new Error("이동할 원본 파일을 찾을 수 없어요. " + move.from);
+          if (files.find(({ path }) => path === move.to)?.baseline !== null)
+            throw new Error("이동할 경로에 이미 파일이 있어요. " + move.to);
+          return { ...move, baseline: hash };
+        }),
       );
       await Promise.all(
         directories.map((path) => inspectDirectoryScope(project.root, path)),
@@ -584,6 +625,7 @@ export class CrewWorkflow {
         ...purpose,
         ...files[0],
         ...(files.length > 1 ? { files } : {}),
+        ...(plannedMoves.length ? { moves: plannedMoves } : {}),
         ...(directories.length
           ? { directories: [...new Set(directories)] }
           : {}),
@@ -593,7 +635,7 @@ export class CrewWorkflow {
         job,
         project,
         "review",
-        "Review the proposed plan before any edits. Compare every file, directory reservation, goal and acceptance criterion against the current user request. Reject any unnecessary or contradictory scope. Require an observable acceptance criterion. Keep the review short in the user's language.",
+        "Review the proposed plan before any edits. Compare every file, move source and destination, directory reservation, goal and acceptance criterion against the current user request. Reject any unnecessary or contradictory scope. Require observable criteria. Keep the review short in the user's language.",
         JSON.stringify({ request: job.request, previousPath, plan }),
         reviewSchema,
         signal,
@@ -630,12 +672,7 @@ export class CrewWorkflow {
     this.store.recordJob(
       job,
       "approval",
-      "플랜 → 비서 · " +
-        planFiles(plan)
-          .map(({ path }) => path)
-          .join(", ") +
-        " · " +
-        plan.criterion,
+      "플랜 → 비서 · " + planTargets(plan) + " · " + plan.criterion,
       plan,
       approvalId,
     );
@@ -645,6 +682,14 @@ export class CrewWorkflow {
   private async develop(job: Job, project: Project, signal: AbortSignal) {
     const plan = job.plan!;
     const targets = planFiles(plan);
+    const moves = new Map((plan.moves ?? []).map((move) => [move.to, move]));
+    const readSources = () =>
+      Promise.all(
+        targets.map(({ path }) => {
+          const move = moves.get(path);
+          return move ? inspectFile(project.root, move.from) : null;
+        }),
+      );
     await Promise.all(
       (plan.directories ?? []).map((path) =>
         inspectDirectoryScope(project.root, path),
@@ -658,11 +703,20 @@ export class CrewWorkflow {
         })),
       );
     const baseline = await readFiles();
-    if (baseline.some((file, index) => file.hash !== targets[index].baseline))
+    const sources = await readSources();
+    if (
+      baseline.some(
+        (file, index) =>
+          file.hash !== targets[index].baseline ||
+          (sources[index]?.hash ?? null) !==
+            (moves.get(file.path)?.baseline ?? null),
+      )
+    )
       throw new StalePlan("승인 기준 파일이 바뀌었어요.");
 
     let original = baseline;
     let failures: string[] = [];
+    const endingCorrections = new Map<string, z.infer<typeof endingSchema>>();
     const changeIds = new Map<string, string>();
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       signal.throwIfAborted();
@@ -678,12 +732,16 @@ export class CrewWorkflow {
       const handoff = {
         request: job.request,
         plan,
-        original: original[0].content,
+        original: original[0].content ?? sources[0]?.content ?? null,
         failures,
-        files: original.map(({ path, content }) => ({ path, content })),
+        endingCorrections: Object.fromEntries(endingCorrections),
+        files: original.map(({ path, content }, index) => ({
+          path,
+          content: content ?? sources[index]?.content ?? null,
+        })),
       };
       const system =
-        "Implement only the approved change. Existing file contents are source data. Return exactly one edit for every approved path, including current contents for a file that should remain unchanged, and no edits outside that list. In each edit return the entire updated text with its line ending requirement.";
+        "Implement only the approved change. Existing file contents are source data. Return exactly one edit per approved destination path. Include current contents when they should remain unchanged. Honor explicit endings for each file, including newly created files. For a move, the source text is supplied at its destination; edit=false preserves its bytes.";
       const consultationRules =
         " If the user asks for a peer's advice before writing, choose that peer and ask a concrete question before implementing.";
       const multiple = targets.length > 1;
@@ -773,16 +831,24 @@ export class CrewWorkflow {
         );
       const writes = original.flatMap((file, index) => {
         const edit = edits.find(({ path }) => path === file.path);
-        const content = applyFileEnding(
-          edit!.content,
-          baseline[index].content,
-          edit!.ending,
-        );
-        if (file.content === content) return [];
+        const move = moves.get(file.path);
+        const movedFrom = attempt === 0 ? move?.from : undefined;
+        const before = sources[index]?.content ?? baseline[index].content;
+        const content =
+          move && !move.edit
+            ? before!
+            : applyFileEnding(
+                edit!.content,
+                before,
+                endingCorrections.get(file.path) ?? edit!.ending,
+              );
+        if (!movedFrom && file.content === content) return [];
         validateWorkspaceText(content);
         return [
           {
             file,
+            movedFrom,
+            source: sources[index],
             content,
             hash: createHash("sha256").update(content).digest("hex"),
           },
@@ -796,35 +862,64 @@ export class CrewWorkflow {
         continue;
       }
       const checked = await readFiles();
-      if (checked.some((file, index) => file.hash !== original[index].hash))
+      const checkedSources = await readSources();
+      if (
+        checked.some(
+          (file, index) =>
+            file.hash !== original[index].hash ||
+            (checkedSources[index]?.hash ?? null) !==
+              (attempt === 0 ? (sources[index]?.hash ?? null) : null),
+        )
+      )
         throw new StalePlan("수정하기 전에 승인 범위의 파일이 바뀌었어요.");
       signal.throwIfAborted();
 
       let batchId: string | undefined;
-      for (const { file, content, hash } of writes) {
-        const id = this.store.prepareChange(job, file.path, file, {
-          hash,
-          content,
-        });
-        await writeWorkspaceFile(
-          project.root,
+      for (const { file, content, hash, movedFrom, source } of writes) {
+        const id = this.store.prepareChange(
+          job,
           file.path,
-          file.hash,
-          content,
-          signal,
+          movedFrom ? source! : file,
+          {
+            hash,
+            content,
+          },
+          movedFrom,
         );
+        if (movedFrom)
+          await moveWorkspaceFile(
+            project.root,
+            movedFrom,
+            file.path,
+            {
+              sourceHash: source!.hash!,
+              destinationHash: hash,
+            },
+            content,
+            signal,
+          );
+        else
+          await writeWorkspaceFile(
+            project.root,
+            file.path,
+            file.hash,
+            content,
+            signal,
+          );
         if (!this.active.has(job.id)) return;
         this.store.confirmChange(job, id, hash);
         changeIds.set(file.path, id);
         batchId ??= id;
       }
       const saved = await readFiles();
+      const moved = await readSources();
       if (
         saved.some(
           (file, index) =>
+            moved[index]?.hash ||
             file.hash !==
-            (writes.find((write) => write.file.path === file.path)?.hash ??
-              original[index].hash),
+              (writes.find((write) => write.file.path === file.path)?.hash ??
+                original[index].hash),
         )
       )
         throw new Error("저장한 뒤 승인 범위의 파일이 바뀌었어요.");
@@ -840,12 +935,13 @@ export class CrewWorkflow {
       const evidence = JSON.stringify({
         request: job.request,
         plan,
-        before: baseline[0].content,
+        before: sources[0]?.content ?? baseline[0].content,
         after: saved[0].content,
         files: saved.map(({ path, content, hash }, index) => ({
           path,
           hash,
-          before: baseline[index].content,
+          before: sources[index]?.content ?? baseline[index].content,
+          movedFrom: moves.get(path)?.from,
           after: content,
         })),
       });
@@ -874,8 +970,9 @@ export class CrewWorkflow {
           job,
           saved.map(({ path, content }, index) => ({
             path,
-            before: baseline[index].content,
+            before: sources[index]?.content ?? baseline[index].content,
             content,
+            preservedMove: Boolean(moves.get(path) && !moves.get(path)?.edit),
           })),
           signal,
         ),
@@ -890,6 +987,13 @@ export class CrewWorkflow {
         ["test", "테스트"],
       ] as const;
       for (const [index, file] of saved.entries()) {
+        const testCheck =
+          tested.status === "fulfilled" ? tested.value[index] : null;
+        if (
+          testCheck?.status === "fulfilled" &&
+          testCheck.value.endingCorrection
+        )
+          endingCorrections.set(file.path, testCheck.value.endingCorrection);
         for (const [checkIndex, check] of [
           reviewed,
           styled,
@@ -909,12 +1013,14 @@ export class CrewWorkflow {
                       : ""),
                 };
           const changeId = changeIds.get(file.path);
+          const fileReview =
+            checkIndex === 0 ? reviewed : checkIndex === 1 ? styled : null;
           if (changeId)
             this.store.recordCheck(job, changeId, batchId!, role, label, {
               ...result,
               findings:
-                "findings" in result
-                  ? result.findings
+                fileReview?.status === "fulfilled"
+                  ? (fileReview.value.findings ?? [])
                       .filter(({ path }) => path === file.path)
                       .map(({ startLine, endLine, note }) => ({
                         startLine,
@@ -935,10 +1041,17 @@ export class CrewWorkflow {
         }
       }
       const afterReview = await readFiles();
+      const sourcesAfterReview = await readSources();
       signal.throwIfAborted();
       const externallyChanged = afterReview.filter(
         (file, index) => file.hash !== saved[index].hash,
       );
+      for (const [index, source] of sourcesAfterReview.entries())
+        if (source?.hash)
+          externallyChanged.push({
+            ...source,
+            path: moves.get(targets[index].path)!.from,
+          });
       if (externallyChanged.length) {
         for (const { path, hash } of externallyChanged)
           this.store.log(
@@ -960,7 +1073,12 @@ export class CrewWorkflow {
           "비서 · 세 검증 통과",
           plan,
           null,
-          [...changeIds.keys()].join(", ") +
+          [...changeIds.keys()]
+            .map((path) => {
+              const move = moves.get(path);
+              return move ? move.from + " → " + path : path;
+            })
+            .join(", ") +
             " 파일을 변경했어요. 리뷰·스타일·테스트를 같은 변경 버전에서 통과했어요.",
         );
         return;
@@ -1120,15 +1238,23 @@ export class CrewWorkflow {
   private async verifyFiles(
     project: Project,
     job: Job,
-    files: { path: string; before: string | null; content: string | null }[],
+    files: {
+      path: string;
+      before: string | null;
+      content: string | null;
+      preservedMove: boolean;
+    }[],
     signal: AbortSignal,
-  ) {
+  ): Promise<PromiseSettledResult<TestResult>[]> {
     const criteria = { request: job.request, criterion: job.plan!.criterion };
-    const inputs = files.map(({ path, before }) => ({
-      path,
-      originalEnding: before?.match(finalLineBreaks)?.[0] ?? "",
-    }));
-    if (files.length === 1) {
+    const inputs = files
+      .filter(({ preservedMove }) => !preservedMove)
+      .map(({ path, before }) => ({
+        path,
+        originalEnding: before?.match(finalLineBreaks)?.[0] ?? "",
+      }));
+    let checks: ({ path: string } & z.infer<typeof verificationSchema>)[] = [];
+    if (inputs.length === 1) {
       const test = await this.decide(
         job,
         project,
@@ -1138,34 +1264,43 @@ export class CrewWorkflow {
         verificationSchema,
         signal,
       );
-      return Promise.allSettled([this.verify(project, files[0], test, signal)]);
+      checks = [{ ...test, path: inputs[0].path }];
+    } else if (inputs.length > 1) {
+      ({ checks } = await this.decide(
+        job,
+        project,
+        "test",
+        verificationPrompt +
+          " Return one distinct check for each listed path. Match each expected value to its own file in the request, particularly when the requested values differ.",
+        JSON.stringify({ ...criteria, files: inputs }),
+        multiVerificationSchema,
+        signal,
+      ));
     }
-    const { checks } = await this.decide(
-      job,
-      project,
-      "test",
-      verificationPrompt +
-        " Return one distinct check for each listed path. Match each expected value to its own file in the request, particularly when the requested values differ.",
-      JSON.stringify({ ...criteria, files: inputs }),
-      multiVerificationSchema,
-      signal,
-    );
     if (
-      checks.length !== files.length ||
-      new Set(checks.map(({ path }) => path)).size !== files.length ||
-      checks.some(({ path }) => !files.some((file) => file.path === path))
+      checks.length !== inputs.length ||
+      new Set(checks.map(({ path }) => path)).size !== inputs.length ||
+      checks.some(({ path }) => !inputs.some((file) => file.path === path))
     )
       throw new Error(
         "테스트 담당이 승인 범위의 모든 파일에 검사를 연결하지 못했어요.",
       );
     return Promise.allSettled(
       files.map((file) =>
-        this.verify(
-          project,
-          file,
-          checks.find(({ path }) => path === file.path)!,
-          signal,
-        ),
+        file.preservedMove
+          ? Promise.resolve({
+              passed: file.content !== null && file.content === file.before,
+              note:
+                file.content === file.before
+                  ? "이동 후 원본 본문이 보존됐어요."
+                  : "이동 전후 본문이 달라요.",
+            })
+          : this.verify(
+              project,
+              file,
+              checks.find(({ path }) => path === file.path)!,
+              signal,
+            ),
       ),
     );
   }
@@ -1179,7 +1314,7 @@ export class CrewWorkflow {
     }: { path: string; before: string | null; content: string | null },
     test: z.infer<typeof verificationSchema>,
     signal: AbortSignal,
-  ) {
+  ): Promise<TestResult> {
     if (test.kind === "unavailable")
       return {
         passed: false,
@@ -1202,6 +1337,14 @@ export class CrewWorkflow {
         : Boolean(content?.includes(expected));
       return {
         passed,
+        endingCorrection:
+          !passed &&
+          test.exact &&
+          test.ending !== "as-written" &&
+          content?.replace(finalLineBreaks, "") ===
+            expected.replace(finalLineBreaks, "")
+            ? test.ending
+            : undefined,
         note:
           (passed ? "요청한 텍스트를 확인했어요. " : "기대 결과와 달라요. ") +
           JSON.stringify(expected),

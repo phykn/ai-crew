@@ -140,6 +140,30 @@ try {
   await changeLog.locator("summary").click();
   await expect(changeLog.getByText(/테스트 · 통과/)).toBeVisible();
   await page.getByRole("button", { name: "대화" }).click();
+  await page.getByRole("button", { name: "추가 지시" }).click();
+  await send(
+    "summary.txt의 이름을 archived.txt로 바꿔서 실제로 이동해줘. 내용은 그대로 유지하고, 이동한 뒤 이전 경로에는 파일이 없어야 해.",
+  );
+  await expect(question).toContainText("summary.txt → archived.txt", {
+    timeout: 45000,
+  });
+  await expect(readFile(join(workspace, "summary.txt"), "utf8")).resolves.toBe(
+    "Summary\n",
+  );
+  await expect(
+    readFile(join(workspace, "archived.txt"), "utf8"),
+  ).rejects.toMatchObject({ code: "ENOENT" });
+  await question.getByRole("button", { name: "허용" }).click();
+  await expect(page.locator(".bubble.assistant").last()).toContainText(
+    "summary.txt → archived.txt 파일을 변경했어요.",
+    { timeout: 90000 },
+  );
+  await expect(
+    readFile(join(workspace, "summary.txt"), "utf8"),
+  ).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(readFile(join(workspace, "archived.txt"), "utf8")).resolves.toBe(
+    "Summary\n",
+  );
   if (process.env.AI_CREW_TEST_CODEX === "1") {
     await page.locator(".roster summary").click();
     await page
@@ -194,7 +218,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "PASS packaged Electron: folder, Qwen chat and tool, restart, context, stop, /clear, approved write and multi-file follow-up",
+    "PASS packaged Electron: folder, Qwen chat and tool, restart, context, stop, /clear, approved writes, follow-ups and file move",
   );
 } finally {
   await application?.close().catch(() => {});

@@ -5,6 +5,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,7 +32,7 @@ test("peer consultation and a follow-up share a job with separate approvals", as
     let styleTurns = 0;
     let reviewTurns = 0;
     vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
-      if (system.startsWith("Plan one")) {
+      if (system.startsWith("Plan text-file")) {
         if (followUp) expect(prompt).toContain('"previousPath":"notice.txt"');
         if (replan && !followUp)
           expect(prompt).toContain("검증할 문구를 명시해 주세요.");
@@ -236,7 +237,7 @@ test("overlapping jobs replan and checks stay attached to the version they revie
       const target = { First: "One", Second: "Two", Third: "Three" }[
         String(request)
       ];
-      if (system.startsWith("Plan one"))
+      if (system.startsWith("Plan text-file"))
         return { paths: ["notice.txt"], goal: request, criterion: target };
       if (system.startsWith("Implement only")) {
         if (request === "First") await firstEdit.promise;
@@ -357,7 +358,7 @@ test("stopping one queued role request leaves work ahead and behind it intact", 
   const requested: string[] = [];
   try {
     vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
-      if (system.startsWith("Plan one")) {
+      if (system.startsWith("Plan text-file")) {
         const { request } = JSON.parse(prompt);
         requested.push(request);
         if (request === "First") await release.promise;
@@ -425,7 +426,7 @@ test("unresolved peer guidance waits for the current user question across restar
   try {
     vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
       const clarified = prompt.includes("사용자 답변: Final");
-      if (system.startsWith("Plan one"))
+      if (system.startsWith("Plan text-file"))
         return {
           paths: ["notice.txt"],
           goal: "문구 변경",
@@ -434,7 +435,7 @@ test("unresolved peer guidance waits for the current user question across restar
       if (system.startsWith("Implement only"))
         return {
           content: clarified ? "Final" : "Guessed",
-          ending: "preserve",
+          ending: "no-line-break",
           consult: clarified ? "none" : "style",
           question: clarified ? "" : "쓸 문구를 확인해 주세요.",
         };
@@ -485,6 +486,7 @@ test("unresolved peer guidance waits for the current user question across restar
     workflow.answer(id, store.getJob(id).approvalId!, true);
     await vi.waitFor(() => expect(store.getJob(id).state).toBe("complete"));
     expect(readFileSync(file, "utf8")).toBe("Final\n");
+    expect(store.readChanges(sessionId)).toHaveLength(2);
     expect(
       store.getMessages(sessionId).filter(({ role }) => role === "user"),
     ).toHaveLength(1);
@@ -515,7 +517,7 @@ test("a coordinated edit reserves all files and rejects an out-of-scope write be
     let batchPass = 0;
     vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
       const { request, path, files } = JSON.parse(prompt.split("\n\n").at(-1)!);
-      if (system.startsWith("Plan one"))
+      if (system.startsWith("Plan text-file"))
         return {
           paths:
             request === "Nested"
@@ -682,6 +684,119 @@ test("a coordinated edit reserves all files and rejects an out-of-scope write be
     }
   } finally {
     edit.resolve();
+    workflow.close();
+    store.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("moving a file reserves both endpoints, preserves bytes, and never overwrites a destination", async () => {
+  const folder = realpathSync(mkdtempSync(join(tmpdir(), "crew-move-")));
+  const source = join(folder, "before.txt");
+  const destination = join(folder, "after.txt");
+  const conflict = join(folder, "occupied.txt");
+  const lateDestination = join(folder, "late.txt");
+  const original = Buffer.from("\ufeffKeep the content\r\n");
+  writeFileSync(source, original, { mode: 0o640 });
+  writeFileSync(conflict, "Not this file\n");
+  const store = new CrewStore(":memory:");
+  const workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+  const moveTurn = Promise.withResolvers<void>();
+  try {
+    vi.mocked(decideLocal).mockImplementation(async (system, input) => {
+      const { request } = JSON.parse(input.split("\n\n").at(-1)!);
+      if (system.startsWith("Plan text-file"))
+        return {
+          goal: request,
+          criterion: "preserve bytes",
+          paths:
+            request === "Source"
+              ? ["before.txt"]
+              : request === "Destination"
+                ? ["after.txt"]
+                : [],
+          moves: ["Move", "Conflict", "Late"].includes(request)
+            ? [
+                {
+                  from: "before.txt",
+                  to:
+                    request === "Move"
+                      ? "after.txt"
+                      : request === "Late"
+                        ? "late.txt"
+                        : "occupied.txt",
+                  edit: false,
+                },
+              ]
+            : [],
+          directories: [],
+        };
+      if (system.startsWith("Implement only")) {
+        await moveTurn.promise;
+        return {
+          content: "Ignored because the move is unchanged",
+          ending: "preserve",
+          consult: "none",
+          question: "",
+        };
+      }
+      return { passed: true, note: "확인했어요.", findings: [] };
+    });
+    store.openFolder(folder);
+    const sessionId = store.snapshot().session!.id;
+    const invalid = workflow.delegate(sessionId, randomUUID(), "Conflict").id;
+    await vi.waitFor(() => expect(store.getJob(invalid).state).toBe("failed"));
+    expect(readFileSync(conflict, "utf8")).toBe("Not this file\n");
+    expect(readFileSync(source)).toEqual(original);
+    const late = workflow.delegate(sessionId, randomUUID(), "Late").id;
+    await vi.waitFor(() => expect(store.getJob(late).state).toBe("approval"));
+    writeFileSync(lateDestination, "Created outside Crew\n");
+    workflow.answer(late, store.getJob(late).approvalId!, true);
+    await vi.waitFor(() => expect(store.getJob(late).state).toBe("failed"));
+    expect(readFileSync(lateDestination, "utf8")).toBe(
+      "Created outside Crew\n",
+    );
+    expect(readFileSync(source)).toEqual(original);
+
+    const moved = workflow.delegate(sessionId, randomUUID(), "Move").id;
+    const editSource = workflow.delegate(sessionId, randomUUID(), "Source").id;
+    const editDestination = workflow.delegate(
+      sessionId,
+      randomUUID(),
+      "Destination",
+    ).id;
+    await vi.waitFor(() => {
+      for (const id of [moved, editSource, editDestination])
+        expect(store.getJob(id).state).toBe("approval");
+    });
+
+    for (const id of [moved, editSource, editDestination])
+      workflow.answer(id, store.getJob(id).approvalId!, true);
+    expect(store.getJob(editSource).state).toBe("queued");
+    expect(store.getJob(editDestination).state).toBe("queued");
+    expect(readFileSync(source)).toEqual(original);
+    expect(() => readFileSync(destination)).toThrow();
+    moveTurn.resolve();
+
+    await vi.waitFor(() => {
+      expect(store.getJob(moved).state).toBe("complete");
+      expect(store.getJob(editSource).state).toBe("approval");
+      expect(store.getJob(editDestination).state).toBe("approval");
+    });
+    expect(() => readFileSync(source)).toThrow();
+    expect(readFileSync(destination)).toEqual(original);
+    expect(statSync(destination).mode & 0o777).toBe(0o640);
+    const [change] = store.readChanges(sessionId);
+    expect(change).toMatchObject({
+      path: "after.txt",
+      movedFrom: "before.txt",
+    });
+    expect(change.beforeHash).toBe(change.afterHash);
+    expect(change.checks.find(({ role }) => role === "test")?.passed).toBe(
+      true,
+    );
+  } finally {
+    moveTurn.resolve();
     workflow.close();
     store.close();
     rmSync(folder, { recursive: true, force: true });

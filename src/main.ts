@@ -7,6 +7,8 @@ import {
   type Completion,
   type ModelDetails,
 } from "./actions";
+import { ActionRunner } from "./app-actions";
+import { appTools } from "./app-tools";
 import { findChatCommand } from "./chat-commands";
 import { CodexConnection } from "./codex";
 import { classifyModelFailure } from "./model-errors";
@@ -147,15 +149,22 @@ async function startApp() {
             });
             publish(null);
           },
-          mentionsWiki(text)
-            ? wikiTools(
-                store,
-                { projectId: project.id, sessionId, canRead: wiki.length > 0 },
-                assistant,
-                controller.signal,
-                () => publish(null),
-              )
-            : undefined,
+          {
+            ...appTools(runner),
+            ...(mentionsWiki(text)
+              ? wikiTools(
+                  store,
+                  {
+                    projectId: project.id,
+                    sessionId,
+                    canRead: wiki.length > 0,
+                  },
+                  assistant,
+                  controller.signal,
+                  () => publish(null),
+                )
+              : {}),
+          },
         );
       }
     } catch (error) {
@@ -187,6 +196,70 @@ async function startApp() {
     }
   }
 
+  const runner = new ActionRunner({
+    store,
+    workflow,
+    mcp,
+    pickFolder: async () => {
+      const selected = await dialog.showOpenDialog(window!, {
+        properties: ["openDirectory"],
+        title: "프로젝트 폴더 열기",
+      });
+      return selected.canceled || !selected.filePaths[0]
+        ? null
+        : await realpath(selected.filePaths[0]);
+    },
+  });
+
+  runner.attachChat({
+    send: (action) => {
+      const command = findChatCommand(action.text);
+      const current = runs.get(action.sessionId);
+      if (current && current.request !== action.requestId && !command)
+        throw new Error("이 대화에서 이미 답변을 생성하고 있어요.");
+      if (command === "/clear") {
+        store.clearSession(action.sessionId, action.requestId);
+        return;
+      }
+      if (
+        !store.isHired(
+          store.getSession(action.sessionId).projectId,
+          "assistant",
+        )
+      )
+        throw new Error("크루에서 비서를 재고용해 주세요.");
+      if (
+        workflow.routeFollowup(
+          action.sessionId,
+          action.requestId,
+          action.text,
+        )
+      )
+        return;
+      const id = store.beginResponse(
+        action.sessionId,
+        action.requestId,
+        action.text,
+      );
+      if (id) {
+        const controller = new AbortController();
+        runs.set(action.sessionId, {
+          id,
+          request: action.requestId,
+          controller,
+        });
+        void generate(action.sessionId, id, action.text, controller);
+      }
+    },
+    stop: (sessionId, responseId) => {
+      const run = runs.get(sessionId);
+      if (run?.id === responseId && !run.controller.signal.aborted) {
+        store.finish(run.id, "stopping");
+        run.controller.abort();
+      }
+    },
+  });
+
   ipcMain.handle("crew:action", async (event, input: unknown) => {
     if (
       !window ||
@@ -194,193 +267,8 @@ async function startApp() {
       event.senderFrame !== window.webContents.mainFrame
     )
       throw new Error("현재 앱 창에서 요청해 주세요.");
-    const action = actions.parse(input);
-    switch (action.type) {
-      case "project.pick": {
-        const selected = await dialog.showOpenDialog(window, {
-          properties: ["openDirectory"],
-          title: "프로젝트 폴더 열기",
-        });
-        if (!selected.canceled && selected.filePaths[0])
-          store.openFolder(await realpath(selected.filePaths[0]));
-        break;
-      }
-      case "project.approval":
-        store.setApprovalMode(action.projectId, action.mode);
-        break;
-      case "project.open":
-        store.openProject(action.projectId);
-        break;
-      case "session.new":
-        store.newSession(action.projectId);
-        break;
-      case "session.open":
-        store.openSession(action.sessionId);
-        break;
-      case "session.draft":
-        store.saveDraft(action.sessionId, action.draft);
-        break;
-      case "crew.member.add":
-        store.addMember(action.projectId, {
-          id: action.memberId,
-          roleId: action.roleId,
-          name: action.name,
-          provider: action.provider,
-        });
-        break;
-      case "crew.member.update":
-        store.updateMember(action.projectId, action.memberId, action);
-        break;
-      case "crew.workspace.write":
-        store.setWorkspaceWrite(
-          action.projectId,
-          action.memberId,
-          action.allow,
-        );
-        break;
-      case "mcp.connect":
-        await mcp.connect(
-          action.projectId,
-          action.serverId,
-          action.name,
-          action.url,
-        );
-        break;
-      case "mcp.disconnect":
-        store.disconnectMcpEndpoint(action.projectId, action.serverId);
-        break;
-      case "mcp.grant":
-        store.setMcpGrant(
-          action.projectId,
-          action.serverId,
-          action.memberId,
-          action.toolName,
-          action.allow,
-        );
-        break;
-      case "mcp.answer":
-        workflow.answerTool(action.jobId, action.requestId, action.allow);
-        break;
-      case "workflow.save":
-        store.saveWorkflow(action.projectId, {
-          id: action.workflowId,
-          version: action.version,
-          name: action.name,
-          graph: action.graph,
-          author: "사용자",
-        });
-        break;
-      case "workflow.select":
-        store.setSessionWorkflow(action.sessionId, action.workflowId);
-        break;
-      case "workflow.apply":
-        store.applyWorkflow(action.jobId, action.scope);
-        break;
-      case "crew.skill.add":
-        store.addSkill(action.projectId, {
-          id: action.skillId,
-          memberId: action.memberId,
-          name: action.name,
-          markdown: action.markdown,
-        });
-        break;
-      case "crew.skill.remove":
-        store.removeSkill(action.projectId, action.memberId, action.skillId);
-        break;
-      case "memory.add":
-        store.saveMemory(action.sessionId, action.body, action.ownerId);
-        break;
-      case "memory.remove":
-        store.removeMemory(action.projectId, action.memoryId);
-        break;
-      case "wiki.save":
-        store.saveWiki(action.sessionId, {
-          id: action.pageId, version: action.version, title: action.title,
-          body: action.body, links: action.links,
-        });
-        break;
-      case "wiki.remove":
-        store.removeWiki(action.projectId, action.pageId, action.version);
-        break;
-      case "chat.send": {
-        const command = findChatCommand(action.text);
-        const current = runs.get(action.sessionId);
-        if (
-          current &&
-          current.request !== action.requestId &&
-          !command
-        )
-          throw new Error("이 대화에서 이미 답변을 생성하고 있어요.");
-        if (command === "/clear") {
-          store.clearSession(action.sessionId, action.requestId);
-          break;
-        }
-        if (
-          !store.isHired(
-            store.getSession(action.sessionId).projectId,
-            "assistant",
-          )
-        )
-          throw new Error("크루에서 비서를 재고용해 주세요.");
-        if (
-          workflow.routeFollowup(
-            action.sessionId,
-            action.requestId,
-            action.text,
-          )
-        )
-          break;
-        const id = store.beginResponse(
-          action.sessionId,
-          action.requestId,
-          action.text,
-        );
-        if (id) {
-          const controller = new AbortController();
-          runs.set(action.sessionId, {
-            id,
-            request: action.requestId,
-            controller,
-          });
-          void generate(action.sessionId, id, action.text, controller);
-        }
-        break;
-      }
-      case "job.answer":
-        workflow.answer(action.jobId, action.requestId, action.allow);
-        break;
-      case "job.stop":
-        workflow.stop(action.jobId);
-        break;
-      case "job.resume":
-        workflow.resume(action.jobId);
-        break;
-      case "job.followup.select":
-        workflow.selectFollowup(
-          action.sessionId,
-          action.requestId,
-          action.jobId,
-        );
-        break;
-      case "job.revise":
-        workflow.revise(
-          action.jobId,
-          action.sessionId,
-          action.requestId,
-          action.text,
-          action.questionId,
-        );
-        break;
-      case "chat.stop": {
-        const run = runs.get(action.sessionId);
-        if (run?.id === action.responseId && !run.controller.signal.aborted) {
-          store.finish(run.id, "stopping");
-          run.controller.abort();
-        }
-        break;
-      }
-    }
-    return store.snapshot();
+    const outcome = await runner.run(input, "ui");
+    return outcome.snapshot;
   });
 
   async function showWindow() {

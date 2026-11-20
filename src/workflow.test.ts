@@ -35,7 +35,7 @@ test("peer consultation and a follow-up share a job with separate approvals", as
         if (replan && !followUp)
           expect(prompt).toContain("검증할 문구를 명시해 주세요.");
         return {
-          path: "notice.txt",
+          paths: ["notice.txt"],
           goal: "문구 변경",
           criterion: followUp ? "Final과 줄바꿈" : "After와 줄바꿈",
         };
@@ -236,7 +236,7 @@ test("overlapping jobs replan and checks stay attached to the version they revie
         String(request)
       ];
       if (system.startsWith("Plan one"))
-        return { path: "notice.txt", goal: request, criterion: target };
+        return { paths: ["notice.txt"], goal: request, criterion: target };
       if (system.startsWith("Implement only")) {
         if (request === "First") await firstEdit.promise;
         return {
@@ -326,7 +326,7 @@ test("stopping one queued role request leaves work ahead and behind it intact", 
         const { request } = JSON.parse(prompt);
         requested.push(request);
         if (request === "First") await release.promise;
-        return { path: "notice.txt", goal: request, criterion: request };
+        return { paths: ["notice.txt"], goal: request, criterion: request };
       }
       return { passed: true, note: "확인했어요." };
     });
@@ -392,7 +392,7 @@ test("unresolved peer guidance waits for the current user question across restar
       const clarified = prompt.includes("사용자 답변: Final");
       if (system.startsWith("Plan one"))
         return {
-          path: "notice.txt",
+          paths: ["notice.txt"],
           goal: "문구 변경",
           criterion: clarified ? "Final" : "새 문구",
         };
@@ -455,6 +455,134 @@ test("unresolved peer guidance waits for the current user question across restar
     ).toHaveLength(1);
     expect(store.getJob(id).clarification).toBeNull();
   } finally {
+    workflow.close();
+    store.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("a coordinated edit reserves all files and rejects an out-of-scope write before saving", async () => {
+  const folder = realpathSync(mkdtempSync(join(tmpdir(), "crew-scope-")));
+  const a = join(folder, "a.txt");
+  const b = join(folder, "b.txt");
+  const other = join(folder, "other.txt");
+  writeFileSync(a, "old A\n");
+  writeFileSync(b, "old B\n");
+  writeFileSync(other, "external\n");
+  const store = new CrewStore(":memory:");
+  const workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+  const edit = Promise.withResolvers<void>();
+  try {
+    let batchPass = 0;
+    vi.mocked(decideLocal).mockImplementation(async (system, prompt) => {
+      const { request, path } = JSON.parse(prompt.split("\n\n").at(-1)!);
+      if (system.startsWith("Plan one"))
+        return {
+          paths: request === "Shared" ? ["b.txt"] : ["a.txt", "b.txt"],
+          goal: request,
+          criterion: "new values",
+        };
+      if (system.startsWith("Implement only")) {
+        if (request === "Batch") {
+          batchPass++;
+          await edit.promise;
+        }
+        return {
+          edits: [
+            { path: "a.txt", content: "new A", ending: "preserve" },
+            {
+              path: request === "Outside" ? "other.txt" : "b.txt",
+              content:
+                request === "Batch" && batchPass === 1 ? "old B" : "new B",
+              ending: "preserve",
+            },
+          ],
+          consult: "none",
+          question: "",
+        };
+      }
+      if (system.startsWith("Choose an independent"))
+        return {
+          kind: "text",
+          expected: path === "a.txt" ? "new A" : "new B",
+          exact: true,
+          ending: "preserve",
+          reason: "",
+        };
+      if (system.startsWith("Check whether the change")) {
+        expect(prompt).toContain('"after":"new A\\n"');
+        expect(prompt).toContain(
+          batchPass === 1 ? '"after":"old B\\n"' : '"after":"new B\\n"',
+        );
+      }
+      return { passed: true, note: "확인했어요." };
+    });
+    store.openFolder(folder);
+    const session = store.snapshot().session!;
+    const outside = workflow.delegate(session.id, randomUUID(), "Outside").id;
+    await vi.waitFor(() =>
+      expect(store.getJob(outside).state).toBe("approval"),
+    );
+    workflow.answer(outside, store.getJob(outside).approvalId!, true);
+    await vi.waitFor(() => expect(store.getJob(outside).state).toBe("failed"));
+    expect([a, b, other].map((file) => readFileSync(file, "utf8"))).toEqual([
+      "old A\n",
+      "old B\n",
+      "external\n",
+    ]);
+    expect(store.readChanges(session.id)).toEqual([]);
+
+    const batch = workflow.delegate(session.id, randomUUID(), "Batch").id;
+    const shared = workflow.delegate(session.id, randomUUID(), "Shared").id;
+    await vi.waitFor(() => {
+      expect(store.getJob(batch).state).toBe("approval");
+      expect(store.getJob(shared).state).toBe("approval");
+    });
+    const oldApproval = store.getJob(shared).approvalId!;
+    workflow.answer(batch, store.getJob(batch).approvalId!, true);
+    workflow.answer(shared, oldApproval, true);
+    expect(store.getJob(shared).state).toBe("queued");
+    edit.resolve();
+    await vi.waitFor(() => {
+      expect(store.getJob(batch).state).toBe("complete");
+      expect(store.getJob(shared).state).toBe("approval");
+    });
+    expect(store.getJob(shared).approvalId).not.toBe(oldApproval);
+    expect(batchPass).toBe(2);
+    expect(store.snapshot().activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          jobId: batch,
+          text: expect.stringContaining(
+            "테스트 · b.txt · 변경 없음 · 기대 결과와 달라요.",
+          ),
+        }),
+      ]),
+    );
+    expect([a, b, other].map((file) => readFileSync(file, "utf8"))).toEqual([
+      "new A\n",
+      "new B\n",
+      "external\n",
+    ]);
+    const changes = store.readChanges(session.id);
+    expect(changes.map(({ path }) => path)).toEqual(["b.txt", "a.txt"]);
+    expect(
+      new Set(
+        changes.flatMap(({ checks }) => checks.map(({ batchId }) => batchId)),
+      ).size,
+    ).toBe(1);
+    for (const change of changes) {
+      expect(change.jobId).toBe(batch);
+      expect(
+        change.checks.map(({ role, passed }) => ({ role, passed })),
+      ).toEqual([
+        { role: "review", passed: true },
+        { role: "style", passed: true },
+        { role: "test", passed: true },
+      ]);
+    }
+  } finally {
+    edit.resolve();
     workflow.close();
     store.close();
     rmSync(folder, { recursive: true, force: true });

@@ -14,6 +14,11 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 const ignored = new Set(["node_modules", "dist", "out", "coverage"]);
 const maxBytes = 24_000;
 
+export function validateWorkspaceText(content: string) {
+  if (Buffer.byteLength(content) > maxBytes || content.includes("\0"))
+    throw new Error("작은 텍스트 파일만 이 작업에서 수정할 수 있어요.");
+}
+
 export async function listWorkspace(root: string) {
   const entries: string[] = [];
   async function walk(folder: string, depth: number) {
@@ -96,8 +101,7 @@ export async function writeWorkspaceFile(
     throw new Error(
       "계획을 승인한 뒤 파일이 바뀌었어요. 최신 파일을 기준으로 다시 계획해 주세요.",
     );
-  if (Buffer.byteLength(content) > maxBytes)
-    throw new Error("변경 내용이 저장할 수 있는 크기를 넘었어요.");
+  validateWorkspaceText(content);
   const temporary = resolve(dirname(entry.target), ".crew-" + randomUUID());
   const file = await open(temporary, "wx", entry.mode);
   try {

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
+  planFiles,
   roles,
   type Activity,
   type ApprovalMode,
@@ -28,7 +29,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 12)
+    if (migration.user_version > 13)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -183,6 +184,22 @@ export class CrewStore {
         );
         ALTER TABLE job_revisions ADD COLUMN question_id TEXT REFERENCES job_questions(id);
         PRAGMA user_version = 12;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 13) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE work_checks RENAME TO previous_work_checks;
+        CREATE TABLE work_checks (
+          change_id TEXT NOT NULL REFERENCES work_changes(id), role TEXT NOT NULL,
+          passed INTEGER NOT NULL, unavailable INTEGER NOT NULL, note TEXT NOT NULL,
+          command TEXT, checked_at TEXT NOT NULL, batch_id TEXT NOT NULL REFERENCES work_changes(id),
+          PRIMARY KEY (change_id, batch_id, role)
+        );
+        INSERT INTO work_checks SELECT *, change_id FROM previous_work_checks;
+        DROP TABLE previous_work_checks;
+        PRAGMA user_version = 13;
         COMMIT;
       `);
     }
@@ -573,18 +590,11 @@ export class CrewStore {
     return job;
   }
 
-  nextQueuedJob(projectId: string, path: string) {
-    const next = this.db
-      .prepare(
-        "SELECT id, plan FROM jobs WHERE project_id = ? AND state = 'queued' ORDER BY rowid",
-      )
-      .all(projectId)
-      .find(
-        (row) =>
-          (JSON.parse(String(row.plan)) as WorkPlan).path.toLowerCase() ===
-          path.toLowerCase(),
-      );
-    return next && this.getJob(String(next.id));
+  readQueuedJobs() {
+    return this.db
+      .prepare("SELECT id FROM jobs WHERE state = 'queued' ORDER BY rowid")
+      .all()
+      .map(({ id }) => this.getJob(String(id)));
   }
 
   askJobQuestion(job: Job, text: string) {
@@ -679,6 +689,7 @@ export class CrewStore {
 
   prepareChange(
     job: Job,
+    path: string,
     before: { hash: string | null; content: string | null },
     after: { hash: string; content: string },
   ) {
@@ -692,7 +703,7 @@ export class CrewStore {
         id,
         job.id,
         job.approvalId,
-        job.plan!.path,
+        path,
         before.hash,
         after.hash,
         before.content,
@@ -721,6 +732,7 @@ export class CrewStore {
   recordCheck(
     job: Job,
     changeId: string,
+    batchId: string,
     role: "review" | "style" | "test",
     label: string,
     result: {
@@ -734,7 +746,7 @@ export class CrewStore {
       const saved = this.db
         .prepare(
           `INSERT OR IGNORE INTO work_checks
-          SELECT id, ?, ?, ?, ?, ?, ? FROM work_changes
+          SELECT id, ?, ?, ?, ?, ?, ?, ? FROM work_changes
           WHERE id = ? AND job_id = ? AND saved_at IS NOT NULL RETURNING change_id`,
         )
         .get(
@@ -744,6 +756,7 @@ export class CrewStore {
           result.note,
           result.command ?? null,
           new Date().toISOString(),
+          batchId,
           changeId,
           job.id,
         );
@@ -770,8 +783,10 @@ export class CrewStore {
       )
       .all(sessionId) as Omit<WorkChange, "checks">[];
     const checks = this.db
-      .prepare(`SELECT role, passed, unavailable, note, command, checked_at AS checkedAt
-      FROM work_checks WHERE change_id = ? ORDER BY rowid`);
+      .prepare(`SELECT role, passed, unavailable, note, command, checked_at AS checkedAt, batch_id AS batchId
+      FROM work_checks WHERE change_id = ? AND batch_id = (
+        SELECT b.batch_id FROM work_checks b WHERE b.change_id = work_checks.change_id ORDER BY b.rowid DESC LIMIT 1
+      ) ORDER BY rowid`);
     type CheckRow = Omit<
       WorkChange["checks"][number],
       "passed" | "unavailable"
@@ -801,7 +816,12 @@ export class CrewStore {
         .run(id, job.id, job.request, JSON.stringify(plan));
       this.log(
         job.sessionId,
-        "플랜 → 리뷰 · " + plan.path + " · " + plan.criterion,
+        "플랜 → 리뷰 · " +
+          planFiles(plan)
+            .map(({ path }) => path)
+            .join(", ") +
+          " · " +
+          plan.criterion,
         job.id,
       );
     });

@@ -188,7 +188,11 @@ export type WorkPlan = {
   goal: string;
   criterion: string;
   baseline: string | null;
+  files?: { path: string; baseline: string | null }[];
 };
+export function planFiles(plan: WorkPlan) {
+  return plan.files ?? [{ path: plan.path, baseline: plan.baseline }];
+}
 export type WorkChange = {
   id: string;
   jobId: string;
@@ -204,6 +208,7 @@ export type WorkChange = {
     note: string;
     command: string | null;
     checkedAt: string;
+    batchId: string;
   }[];
 };
 export type Job = {

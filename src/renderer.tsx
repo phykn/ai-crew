@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import {
   approvalLabels,
+  planFiles,
   roles,
   type Action,
   type ApprovalMode,
@@ -765,11 +766,26 @@ function Workspace() {
                 <section className="decision" aria-label="권한 승인">
                   <div>
                     <p>
-                      <strong>{approval.plan.path}</strong>{" "}
-                      {approval.plan.baseline === null
-                        ? "파일을 만들까요?"
-                        : "파일을 수정할까요?"}
+                      {planFiles(approval.plan).length === 1 ? (
+                        <>
+                          <strong>{approval.plan.path}</strong>{" "}
+                          {approval.plan.baseline === null
+                            ? "파일을 만들까요?"
+                            : "파일을 수정할까요?"}
+                        </>
+                      ) : (
+                        "이 파일들을 변경할까요?"
+                      )}
                     </p>
+                    {planFiles(approval.plan).length > 1 && (
+                      <ul>
+                        {planFiles(approval.plan).map(({ path, baseline }) => (
+                          <li key={path}>
+                            {path} · {baseline === null ? "생성" : "수정"}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     <small>
                       {approval.plan.goal} · {approval.plan.criterion}
                     </small>

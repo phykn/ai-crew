@@ -110,14 +110,23 @@ try {
   expect(await readFile(projectFile, "utf8")).toBe("After\n");
   await page.getByRole("button", { name: "추가 지시" }).click();
   await expect(page.locator(".revision-target")).toBeVisible();
-  await send("같은 notes.txt 내용을 Final로 바꿔줘. 줄바꿈 한 개를 유지해줘.");
+  await send(
+    "notes.txt 전체 내용을 Final과 줄바꿈 한 개로 바꿔줘. 같은 폴더에 summary.txt도 새로 만들고 전체 내용은 Summary와 줄바꿈 한 개로 해줘. 두 파일 모두 실제 변경이 필요해.",
+  );
   await expect(question).toContainText("notes.txt", { timeout: 45000 });
+  await expect(question).toContainText("summary.txt");
   expect(await readFile(projectFile, "utf8")).toBe("After\n");
   await question.getByRole("button", { name: "허용" }).click();
-  await expect(page.getByText(/notes.txt 파일을 변경했어요/)).toHaveCount(2, {
-    timeout: 45000,
-  });
+  await expect(page.locator(".bubble.assistant").last()).toContainText(
+    /(?:notes\.txt, summary\.txt|summary\.txt, notes\.txt) 파일을 변경했어요/,
+    {
+      timeout: 90000,
+    },
+  );
   expect(await readFile(projectFile, "utf8")).toBe("Final\n");
+  expect(await readFile(join(workspace, "summary.txt"), "utf8")).toBe(
+    "Summary\n",
+  );
   await page
     .getByRole("button", { name: "업무 로그", exact: true })
     .last()
@@ -185,7 +194,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "PASS packaged Electron: folder, Qwen chat and tool, restart, context, stop, /clear, approved file write and follow-up",
+    "PASS packaged Electron: folder, Qwen chat and tool, restart, context, stop, /clear, approved write and multi-file follow-up",
   );
 } finally {
   await application?.close().catch(() => {});

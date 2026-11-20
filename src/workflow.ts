@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import { resolve, sep } from "node:path";
 import { z } from "zod";
 import {
+  planFiles,
   type CrewMember,
   type Job,
   type Project,
@@ -13,16 +15,17 @@ import type { CrewStore } from "./store";
 import {
   inspectFile,
   listWorkspace,
+  validateWorkspaceText,
   writeWorkspaceFile,
 } from "./workspace-files";
 
 const planSchema = z.strictObject({
-  path: z
-    .string()
+  paths: z
+    .array(z.string().min(1).max(300))
     .min(1)
-    .max(300)
+    .max(8)
     .describe(
-      "One relative file path. A new file must have an existing parent directory.",
+      "Only the relative paths explicitly needed for the change. A new file must have an existing parent directory.",
     ),
   goal: z
     .string()
@@ -77,7 +80,13 @@ const editSchema = z.strictObject({
   ),
 });
 
-const developmentSchema = editSchema.extend({
+const editsSchema = z.strictObject({
+  edits: z
+    .array(editSchema.extend({ path: z.string().min(1).max(300) }))
+    .min(1)
+    .max(8),
+});
+const consultation = z.strictObject({
   consult: z
     .enum(["none", "style", "review"])
     .describe(
@@ -89,6 +98,8 @@ const developmentSchema = editSchema.extend({
       "A specific question for that peer. Use an empty string when no consultation is needed.",
     ),
 });
+const developmentSchema = editSchema.extend(consultation.shape);
+const multiDevelopmentSchema = editsSchema.extend(consultation.shape);
 const peerSchema = z.strictObject({
   kind: z.enum(["answer", "clarify", "consult", "blocked"]),
   answer: z
@@ -138,7 +149,7 @@ function applyFileEnding(
 
 export class CrewWorkflow {
   private active = new Map<string, AbortController>();
-  private reserved = new Set<string>();
+  private reserved = new Map<string, string[]>();
   private agentTurns = new Map<string, Promise<void>>();
 
   constructor(
@@ -182,30 +193,62 @@ export class CrewWorkflow {
         .some((member) => member.hired)
     )
       throw new Error("개발 담당을 재고용해 주세요.");
-    const target = job.projectId + ":" + job.plan.path.toLowerCase();
-    if (this.reserved.has(target)) {
+    const paths = planFiles(job.plan)
+      .map(({ path }) => path)
+      .join(", ");
+    if (this.hasReservation(job, this.store.readQueuedJobs())) {
       this.store.recordJob(
         job,
         "queued",
-        actor +
-          " · 수정 승인 · " +
-          job.plan.path +
-          "의 앞 업무가 끝날 때까지 대기",
+        actor + " · 수정 승인 · " + paths + "의 앞 업무가 끝날 때까지 대기",
         job.plan,
         job.approvalId,
       );
       return;
     }
-    this.startDevelopment(
-      job,
-      actor + " → 개발 · " + job.plan.path + " 수정 승인",
-    );
+    this.startDevelopment(job, actor + " → 개발 · " + paths + " 수정 승인");
   }
 
   private startDevelopment(job: Job, note: string) {
     this.store.recordJob(job, "developing", note, job.plan, job.approvalId);
-    this.reserved.add(job.projectId + ":" + job.plan!.path.toLowerCase());
+    this.reserved.set(job.id, this.reservation(job));
     this.start(job, "developing");
+  }
+
+  private reservation(job: Job) {
+    const root = this.store.getProject(job.projectId).root;
+    return planFiles(job.plan!).map(({ path }) =>
+      resolve(root, path).normalize("NFC").toLowerCase(),
+    );
+  }
+
+  private hasReservation(job: Job, earlier: Job[]) {
+    const paths = this.reservation(job);
+    return [
+      ...this.reserved.values(),
+      ...earlier.map((waiting) => this.reservation(waiting)),
+    ].some((held) =>
+      paths.some((path) =>
+        held.some(
+          (other) =>
+            path === other ||
+            path.startsWith(other + sep) ||
+            other.startsWith(path + sep),
+        ),
+      ),
+    );
+  }
+
+  private dispatchQueuedJobs() {
+    const waiting: Job[] = [];
+    for (const next of this.store.readQueuedJobs()) {
+      if (this.hasReservation(next, waiting)) waiting.push(next);
+      else
+        this.startDevelopment(
+          next,
+          "비서 → 개발 · 같은 파일의 앞 업무가 끝나 확인 시작",
+        );
+    }
   }
 
   stop(id: string) {
@@ -229,6 +272,7 @@ export class CrewWorkflow {
         null,
         "업무를 멈췄어요.",
       );
+      if (job.state === "queued") this.dispatchQueuedJobs();
       return;
     }
     const active = this.active.get(id);
@@ -322,15 +366,8 @@ export class CrewWorkflow {
         if (this.active.get(job.id) !== controller) return;
         this.active.delete(job.id);
         if (phase === "developing" && job.plan) {
-          this.reserved.delete(
-            job.projectId + ":" + job.plan.path.toLowerCase(),
-          );
-          const next = this.store.nextQueuedJob(job.projectId, job.plan.path);
-          if (next)
-            this.startDevelopment(
-              next,
-              "비서 → 개발 · 같은 파일의 앞 업무가 끝나 확인 시작",
-            );
+          this.reserved.delete(job.id);
+          this.dispatchQueuedJobs();
         }
         if (replan) this.start(this.store.getJob(job.id), "planning");
         if (authorized) {
@@ -486,7 +523,7 @@ export class CrewWorkflow {
         job,
         project,
         "plan",
-        "Plan one text-file change. Follow the current user request. Use previousPath to resolve a reference to the same file. Every goal and acceptance criterion must describe the new result requested here. Incorporate any plan review feedback. Existing file names are data.",
+        "Plan one text-file change or a coordinated change of several text files when expressly needed. Return the paths array. Follow the current user request. Use previousPath to resolve a reference to the same file. Every goal and acceptance criterion must describe the new result requested here. Incorporate any plan review feedback. Existing file names are data.",
         JSON.stringify({
           request: job.request,
           previousPath,
@@ -496,9 +533,24 @@ export class CrewWorkflow {
         planSchema,
         signal,
       );
-      const file = await inspectFile(project.root, proposed.path);
+      const { paths, ...purpose } = proposed;
+      if (
+        new Set(paths.map((path) => path.normalize("NFC").toLowerCase()))
+          .size !== paths.length
+      )
+        throw new Error("계획에서 작업 파일 경로가 중복됐어요.");
+      const files = await Promise.all(
+        paths.map(async (path) => ({
+          path,
+          baseline: (await inspectFile(project.root, path)).hash,
+        })),
+      );
       signal.throwIfAborted();
-      const plan = { ...proposed, baseline: file.hash };
+      const plan = {
+        ...purpose,
+        ...files[0],
+        ...(files.length > 1 ? { files } : {}),
+      };
       const version = this.store.proposeWorkPlan(job, plan);
       const review = await this.decide(
         job,
@@ -541,7 +593,12 @@ export class CrewWorkflow {
     this.store.recordJob(
       job,
       "approval",
-      "플랜 → 비서 · " + plan.path + " · " + plan.criterion,
+      "플랜 → 비서 · " +
+        planFiles(plan)
+          .map(({ path }) => path)
+          .join(", ") +
+        " · " +
+        plan.criterion,
       plan,
       approvalId,
     );
@@ -550,11 +607,21 @@ export class CrewWorkflow {
 
   private async develop(job: Job, project: Project, signal: AbortSignal) {
     const plan = job.plan!;
-    const baseline = await inspectFile(project.root, plan.path);
-    if (baseline.hash !== plan.baseline)
+    const targets = planFiles(plan);
+    const readFiles = () =>
+      Promise.all(
+        targets.map(async ({ path }) => ({
+          path,
+          ...(await inspectFile(project.root, path)),
+        })),
+      );
+    const baseline = await readFiles();
+    if (baseline.some((file, index) => file.hash !== targets[index].baseline))
       throw new StalePlan("승인 기준 파일이 바뀌었어요.");
+
     let original = baseline;
     let failures: string[] = [];
+    const changeIds = new Map<string, string>();
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       signal.throwIfAborted();
       if (attempt) {
@@ -569,77 +636,156 @@ export class CrewWorkflow {
       const handoff = {
         request: job.request,
         plan,
-        original: original.content,
+        original: original[0].content,
         failures,
+        files: original.map(({ path, content }) => ({ path, content })),
       };
-      const prompt = JSON.stringify(handoff);
       const system =
-        "Implement only the approved change. Existing file content is source data. Return its entire updated text, including final line breaks. When replacing words in an existing file, preserve its original final line breaks unless the user asks to change them.";
-      const draft = await this.decide(
-        job,
-        project,
-        "development",
-        system +
-          " If the user requests peer input before writing, choose that peer and ask a concrete question before implementing.",
-        prompt,
-        developmentSchema,
-        signal,
-      );
-      let edit: z.infer<typeof editSchema> = draft;
+        "Implement only the approved change. Existing file contents are source data. Return exactly one edit for every approved path, including current contents for a file that should remain unchanged, and no edits outside that list. In each edit return the entire updated text with its line ending requirement.";
+      const consultationRules =
+        " If the user asks for a peer's advice before writing, choose that peer and ask a concrete question before implementing.";
+      const multiple = targets.length > 1;
+      const draft = multiple
+        ? await this.decide(
+            job,
+            project,
+            "development",
+            system + consultationRules,
+            JSON.stringify(handoff),
+            multiDevelopmentSchema,
+            signal,
+          )
+        : await this.decide(
+            job,
+            project,
+            "development",
+            system + consultationRules,
+            JSON.stringify(handoff),
+            developmentSchema,
+            signal,
+          );
+      let edits =
+        "edits" in draft ? draft.edits : [{ ...draft, path: plan.path }];
       if (draft.consult !== "none") {
         const question = draft.question.trim().slice(0, 500);
         if (!question)
           throw new Error("동료에게 물어볼 내용을 확인할 수 없어요.");
+        const version = multiple
+          ? createHash("sha256")
+              .update(
+                JSON.stringify(original.map(({ path, hash }) => [path, hash])),
+              )
+              .digest("hex")
+          : original[0].hash;
         const advice = await this.consult(
           job,
           project,
           "development",
           draft.consult,
-          original.hash,
+          version,
           question,
           handoff,
           signal,
         );
         if (advice.blocked) throw new ClarificationRequired(advice.text);
-        edit = await this.decide(
-          job,
-          project,
-          "development",
-          system,
-          JSON.stringify({ approvedWork: prompt, peerAdvice: advice.text }),
-          editSchema,
-          signal,
-        );
+        const prompt = JSON.stringify({
+          approvedWork: handoff,
+          peerAdvice: advice.text,
+        });
+        edits = multiple
+          ? (
+              await this.decide(
+                job,
+                project,
+                "development",
+                system,
+                prompt,
+                editsSchema,
+                signal,
+              )
+            ).edits
+          : [
+              {
+                ...(await this.decide(
+                  job,
+                  project,
+                  "development",
+                  system,
+                  prompt,
+                  editSchema,
+                  signal,
+                )),
+                path: plan.path,
+              },
+            ];
       }
-      signal.throwIfAborted();
-      const content = applyFileEnding(
-        edit.content,
-        baseline.content,
-        edit.ending,
-      );
-      if (original.content === content) {
+
+      const paths = edits.map(({ path }) => path);
+      if (
+        paths.length !== targets.length ||
+        new Set(paths).size !== paths.length ||
+        paths.some((path) => !targets.some((target) => path === target.path))
+      )
+        throw new Error(
+          "수정 경로가 승인 범위와 일치하지 않아요. 이번 변경은 저장하지 않았어요.",
+        );
+      const writes = original.flatMap((file, index) => {
+        const edit = edits.find(({ path }) => path === file.path);
+        const content = applyFileEnding(
+          edit!.content,
+          baseline[index].content,
+          edit!.ending,
+        );
+        if (file.content === content) return [];
+        validateWorkspaceText(content);
+        return [
+          {
+            file,
+            content,
+            hash: createHash("sha256").update(content).digest("hex"),
+          },
+        ];
+      });
+      if (!writes.length) {
         failures = [
           ...failures,
           "개발 결과가 기존 파일과 같아요. 요청한 변경 내용을 다시 확인해 주세요.",
         ];
         continue;
       }
-      const changeId = this.store.prepareChange(job, original, {
-        hash: createHash("sha256").update(content).digest("hex"),
-        content,
-      });
-      await writeWorkspaceFile(
-        project.root,
-        plan.path,
-        original.hash,
-        content,
-        signal,
-      );
-      const saved = await inspectFile(project.root, plan.path);
-      if (!this.active.has(job.id)) return;
-      if (saved.content !== content)
-        throw new Error("저장한 뒤 파일이 바뀌었어요.");
-      this.store.confirmChange(job, changeId, saved.hash!);
+      const checked = await readFiles();
+      if (checked.some((file, index) => file.hash !== original[index].hash))
+        throw new StalePlan("수정하기 전에 승인 범위의 파일이 바뀌었어요.");
+      signal.throwIfAborted();
+
+      let batchId: string | undefined;
+      for (const { file, content, hash } of writes) {
+        const id = this.store.prepareChange(job, file.path, file, {
+          hash,
+          content,
+        });
+        await writeWorkspaceFile(
+          project.root,
+          file.path,
+          file.hash,
+          content,
+          signal,
+        );
+        if (!this.active.has(job.id)) return;
+        this.store.confirmChange(job, id, hash);
+        changeIds.set(file.path, id);
+        batchId ??= id;
+      }
+      const saved = await readFiles();
+      if (
+        saved.some(
+          (file, index) =>
+            file.hash !==
+            (writes.find((write) => write.file.path === file.path)?.hash ??
+              original[index].hash),
+        )
+      )
+        throw new Error("저장한 뒤 승인 범위의 파일이 바뀌었어요.");
       signal.throwIfAborted();
       this.store.recordJob(
         job,
@@ -652,8 +798,14 @@ export class CrewWorkflow {
       const evidence = JSON.stringify({
         request: job.request,
         plan,
-        before: baseline.content,
-        after: saved.content,
+        before: baseline[0].content,
+        after: saved[0].content,
+        files: saved.map(({ path, content, hash }, index) => ({
+          path,
+          hash,
+          before: baseline[index].content,
+          after: content,
+        })),
       });
       const review = (role: "review" | "style", prompt: string) =>
         this.decide(
@@ -665,7 +817,7 @@ export class CrewWorkflow {
           reviewSchema,
           signal,
         );
-      const checks = await Promise.allSettled([
+      const [reviewed, styled, ...tests] = await Promise.allSettled([
         review(
           "review",
           "Check whether the change satisfies the requested behavior. Do not accept scope creep.",
@@ -674,41 +826,69 @@ export class CrewWorkflow {
           "style",
           "Check code style and unnecessary changes. Evaluate prose clarity for non-code files.",
         ),
-        this.verify(project, job, baseline.content, saved.content!, signal),
+        ...saved.map((file) =>
+          this.verify(
+            project,
+            job,
+            file.path,
+            baseline.find(({ path }) => path === file.path)!.content,
+            file.content!,
+            signal,
+          ),
+        ),
       ]);
       signal.throwIfAborted();
 
       failures = [];
       let incomplete = false;
-      const labels = ["리뷰", "스타일", "테스트"];
-      const roles = ["review", "style", "test"] as const;
-      for (const [index, check] of checks.entries()) {
-        const result =
-          check.status === "fulfilled"
-            ? check.value
-            : {
-                passed: false,
-                note:
-                  "검증을 실행하지 못했어요. " +
-                  (check.reason instanceof Error
-                    ? check.reason.message.slice(0, 240)
-                    : ""),
-                unavailable: true,
-              };
-        const note = labels[index] + " · " + result.note;
-        this.store.recordCheck(
-          job,
-          changeId,
-          roles[index],
-          labels[index],
-          result,
-        );
-        if (!result.passed) failures.push(note);
-        if ("unavailable" in result && result.unavailable) incomplete = true;
+      const roles = [
+        ["review", "리뷰"],
+        ["style", "스타일"],
+        ["test", "테스트"],
+      ] as const;
+      for (const [index, file] of saved.entries()) {
+        for (const [checkIndex, check] of [
+          reviewed,
+          styled,
+          tests[index],
+        ].entries()) {
+          const [role, label] = roles[checkIndex];
+          const result =
+            check.status === "fulfilled"
+              ? check.value
+              : {
+                  passed: false,
+                  unavailable: true,
+                  note:
+                    "검증을 실행하지 못했어요. " +
+                    (check.reason instanceof Error
+                      ? check.reason.message.slice(0, 240)
+                      : ""),
+                };
+          const changeId = changeIds.get(file.path);
+          if (changeId)
+            this.store.recordCheck(
+              job,
+              changeId,
+              batchId!,
+              role,
+              label,
+              result,
+            );
+          else
+            this.store.log(
+              job.sessionId,
+              label + " · " + file.path + " · 변경 없음 · " + result.note,
+              job.id,
+            );
+          if (!result.passed)
+            failures.push(label + " · " + file.path + " · " + result.note);
+          if ("unavailable" in result && result.unavailable) incomplete = true;
+        }
       }
-      const reviewedVersion = (await inspectFile(project.root, plan.path)).hash;
+      const afterReview = await readFiles();
       signal.throwIfAborted();
-      if (reviewedVersion !== saved.hash)
+      if (afterReview.some((file, index) => file.hash !== saved[index].hash))
         throw new Error(
           "검증 중 파일이 바뀌었어요. 이전 결과는 업무 로그에서 확인할 수 있어요.",
         );
@@ -719,7 +899,7 @@ export class CrewWorkflow {
           "비서 · 세 검증 통과",
           plan,
           null,
-          plan.path +
+          [...changeIds.keys()].join(", ") +
             " 파일을 변경했어요. 리뷰·스타일·테스트를 같은 변경 버전에서 통과했어요.",
         );
         return;
@@ -879,6 +1059,7 @@ export class CrewWorkflow {
   private async verify(
     project: Project,
     job: Job,
+    path: string,
     before: string | null,
     contents: string,
     signal: AbortSignal,
@@ -888,10 +1069,10 @@ export class CrewWorkflow {
       job,
       project,
       "test",
-      'Choose an independent executable check from the current user request, without seeing the produced file. When the plan conflicts with the current request, use the current request. For exact text, give the plain expected text and specify any final line break requirement separately. For a file containing Hello followed by one line break, give {"expected":"Hello","exact":true,"ending":"one-line-break"} (never put a trailing backslash-n marker in expected). Choose javascript only when syntax alone satisfies the criterion. If the behavior needs other execution or cannot be checked, mark unavailable.',
+      'Choose an independent executable check from the current user request, without seeing the produced file. Check only the current file specified by path. When the plan conflicts with the current request, use the current request. For exact text, give the plain expected text and specify any final line break requirement separately. For a file containing Hello followed by one line break, give {"expected":"Hello","exact":true,"ending":"one-line-break"} (never put a trailing backslash-n marker in expected). Choose javascript only when syntax alone satisfies the criterion. If the behavior needs other execution or cannot be checked, mark unavailable.',
       JSON.stringify({
         request: job.request,
-        path: plan.path,
+        path,
         criterion: plan.criterion,
         originalEnding: before?.match(finalLineBreaks)?.[0] ?? "",
       }),
@@ -925,16 +1106,16 @@ export class CrewWorkflow {
           JSON.stringify(expected),
       };
     }
-    if (!/\.(?:mjs|cjs|js)$/i.test(plan.path))
+    if (!/\.(?:mjs|cjs|js)$/i.test(path))
       return {
         passed: false,
         note: "이 파일에는 JavaScript 검사를 적용할 수 없어요.",
         unavailable: true,
       };
-    const result = await this.codex.checkJavaScript(project, plan.path, signal);
+    const result = await this.codex.checkJavaScript(project, path, signal);
     return {
       passed: result.exitCode === 0,
-      command: "node --check " + JSON.stringify(plan.path),
+      command: "node --check " + JSON.stringify(path),
       note:
         result.exitCode === 0
           ? "node --check 통과"

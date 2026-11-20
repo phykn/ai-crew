@@ -13,6 +13,8 @@ import type { ModelDetails, Project } from "./actions";
 import { ModelConnectionError, ModelLimitError } from "./model-errors";
 import type { CrewMcp } from "./mcp";
 
+import { reportedCost } from "./model-cost";
+
 const modelList = z.object({
   data: z.array(
     z.object({ id: z.string().min(1), loaded: z.boolean().optional() }),
@@ -134,6 +136,10 @@ export async function decideLocal<T extends z.ZodType>(
   if (details) {
     details.inputTokens = result.totalUsage.inputTokens;
     details.outputTokens = result.totalUsage.outputTokens;
+    const cost = reportedCost(
+      result.providerMetadata as Record<string, unknown> | undefined,
+    );
+    if (cost !== undefined) details.costUsd = cost;
   }
   if (result.finishReason === "length")
     throw new ModelLimitError("로컬 모델이 응답 길이 한도에 도달했어요.");
@@ -229,5 +235,11 @@ export async function runLocal(
     }
   }
   signal.throwIfAborted();
+  if (details) {
+    const cost = reportedCost(
+      (await reply.providerMetadata) as Record<string, unknown> | undefined,
+    );
+    if (cost !== undefined) details.costUsd = cost;
+  }
   if (!answered) throw new Error("모델 응답에 표시할 내용이 없어요.");
 }

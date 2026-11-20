@@ -212,6 +212,7 @@ function ModelUsage({
       count: number;
       elapsedMs: number;
       tokens: number | null;
+      costUsd: number | null;
     }
   >();
   for (const run of runs) {
@@ -223,12 +224,15 @@ function ModelUsage({
       count: 0,
       elapsedMs: 0,
       tokens: null,
+      costUsd: null,
     };
     group.count++;
     group.elapsedMs += run.elapsedMs;
     if (run.inputTokens !== null || run.outputTokens !== null)
       group.tokens =
         (group.tokens ?? 0) + (run.inputTokens ?? 0) + (run.outputTokens ?? 0);
+    if (run.costUsd !== null)
+      group.costUsd = (group.costUsd ?? 0) + run.costUsd;
     groups.set(key, group);
   }
   if (!groups.size) return null;
@@ -244,6 +248,10 @@ function ModelUsage({
             {group.count}회 · {(group.elapsedMs / 1000).toFixed(1)}초
             {group.tokens !== null &&
               ` · 확인된 토큰 ${group.tokens.toLocaleString()}`}
+            {" · "}
+            {group.costUsd !== null
+              ? "비용 $" + group.costUsd.toFixed(4)
+              : "비용 미제공"}
           </li>
         ))}
       </ul>

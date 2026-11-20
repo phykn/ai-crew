@@ -42,11 +42,13 @@ const deltaSchema = z.object({
 const tokenCounts = z.object({
   inputTokens: z.int().nonnegative(),
   outputTokens: z.int().nonnegative(),
+  costUsd: z.number().nonnegative().optional(),
 });
 const tokenUsage = z.object({
   threadId: z.string(),
   turnId: z.string(),
   tokenUsage: z.object({ total: tokenCounts, last: tokenCounts }),
+  costUsd: z.number().nonnegative().optional(),
 });
 const turnError = z.object({
   message: z.string(),
@@ -395,6 +397,9 @@ export class CodexConnection {
           usage.data.turnId === turnId
         ) {
           const { total, last } = usage.data.tokenUsage;
+          const reported =
+            usage.data.costUsd ?? last.costUsd ?? total.costUsd;
+          if (reported !== undefined) details.costUsd = reported;
           const baseline = tokenBaseline ?? {
             inputTokens: total.inputTokens - last.inputTokens,
             outputTokens: total.outputTokens - last.outputTokens,

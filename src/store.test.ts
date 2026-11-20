@@ -79,6 +79,7 @@ test("keeps projects, conversation, draft and selected model through restart", (
       {
         id: 1, jobId: job.id, roleId: "development", provider: "local",
         model: "qwen-test", elapsedMs: 75, inputTokens: 31, outputTokens: 12,
+        costUsd: null,
       },
     ]);
     expect(store.readMembers(current!.id, "review")).toContainEqual({

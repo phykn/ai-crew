@@ -501,6 +501,7 @@ export type ModelDetails = {
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  costUsd?: number;
 };
 export type ModelRun = {
   id: number;
@@ -511,6 +512,7 @@ export type ModelRun = {
   elapsedMs: number;
   inputTokens: number | null;
   outputTokens: number | null;
+  costUsd: number | null;
 };
 export type ChatEvent = {
   sessionId: string;

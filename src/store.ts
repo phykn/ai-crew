@@ -45,7 +45,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 28)
+    if (migration.user_version > 29)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -434,6 +434,14 @@ export class CrewStore {
         ALTER TABLE jobs ADD COLUMN workflow_id TEXT;
         ALTER TABLE jobs ADD COLUMN workflow_version INTEGER;
         PRAGMA user_version = 28;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 29) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE model_runs ADD COLUMN cost_usd REAL;
+        PRAGMA user_version = 29;
         COMMIT;
       `);
     }
@@ -2383,8 +2391,8 @@ export class CrewStore {
   ) {
     this.db
       .prepare(`
-        INSERT INTO model_runs (session_id, job_id, role_id, provider, model, elapsed_ms, input_tokens, output_tokens)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO model_runs (session_id, job_id, role_id, provider, model, elapsed_ms, input_tokens, output_tokens, cost_usd)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         sessionId,
@@ -2395,6 +2403,7 @@ export class CrewStore {
         Math.round(elapsed),
         details.inputTokens ?? null,
         details.outputTokens ?? null,
+        details.costUsd ?? null,
       );
   }
 
@@ -2431,7 +2440,8 @@ export class CrewStore {
         ? (this.db
             .prepare(`
             SELECT id, job_id AS jobId, role_id AS roleId, provider, model,
-                   elapsed_ms AS elapsedMs, input_tokens AS inputTokens, output_tokens AS outputTokens
+                   elapsed_ms AS elapsedMs, input_tokens AS inputTokens, output_tokens AS outputTokens,
+                   cost_usd AS costUsd
             FROM model_runs WHERE session_id = ? ORDER BY id DESC
           `)
             .all(session.id) as ModelRun[])

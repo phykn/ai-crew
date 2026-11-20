@@ -183,6 +183,19 @@ export const actions = z.discriminatedUnion("type", [
     scope: z.enum(["current", "once"]),
   }),
   z.strictObject({
+    type: z.literal("view.set"),
+    sessionId: identifier,
+    patch: z.strictObject({
+      tab: z.enum(["chat", "log", "memory", "workflow"]).optional(),
+      camp: z.boolean().optional(),
+      legend: z.boolean().optional(),
+      panelWidth: z.int().min(280).max(720).optional(),
+      logJobId: identifier.nullable().optional(),
+      memorySection: z.enum(["memory", "wiki"]).optional(),
+      memoryOwnerId: identifier.nullable().optional(),
+    }),
+  }),
+  z.strictObject({
     type: z.literal("memory.add"),
     sessionId: identifier,
     ownerId: z.union([roleId, identifier]).nullable(),
@@ -417,6 +430,15 @@ export type Job = {
   workflowId: string | null;
   workflowVersion: number | null;
 };
+export type ViewState = {
+  tab: "chat" | "log" | "memory" | "workflow";
+  camp: boolean;
+  legend: boolean;
+  panelWidth: number;
+  logJobId: string | null;
+  memorySection: "memory" | "wiki";
+  memoryOwnerId: string | null;
+};
 export type WorkflowStage = {
   id: string;
   title: string;
@@ -445,6 +467,7 @@ export type Snapshot = {
   current: Project | null;
   sessions: Session[];
   session: Session | null;
+  view: ViewState;
   members: CrewMember[];
   mcpServers: McpEndpoint[];
   mcpGrants: McpGrant[];

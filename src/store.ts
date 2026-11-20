@@ -32,9 +32,20 @@ import {
   type WikiRevision,
   type Workflow,
   type WorkflowGraph,
+  type ViewState,
 } from "./actions";
 import { skillStates } from "./skill-status";
 import { defaultGraph, remainingStages, validateGraph } from "./workflow-graph";
+
+export const defaultViewState = (): ViewState => ({
+  tab: "chat",
+  camp: false,
+  legend: false,
+  panelWidth: 340,
+  logJobId: null,
+  memorySection: "memory",
+  memoryOwnerId: null,
+});
 
 export class CrewStore {
   private db: DatabaseSync;
@@ -45,7 +56,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 29)
+    if (migration.user_version > 30)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -442,6 +453,20 @@ export class CrewStore {
         BEGIN;
         ALTER TABLE model_runs ADD COLUMN cost_usd REAL;
         PRAGMA user_version = 29;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 30) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE view_state (
+          session_id TEXT PRIMARY KEY REFERENCES sessions(id),
+          tab TEXT NOT NULL DEFAULT 'chat', camp INTEGER NOT NULL DEFAULT 0,
+          legend INTEGER NOT NULL DEFAULT 0, panel_width INTEGER NOT NULL DEFAULT 340,
+          log_job_id TEXT, memory_section TEXT NOT NULL DEFAULT 'memory',
+          memory_owner_id TEXT
+        );
+        PRAGMA user_version = 30;
         COMMIT;
       `);
     }
@@ -1105,6 +1130,61 @@ export class CrewStore {
           .run(latest.id, job.sessionId);
     });
     return latest;
+  }
+
+  viewState(sessionId: string): ViewState {
+    const row = this.db
+      .prepare(
+        `SELECT tab, camp, legend, panel_width AS panelWidth, log_job_id AS logJobId,
+         memory_section AS memorySection, memory_owner_id AS memoryOwnerId
+         FROM view_state WHERE session_id = ?`,
+      )
+      .get(sessionId) as
+      | (Omit<ViewState, "camp" | "legend"> & { camp: number; legend: number })
+      | undefined;
+    if (!row) return defaultViewState();
+    return {
+      ...row,
+      camp: Boolean(row.camp),
+      legend: Boolean(row.legend),
+    };
+  }
+
+  setViewState(sessionId: string, patch: Partial<ViewState>) {
+    const session = this.getSession(sessionId);
+    const current = this.viewState(sessionId);
+    if (
+      patch.logJobId &&
+      !this.readJobs(sessionId).some(({ id }) => id === patch.logJobId)
+    )
+      throw new Error("이 대화의 업무를 선택해 주세요.");
+    if (
+      patch.memoryOwnerId &&
+      !this.readMembers(session.projectId).some(
+        ({ id }) => id === patch.memoryOwnerId,
+      )
+    )
+      throw new Error("이 프로젝트의 담당자를 선택해 주세요.");
+    const next: ViewState = { ...current, ...patch };
+    this.db
+      .prepare(
+        `INSERT INTO view_state (session_id, tab, camp, legend, panel_width, log_job_id, memory_section, memory_owner_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(session_id) DO UPDATE SET tab = excluded.tab, camp = excluded.camp,
+           legend = excluded.legend, panel_width = excluded.panel_width,
+           log_job_id = excluded.log_job_id, memory_section = excluded.memory_section,
+           memory_owner_id = excluded.memory_owner_id`,
+      )
+      .run(
+        sessionId,
+        next.tab,
+        Number(next.camp),
+        Number(next.legend),
+        next.panelWidth,
+        next.logJobId,
+        next.memorySection,
+        next.memoryOwnerId,
+      );
   }
 
   private logMcpSetting(projectId: string, note: string) {
@@ -2435,6 +2515,7 @@ export class CrewStore {
       current,
       sessions,
       session,
+      view: session ? this.viewState(session.id) : defaultViewState(),
       messages: session ? this.getMessages(session.id) : [],
       modelRuns: session
         ? (this.db

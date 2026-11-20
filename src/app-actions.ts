@@ -179,6 +179,9 @@ export class ActionRunner {
       case "workflow.apply":
         store.applyWorkflow(action.jobId, action.scope);
         break;
+      case "view.set":
+        store.setViewState(action.sessionId, action.patch);
+        break;
       case "chat.send":
         await this.chat(action);
         break;
@@ -261,6 +264,7 @@ const descriptions: Record<string, string> = {
   "workflow.save": "워크플로우 초안을 검사하고 저장해요.",
   "workflow.select": "세션의 워크플로우를 선택해요.",
   "workflow.apply": "저장한 워크플로우를 진행 중 업무에 적용해요.",
+  "view.set": "탭·캠프 보기·범례·패널 폭·연 업무·메모리 보기를 바꿔요.",
   "chat.send": "비서에게 메시지를 보내요.",
   "chat.stop": "응답 생성을 멈춰요.",
   "job.answer": "권한 요청에 허용·거절로 답해요.",
@@ -303,6 +307,7 @@ export type AppRead = {
   project: { id: string; name: string; root: string; approvalMode: string } | null;
   session: { id: string; title: string; workflowId: string | null } | null;
   tabs: string[];
+  view: Snapshot["view"];
   jobs: Snapshot["jobs"];
   pendingApprovals: { id: string; jobId: string }[];
   pendingToolApprovals: ToolApproval[];
@@ -345,6 +350,7 @@ export function appRead(store: CrewStore): AppRead {
         }
       : null,
     tabs: ["대화", "로그", "메모리", "워크플로우"],
+    view: snapshot.view,
     jobs: snapshot.jobs,
     pendingApprovals: snapshot.fileApprovals
       .filter(({ decision }) => decision === null)

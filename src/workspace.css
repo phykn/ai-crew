@@ -30,7 +30,20 @@ summary:focus-visible {
 .workspace {
   height: 100dvh;
   display: grid;
-  grid-template: minmax(0, 1fr) / var(--workspace-columns);
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr) var(--panel-width, 380px);
+}
+.panel-resizer {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 3;
+}
+.panel-resizer:focus-visible {
+  outline: 2px solid var(--warm);
+  outline-offset: -2px;
 }
 .icon {
   width: var(--icon-size);
@@ -228,6 +241,7 @@ summary:focus-visible {
   font-size: var(--font-detail);
 }
 .panel {
+  position: relative;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -660,6 +674,9 @@ summary:focus-visible {
   }
   .panel {
     border-left: 0;
+  }
+  .panel-resizer {
+    display: none;
   }
   .camp-toggle {
     display: grid;

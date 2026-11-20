@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { CrewSettings } from "./crew-settings";
 import { MemoryPanel } from "./memory-panel";
@@ -270,18 +270,20 @@ function Workspace() {
     text: string;
     questionId?: string;
   } | null>(null);
-  const [logJob, setLogJob] = useState<string | null>(null);
   const [focusedApprovalId, setFocusedApprovalId] = useState<string | null>(
     null,
   );
-  const [view, setView] = useState<"chat" | "log" | "memory" | "workflow">(
-    "chat",
+  const [resizing, setResizing] = useState<number | null>(null);
+  const [localView, setLocalView] = useState<Snapshot["view"]["tab"]>("chat");
+  const [localCamp, setLocalCamp] = useState(false);
+  const [localMemorySection, setLocalMemorySection] = useState<
+    Snapshot["view"]["memorySection"]
+  >("memory");
+  const [localMemoryOwner, setLocalMemoryOwner] = useState<string | undefined>(
+    undefined,
   );
   const [flowDraft, setFlowDraft] = useState<FlowDraft | null>(null);
-  const [memoryOwner, setMemoryOwner] = useState<string | null | undefined>(undefined);
-  const [memorySection, setMemorySection] = useState<"wiki" | "memory">("memory");
   const [menu, setMenu] = useState<"projects" | "sessions" | null>(null);
-  const [showCamp, setShowCamp] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [settingsMember, setSettingsMember] = useState<string | null>(null);
@@ -297,10 +299,7 @@ function Workspace() {
   const following = useRef(true);
 
   function apply(next: Snapshot, resetDraft = false) {
-    if (next.current?.id !== dataRef.current?.current?.id) {
-      setMemoryOwner(undefined);
-      setFlowDraft(null);
-    }
+    if (next.current?.id !== dataRef.current?.current?.id) setFlowDraft(null);
     if (next.session?.id !== dataRef.current?.session?.id) setRevision(null);
     if (resetDraft || next.session?.id !== dataRef.current?.session?.id) {
       setDraft(next.session?.draft ?? "");
@@ -342,10 +341,44 @@ function Workspace() {
     };
   }, []);
 
+  const view = data?.session ? data.view.tab : localView;
+  const logJob = data?.view.logJobId ?? null;
+  const showCamp = data?.session ? data.view.camp : localCamp;
+  const legend = data?.view.legend ?? false;
+  const memorySection = data?.session
+    ? data.view.memorySection
+    : localMemorySection;
+  const memoryOwner = data?.session
+    ? (data.view.memoryOwnerId ?? undefined)
+    : localMemoryOwner;
+  const panelWidth = resizing ?? data?.view.panelWidth ?? 380;
+
   useEffect(() => {
     const area = messages.current;
     if (area && following.current) area.scrollTop = area.scrollHeight;
   }, [data?.messages, view]);
+
+  function patchView(patch: Partial<Snapshot["view"]>) {
+    const session = dataRef.current?.session;
+    if (!session) return;
+    void window.crew
+      .run({ type: "view.set", sessionId: session.id, patch })
+      .then((snapshot) => apply(snapshot))
+      .catch((problem: Error) => setError(problem.message));
+  }
+  const setView = (tab: Snapshot["view"]["tab"]) =>
+    data?.session ? patchView({ tab }) : setLocalView(tab);
+  const setShowCamp = (camp: boolean) =>
+    data?.session ? patchView({ camp }) : setLocalCamp(camp);
+  const setLogJob = (jobId: string | null) => patchView({ logJobId: jobId });
+  const setMemorySection = (section: Snapshot["view"]["memorySection"]) =>
+    data?.session
+      ? patchView({ memorySection: section })
+      : setLocalMemorySection(section);
+  const setMemoryOwner = (ownerId: string | null | undefined) =>
+    data?.session
+      ? patchView({ memoryOwnerId: ownerId ?? null })
+      : setLocalMemoryOwner(ownerId ?? undefined);
 
   async function run(action: Action, resetDraft = false) {
     setError("");
@@ -486,6 +519,7 @@ function Workspace() {
   return (
     <main
       className={showCamp ? "workspace camp-visible" : "workspace"}
+      style={{ "--panel-width": panelWidth + "px" } as CSSProperties}
       onClick={(event) => {
         if (!(event.target as Element).closest(".menu,[aria-expanded]"))
           setMenu(null);
@@ -504,7 +538,14 @@ function Workspace() {
             <Icon name="fire" /> AI Crew
           </strong>
           {data?.current && (
-            <details className="roster">
+            <details
+              className="roster"
+              open={legend}
+              onToggle={(event) => {
+                if (event.currentTarget.open !== legend)
+                  patchView({ legend: event.currentTarget.open });
+              }}
+            >
               <summary>
                 크루 · {data.members.filter((member) => member.hired).length}
               </summary>
@@ -798,6 +839,48 @@ function Workspace() {
           })}
       </section>
       <section className="panel" aria-label="작업 패널">
+        <div
+          className="panel-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="작업 패널 폭"
+          aria-valuenow={panelWidth}
+          aria-valuemin={280}
+          aria-valuemax={720}
+          tabIndex={0}
+          onKeyDown={(event) => {
+            const step =
+              event.key === "ArrowLeft"
+                ? -24
+                : event.key === "ArrowRight"
+                  ? 24
+                  : 0;
+            if (!step) return;
+            event.preventDefault();
+            patchView({
+              panelWidth: Math.min(720, Math.max(280, panelWidth + step)),
+            });
+          }}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setResizing(panelWidth);
+          }}
+          onPointerMove={(event) => {
+            if (resizing === null) return;
+            setResizing(
+              Math.min(
+                720,
+                Math.max(280, window.innerWidth - event.clientX),
+              ),
+            );
+          }}
+          onPointerUp={() => {
+            if (resizing === null) return;
+            const next = Math.min(720, Math.max(280, resizing));
+            setResizing(null);
+            patchView({ panelWidth: next });
+          }}
+        />
         <header className="toolbar">
           <button
             type="button"

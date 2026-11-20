@@ -707,3 +707,110 @@ summary:focus-visible {
 .compose-actions {
   margin-left: auto;
 }
+
+.workflow-panel {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: var(--space-2);
+  height: 100%;
+  padding: var(--space-2) var(--space-3);
+  overflow: auto;
+}
+.workflow-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.workflow-tools input {
+  min-width: 140px;
+  max-width: 220px;
+  background: var(--card);
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+}
+.workflow-tools select {
+  background: var(--card);
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+}
+.workflow-state {
+  color: var(--warm);
+  font-size: var(--font-detail);
+}
+.workflow-hint {
+  display: block;
+}
+.flow-canvas {
+  min-height: 380px;
+  height: 100%;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-surface);
+  background: #15170f;
+}
+.stage-card {
+  padding: 8px 12px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  text-align: center;
+  font-size: var(--font-detail);
+  color: var(--text);
+}
+.stage-card[data-required="true"] {
+  box-shadow: inset 0 0 0 1px #ebe1ca26;
+}
+.stage-card strong {
+  display: block;
+}
+.stage-card small {
+  color: var(--dim);
+}
+.stage-card em {
+  display: block;
+  color: var(--dim);
+  font-style: normal;
+  font-size: 11px;
+}
+.stage-form,
+.workflow-apply {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+  font-size: var(--font-detail);
+}
+.stage-form header {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.stage-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stage-form input,
+.stage-form textarea,
+.stage-form select {
+  background: var(--card);
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+}
+.stage-form .stage-required {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.workflow-apply {
+  align-items: center;
+}
+.workflow-apply p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.wiki-sentence.changed {
+  background: #f0d08933;
+  border-radius: 3px;
+}

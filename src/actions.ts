@@ -178,6 +178,11 @@ export const actions = z.discriminatedUnion("type", [
     workflowId: identifier.nullable(),
   }),
   z.strictObject({
+    type: z.literal("workflow.apply"),
+    jobId: identifier,
+    scope: z.enum(["current", "once"]),
+  }),
+  z.strictObject({
     type: z.literal("memory.add"),
     sessionId: identifier,
     ownerId: z.union([roleId, identifier]).nullable(),

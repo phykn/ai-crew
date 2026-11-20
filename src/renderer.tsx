@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { CrewSettings } from "./crew-settings";
 import { MemoryPanel } from "./memory-panel";
 import { WikiPanel } from "./wiki-panel";
+import { WorkflowPanel, type FlowDraft } from "./workflow-panel";
 import { findChatCommand, suggestChatCommands } from "./chat-commands";
 import { skillStateLabels, skillStateOrder } from "./skill-status";
 import {
@@ -50,6 +51,7 @@ const icons = {
   folder: "M3 7V5h6l2 2h10v12H3Z",
   send: "m3 11 18-8-7 18-3-8-8-2Zm8 2 10-10",
   stop: "M6 6h12v12H6Z",
+  flow: "M6 4h12v5H6Zm0 11h5v5H6Zm7 0h5v5h-5Zm-3.5-6v3h6v3",
 };
 function Icon({ name }: { name: keyof typeof icons }) {
   return (
@@ -264,7 +266,10 @@ function Workspace() {
   const [focusedApprovalId, setFocusedApprovalId] = useState<string | null>(
     null,
   );
-  const [view, setView] = useState<"chat" | "log" | "memory">("chat");
+  const [view, setView] = useState<"chat" | "log" | "memory" | "workflow">(
+    "chat",
+  );
+  const [flowDraft, setFlowDraft] = useState<FlowDraft | null>(null);
   const [memoryOwner, setMemoryOwner] = useState<string | null | undefined>(undefined);
   const [memorySection, setMemorySection] = useState<"wiki" | "memory">("memory");
   const [menu, setMenu] = useState<"projects" | "sessions" | null>(null);
@@ -284,7 +289,10 @@ function Workspace() {
   const following = useRef(true);
 
   function apply(next: Snapshot, resetDraft = false) {
-    if (next.current?.id !== dataRef.current?.current?.id) setMemoryOwner(undefined);
+    if (next.current?.id !== dataRef.current?.current?.id) {
+      setMemoryOwner(undefined);
+      setFlowDraft(null);
+    }
     if (next.session?.id !== dataRef.current?.session?.id) setRevision(null);
     if (resetDraft || next.session?.id !== dataRef.current?.session?.id) {
       setDraft(next.session?.draft ?? "");
@@ -842,6 +850,20 @@ function Workspace() {
             <button
               type="button"
               className="icon-button"
+              aria-label="워크플로우"
+              title="워크플로우"
+              aria-current={view === "workflow"}
+              onClick={() => {
+                setMenu(null);
+                setView("workflow");
+                setShowCamp(false);
+              }}
+            >
+              <Icon name="flow" />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
               aria-label="세션 목록"
               title="세션 목록"
               aria-expanded={menu === "sessions"}
@@ -891,14 +913,28 @@ function Workspace() {
             </div>
           )}
         </header>
-        {view === "memory" ? (
+        {view === "workflow" ? (
+          data && (
+            <WorkflowPanel
+              data={data}
+              draft={flowDraft}
+              setDraft={setFlowDraft}
+              run={run}
+              error={error}
+              openJob={(jobId) => {
+                setLogJob(jobId);
+                setView("log");
+              }}
+            />
+          )
+        ) : view === "memory" ? (
           <section className="knowledge-view" aria-label="메모리 작업 공간">
             <div className="wiki-controls knowledge-nav">
               <button type="button" aria-pressed={memorySection === "memory"} onClick={() => setMemorySection("memory")}>기억</button>
               <button type="button" aria-pressed={memorySection === "wiki"} onClick={() => setMemorySection("wiki")}>프로젝트 위키</button>
             </div>
             {memorySection === "wiki" && data ? (
-              <WikiPanel key={data.current?.id} data={data} run={run} source={(revision) => void openMemorySource(revision)} error={error} />
+              <WikiPanel key={data.current?.id} data={data} run={run} source={(revision) => void openMemorySource(revision)} openRule={() => { setView("workflow"); setShowCamp(false); }} error={error} />
             ) : (
               <MemoryPanel
                 data={data}

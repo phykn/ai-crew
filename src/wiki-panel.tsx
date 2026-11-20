@@ -1,14 +1,16 @@
 import { useState, type FormEvent } from "react";
 import { Background, Controls, MarkerType, ReactFlow, type Node } from "@xyflow/react";
 import type { Action, Snapshot, WikiPage, WikiRevision } from "./actions";
+import { changedSegments } from "./text-diff";
 import "@xyflow/react/dist/style.css";
 
 type Draft = Pick<WikiPage, "id" | "version" | "title" | "body" | "links">;
 
-export function WikiPanel({ data, run, source, error }: {
+export function WikiPanel({ data, run, source, openRule, error }: {
   data: Snapshot;
   run: (action: Action) => Promise<boolean>;
   source: (revision: WikiRevision) => void;
+  openRule: () => void;
   error: string;
 }) {
   const [layout, setLayout] = useState<"list" | "graph">("list");
@@ -54,6 +56,11 @@ export function WikiPanel({ data, run, source, error }: {
   }
 
   const columns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(data.wiki.length))));
+  const rule =
+    data.workflows.find(({ id }) => id === data.session?.workflowId) ??
+    data.workflows[0];
+  const linkedRule =
+    rule && page && page.body.includes(rule.name) ? rule : undefined;
   const nodes: Node[] = data.wiki.map((item, index) => ({
     id: item.id,
     ariaLabel: item.title,
@@ -138,6 +145,14 @@ export function WikiPanel({ data, run, source, error }: {
         <article className="wiki-page" aria-label={page.title}>
           <h2>{page.title}</h2>
           <p className="memory-body">{page.body}</p>
+          {linkedRule && (
+            <p className="muted">
+              적용 중인 규칙 · {linkedRule.name} v{linkedRule.version}{" "}
+              <button type="button" className="log-link" onClick={openRule}>
+                편집기 열기
+              </button>
+            </p>
+          )}
           {!!page.links.length && <div className="wiki-controls">
             {page.links.map((id) => <button key={id} type="button" className="log-link" onClick={() => open(id)}>{data.wiki.find((item) => item.id === id)?.title}</button>)}
           </div>}
@@ -160,7 +175,22 @@ export function WikiPanel({ data, run, source, error }: {
                   <summary>이전 본문</summary>
                   <p className="memory-body">{page.revisions[index + 1].body}</p>
                 </details>}
-                <p className="memory-body">{revision.body}</p>
+                <p className="memory-body">
+                  {(page.revisions[index + 1]
+                    ? changedSegments(page.revisions[index + 1].body, revision.body)
+                    : [{ text: revision.body, changed: false }]
+                  ).map((segment, position) =>
+                    segment.changed ? (
+                      <mark className="wiki-sentence changed" key={position}>
+                        {segment.text}
+                      </mark>
+                    ) : (
+                      <span className="wiki-sentence" key={position}>
+                        {segment.text}
+                      </span>
+                    ),
+                  )}
+                </p>
                 {data.sessions.some(({ id }) => id === revision.sourceSessionId) ? (
                   <button type="button" className="log-link" onClick={() => source(revision)}>{revision.sourceJobId ? "출처 업무 열기" : "출처 대화 열기"}</button>
                 ) : <small className="muted">삭제된 세션</small>}

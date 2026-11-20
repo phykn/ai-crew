@@ -273,6 +273,9 @@ async function startApp() {
       case "workflow.select":
         store.setSessionWorkflow(action.sessionId, action.workflowId);
         break;
+      case "workflow.apply":
+        store.applyWorkflow(action.jobId, action.scope);
+        break;
       case "crew.skill.add":
         store.addSkill(action.projectId, {
           id: action.skillId,

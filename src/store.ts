@@ -34,7 +34,7 @@ import {
   type WorkflowGraph,
 } from "./actions";
 import { skillStates } from "./skill-status";
-import { defaultGraph, validateGraph } from "./workflow-graph";
+import { defaultGraph, remainingStages, validateGraph } from "./workflow-graph";
 
 export class CrewStore {
   private db: DatabaseSync;
@@ -1056,10 +1056,47 @@ export class CrewStore {
   private jobWorkflow(projectId: string, workflowId: string | null) {
     const workflows = this.listWorkflows(projectId);
     return (
-      workflows.find(({ id }) => id === workflowId) ??
-      workflows[0] ??
-      null
+      workflows.find(({ id }) => id === workflowId) ?? workflows[0] ?? null
     );
+  }
+
+  applyWorkflow(jobId: string, scope: "current" | "once") {
+    const job = this.getJob(jobId);
+    if (["complete", "denied", "failed"].includes(job.state))
+      throw new Error("끝난 업무에는 워크플로우를 적용할 수 없어요.");
+    const session = this.getSession(job.sessionId);
+    const workflows = this.listWorkflows(job.projectId);
+    const latest =
+      workflows.find(({ id }) => id === (job.workflowId ?? session.workflowId)) ??
+      workflows[0];
+    if (!latest) throw new Error("이 프로젝트에 워크플로우가 없어요.");
+    const remaining = remainingStages(latest.graph, []);
+    const titles = latest.graph.stages
+      .filter(({ id, required }) => required && remaining.includes(id))
+      .map(({ title }) => title);
+    this.transaction(() => {
+      this.db
+        .prepare(
+          "UPDATE jobs SET workflow_id = ?, workflow_version = ? WHERE id = ?",
+        )
+        .run(latest.id, latest.version, jobId);
+      this.log(
+        job.sessionId,
+        "사용자 · 워크플로우 " +
+          (scope === "current" ? "이번 업무에도" : "이번에만") +
+          " 적용 · " +
+          latest.name +
+          " v" +
+          latest.version +
+          (titles.length ? " · 남은 필수 단계: " + titles.join(", ") : ""),
+        jobId,
+      );
+      if (scope === "current")
+        this.db
+          .prepare("UPDATE sessions SET workflow_id = ? WHERE id = ?")
+          .run(latest.id, job.sessionId);
+    });
+    return latest;
   }
 
   private logMcpSetting(projectId: string, note: string) {

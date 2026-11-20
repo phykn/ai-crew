@@ -31,6 +31,56 @@ test("the default flow is valid and keeps parallel checks at one level", () => {
   ]);
 });
 
+test("applying the saved rule to a running job records its version and remaining steps", () => {
+  const folder = realpathSync(mkdtempSync(join(tmpdir(), "crew-apply-")));
+  const store = new CrewStore(join(folder, ".crew.sqlite"));
+  try {
+    store.openFolder(folder);
+    const projectId = store.snapshot().current!.id;
+    const sessionId = store.snapshot().session!.id;
+    const [workflow] = store.listWorkflows(projectId);
+    const job = store.createJob(sessionId, randomUUID(), "화면을 고쳐줘");
+    expect(job.workflowVersion).toBe(1);
+    store.setSessionWorkflow(sessionId, null);
+    store.saveWorkflow(projectId, {
+      id: workflow.id,
+      version: 1,
+      name: workflow.name,
+      graph: {
+        ...workflow.graph,
+        stages: workflow.graph.stages.map((stage) =>
+          stage.id === "style"
+            ? { ...stage, title: "접근성 검토", roleId: "review" }
+            : stage,
+        ),
+      },
+      author: "사용자",
+    });
+    store.applyWorkflow(job.id, "current");
+    expect(store.getJob(job.id).workflowVersion).toBe(2);
+    expect(store.snapshot().session!.workflowId).toBe(workflow.id);
+    expect(store.snapshot().activity.map(({ text }) => text)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("워크플로우 이번 업무에도 적용"),
+        expect.stringContaining("남은 필수 단계"),
+      ]),
+    );
+    const once = store.createJob(sessionId, randomUUID(), "한 번만");
+    expect(once.workflowVersion).toBe(2);
+    store.applyWorkflow(once.id, "once");
+    expect(
+      store.snapshot().activity.map(({ text }) => text),
+    ).toEqual(expect.arrayContaining([expect.stringContaining("이번에만 적용")]));
+    store.recordJob(store.getJob(once.id), "complete", "완료");
+    expect(() => store.applyWorkflow(once.id, "current")).toThrow(
+      "끝난 업무에는",
+    );
+  } finally {
+    store.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 test("broken references, cycles and unreachable completions are rejected", () => {
   const graph = defaultGraph();
   const withEdge = (...edges: WorkflowGraph["edges"]): WorkflowGraph => ({

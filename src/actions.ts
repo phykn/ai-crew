@@ -140,6 +140,12 @@ export const actions = z.discriminatedUnion("type", [
     skillId: identifier,
   }),
   z.strictObject({
+    type: z.literal("mcp.answer"),
+    jobId: identifier,
+    requestId: identifier,
+    allow: z.boolean(),
+  }),
+  z.strictObject({
     type: z.literal("memory.add"),
     sessionId: identifier,
     ownerId: z.union([roleId, identifier]).nullable(),
@@ -238,6 +244,31 @@ export type CrewSkill = {
   memberId: string;
   name: string;
   markdown: string;
+};
+export type SkillState = "ready" | "in-use" | "awaiting" | "unavailable";
+export type SkillStatus = {
+  skillId: string;
+  memberId: string;
+  state: SkillState;
+  jobId: string | null;
+  approvalId: string | null;
+  tool: string | null;
+  reason: string | null;
+};
+export type ToolApproval = {
+  id: string;
+  jobId: string;
+  projectId: string;
+  serverId: string;
+  serverName: string;
+  memberId: string;
+  memberName: string;
+  toolName: string;
+  scope: string;
+  mode: ApprovalMode;
+  actor: string | null;
+  decision: "allow" | "deny" | null;
+  requestedAt: string;
 };
 export type ApprovalMode = z.infer<typeof approvalMode>;
 export type Project = {
@@ -355,6 +386,8 @@ export type Snapshot = {
   mcpServers: McpEndpoint[];
   mcpGrants: McpGrant[];
   skills: CrewSkill[];
+  skillStates: SkillStatus[];
+  toolApprovals: ToolApproval[];
   memories: CrewMemory[];
   wiki: WikiPage[];
   assignees: { jobId: string; memberId: string; roleId: RoleId }[];

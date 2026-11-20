@@ -7,6 +7,7 @@ import type { ModelDetails, Project } from "./actions";
 import { ModelConnectionError, ModelLimitError } from "./model-errors";
 
 import type { InitializeParams } from "./codex-protocol/InitializeParams";
+import type { JsonValue } from "./codex-protocol/serde_json/JsonValue";
 import type { ThreadStartParams } from "./codex-protocol/v2/ThreadStartParams";
 import type { ThreadResumeParams } from "./codex-protocol/v2/ThreadResumeParams";
 import type { ThreadTurnsListParams } from "./codex-protocol/v2/ThreadTurnsListParams";
@@ -253,6 +254,7 @@ export class CodexConnection {
       onTurn: (threadId: string, turnId: string) => void;
     },
     details?: ModelDetails,
+    mcpConfig?: { [key: string]: JsonValue | undefined },
   ) {
     await this.connect();
     signal.throwIfAborted();
@@ -269,6 +271,7 @@ export class CodexConnection {
             threadId: previousThread,
             excludeTurns: true,
             ...policy,
+            ...(mcpConfig ? { config: mcpConfig } : {}),
           }),
         );
         thread = resumed.thread.id;
@@ -340,6 +343,7 @@ export class CodexConnection {
       const opened = threadResult.parse(
         await this.rpc("thread/start", {
           ...policy,
+          ...(mcpConfig ? { config: mcpConfig } : {}),
           ephemeral: !!outputSchema && !previousThread && !recover,
           developerInstructions: outputSchema
             ? "Return structured output for the delegated AI Crew role."

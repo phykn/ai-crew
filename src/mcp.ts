@@ -5,6 +5,18 @@ import type { Job, CrewMember, McpEndpoint, McpTool } from "./actions";
 import type { CrewStore } from "./store";
 
 type ToolContext = Pick<Job, "projectId" | "sessionId"> & { id?: string };
+export type ToolGateInput = {
+  job: ToolContext;
+  member: CrewMember;
+  server: McpEndpoint;
+  tool: McpTool;
+  args: Record<string, unknown>;
+  signal: AbortSignal;
+};
+/** Decides whether one external change may run. It records its own decision. */
+export type ToolGate = (
+  input: ToolGateInput,
+) => Promise<{ allow: boolean; actor: string }>;
 function describeTool(
   tool: Awaited<ReturnType<Client["listTools"]>>["tools"][number],
 ): McpTool {
@@ -28,7 +40,14 @@ function describeTool(
 }
 
 export class CrewMcp {
-  constructor(private store: CrewStore) {}
+  constructor(
+    private store: CrewStore,
+    private gate?: ToolGate,
+  ) {}
+
+  setGate(gate: ToolGate) {
+    this.gate = gate;
+  }
 
   async connect(
     projectId: string,
@@ -65,7 +84,6 @@ export class CrewMcp {
   }
 
   modelTools(job: ToolContext, member: CrewMember, signal: AbortSignal) {
-    if (member.provider !== "local") return undefined;
     const grants = this.store
       .listMcpGrants(job.projectId)
       .filter(({ memberId }) => memberId === member.id);
@@ -75,11 +93,11 @@ export class CrewMcp {
         ({ id, enabled }) => id === grant.serverId && enabled,
       );
       const tool = server?.tools.find(
-        ({ name, fingerprint, readOnly }) =>
-          readOnly &&
-          name === grant.toolName &&
-          fingerprint === grant.fingerprint,
+        ({ name, fingerprint }) =>
+          name === grant.toolName && fingerprint === grant.fingerprint,
       );
+      // A chat reply has no job to hold an approval request, so it only reads.
+      if (tool && !tool.readOnly && !job.id) return [];
       return server && tool
         ? [
             {
@@ -87,6 +105,7 @@ export class CrewMcp {
               server: server.name,
               name: tool.name,
               description: tool.description,
+              readOnly: tool.readOnly,
               inputSchema: tool.inputSchema,
             },
           ]
@@ -125,11 +144,8 @@ export class CrewMcp {
       const eligible = this.store
         .readMembers(job.projectId, member.roleId)
         .some(
-          ({ id, hired, provider, assignmentJobId }) =>
-            hired &&
-            provider === "local" &&
-            id === member.id &&
-            (!assignmentJobId || assignmentJobId === job.id),
+          ({ id, hired, assignmentJobId }) =>
+            hired && id === member.id && (!assignmentJobId || assignmentJobId === job.id),
         );
       const grant = this.store
         .listMcpGrants(job.projectId)
@@ -140,12 +156,33 @@ export class CrewMcp {
             name === toolName &&
             fingerprint === tool?.fingerprint,
         );
-      if (!eligible || !grant || !tool?.readOnly)
+      if (!eligible || !grant || !tool)
         throw new Error("현재 도구 권한 없음");
+      if (!tool.readOnly && !job.id) throw new Error("현재 도구 권한 없음");
       return { server, tool };
     };
     try {
       const { server, tool } = access();
+      if (!tool.readOnly) {
+        const decision = this.gate
+          ? await this.gate({ job, member, server, tool, args, signal })
+          : { allow: false, actor: "로컬" };
+        signal.throwIfAborted();
+        if (!decision.allow) {
+          log(
+            server.name +
+              "/" +
+              toolName +
+              " · " +
+              (this.gate ? "변경 도구 거절" : "승인 절차 없음"),
+          );
+          return {
+            error: this.gate
+              ? "변경 도구 실행이 거절되어 아무것도 바꾸지 않았어요."
+              : "승인 절차 없음",
+          };
+        }
+      }
       const requestSignal = AbortSignal.any([
         signal,
         AbortSignal.timeout(15_000),
@@ -184,7 +221,7 @@ export class CrewMcp {
       signal.throwIfAborted();
       const message =
         error instanceof Error &&
-        /^(서버 연결 해제|현재 도구 권한 없음|도구 정의 변경)/.test(
+        /^(서버 연결 해제|현재 도구 권한 없음|도구 정의 변경|변경 도구 거절|승인 절차 없음)/.test(
           error.message,
         )
           ? error.message

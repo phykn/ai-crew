@@ -13,10 +13,11 @@ import {
   type RoleId,
   type WorkPlan,
 } from "./actions";
+import { codexMcpConfig } from "./codex-mcp";
 import type { CodexConnection } from "./codex";
 import { crewInstructions } from "./crew-definition";
 import { decideLocal } from "./local";
-import { CrewMcp } from "./mcp";
+import { CrewMcp, type ToolGateInput } from "./mcp";
 import { classifyModelFailure, ModelLimitError } from "./model-errors";
 import type { CrewStore } from "./store";
 import { mentionsWiki, wikiTools } from "./wiki-tools";
@@ -227,13 +228,123 @@ export class CrewWorkflow {
   private active = new Map<string, AbortController>();
   private reserved = new Map<string, string[]>();
   private agentTurns = new Map<string, Promise<void>>();
+  private toolWaiters = new Map<string, (allow: boolean | null) => void>();
 
   constructor(
     private store: CrewStore,
     private codex: CodexConnection,
     private notify: () => void,
     private mcp = new CrewMcp(store),
-  ) {}
+  ) {
+    this.mcp.setGate((input) => this.toolGate(input));
+  }
+
+  answerTool(id: string, requestId: string, allow: boolean) {
+    const job = this.store.getJob(id);
+    const record = this.store.answerToolApproval(
+      id,
+      requestId,
+      "사용자",
+      allow ? "allow" : "deny",
+    );
+    if (record) {
+      this.toolWaiters.get(requestId)?.(allow);
+      this.notify();
+      return;
+    }
+    this.store.log(
+      job.sessionId,
+      "사용자 · 이미 끝난 승인 요청 · 현재 요청을 다시 확인해 주세요.",
+      job.id,
+    );
+    this.notify();
+  }
+
+  /** Called by the app MCP client before it runs a tool that changes data. */
+  async toolGate({
+    job,
+    member,
+    server,
+    tool,
+    args,
+    signal,
+  }: ToolGateInput) {
+    if (!job.id) return { allow: false, actor: "앱" };
+    const current = this.store.getJob(job.id);
+    const project = this.store.getProject(job.projectId);
+    const scope = JSON.stringify(args).slice(0, 220);
+    const mode = project.approvalMode;
+    const request = () => {
+      const approval = this.store.requestToolApproval(
+        current,
+        member,
+        server,
+        tool.name,
+        scope,
+        mode,
+      );
+      this.notify();
+      return approval;
+    };
+    if (mode === "always") {
+      const approval = request();
+      this.store.answerToolApproval(job.id, approval.id, "역할 권한", "allow");
+      this.notify();
+      return { allow: true, actor: "역할 권한" };
+    }
+    if (mode === "auto") {
+      try {
+        const decision = await this.decide(
+          current,
+          project,
+          "assistant",
+          "Decide whether one external MCP tool may change data for this request. Allow only when the original user request clearly authorizes this exact tool and target, and the crew member is permitted to use it. Otherwise deny.",
+          JSON.stringify({
+            request: current.request,
+            member: member.name,
+            tool: server.name + "/" + tool.name,
+            purpose: tool.description,
+            arguments: args,
+          }),
+          z.strictObject({ allow: z.boolean() }),
+          signal,
+        );
+        signal.throwIfAborted();
+        const approval = request();
+        this.store.answerToolApproval(
+          job.id,
+          approval.id,
+          "비서",
+          decision.allow ? "allow" : "deny",
+        );
+        this.notify();
+        return { allow: decision.allow, actor: "비서" };
+      } catch (error) {
+        if (signal.aborted) throw error;
+      }
+    }
+    const approval = request();
+    const answer = await this.waitForTool(approval.id, signal);
+    if (answer === null)
+      this.store.answerToolApproval(job.id, approval.id, "업무 중단", "deny");
+    this.notify();
+    return { allow: answer === true, actor: "사용자" };
+  }
+
+  private waitForTool(requestId: string, signal: AbortSignal) {
+    return new Promise<boolean | null>((resolve) => {
+      const done = (allow: boolean | null) => {
+        if (this.toolWaiters.get(requestId) !== done) return;
+        this.toolWaiters.delete(requestId);
+        signal.removeEventListener("abort", abort);
+        resolve(allow);
+      };
+      const abort = () => done(null);
+      this.toolWaiters.set(requestId, done);
+      if (signal.aborted) done(null);
+      else signal.addEventListener("abort", abort, { once: true });
+    });
+  }
 
   delegate(sessionId: string, responseId: string, text: string) {
     const existing = this.store
@@ -733,136 +844,150 @@ export class CrewWorkflow {
         member.name + " · 저장한 역할 결과를 바탕으로 새 Codex 실행 연결",
         job.id,
       );
-    for (;;) {
-      signal.throwIfAborted();
-      try {
-        let output: z.infer<T>;
-        const started = performance.now();
-        const details: ModelDetails = {};
+    this.store.startSkillUse(
+      job,
+      member.id,
+      skills.filter(({ memberId }) => memberId === member.id).map(({ id }) => id),
+    );
+    try {
+      for (;;) {
+        signal.throwIfAborted();
         try {
-          if (member.provider === "local") {
-            output = await decideLocal(
-              system,
-              withPrevious(),
-              schema,
-              signal,
-              this.mcp.modelTools(job, member, signal),
-              details,
-              wiki.length || mentionsWiki(job.request)
-                ? wikiTools(
-                    this.store,
-                    { projectId: job.projectId, sessionId: job.sessionId, jobId: job.id, canRead: wiki.length > 0 },
-                    member,
-                    signal,
-                    this.notify,
-                  )
-                : undefined,
-            );
-          } else {
-            let raw = "";
-            const pending = this.store.readPendingModelTurn(job.id, step);
-            const resumeId = pending?.threadId ?? threadId;
-            await this.codex.run(
-              project,
-              resumeId,
-              system + "\n\n" + (resumeId ? prompt : withPrevious()),
-              signal,
-              (text) => {
-                raw += text;
-              },
-              (thread) => {
-                threadId = thread;
-                if (!signal.aborted && this.active.has(job.id))
-                  this.store.rememberAgentThread(job.id, member.id, thread);
-              },
-              z.json().parse(z.toJSONSchema(schema)),
-              () => {
-                signal.throwIfAborted();
-                this.store.log(
-                  job.sessionId,
-                  member.name +
-                    " · 이전 Codex 세션 " +
-                    resumeId +
-                    "을 불러올 수 없어 저장한 맥락으로 새 실행 연결",
-                  job.id,
-                );
-                return system + "\n\n" + withPrevious();
-              },
-              {
-                resumeTurn: pending?.turnId ?? null,
-                onTurn: (thread, turn) => {
-                  if (!signal.aborted)
-                    this.store.savePendingModelTurn(job.id, step, thread, turn);
+          let output: z.infer<T>;
+          const started = performance.now();
+          const details: ModelDetails = {};
+          try {
+            if (member.provider === "local") {
+              output = await decideLocal(
+                system,
+                withPrevious(),
+                schema,
+                signal,
+                this.mcp.modelTools(job, member, signal),
+                details,
+                wiki.length || mentionsWiki(job.request)
+                  ? wikiTools(
+                      this.store,
+                      { projectId: job.projectId, sessionId: job.sessionId, jobId: job.id, canRead: wiki.length > 0 },
+                      member,
+                      signal,
+                      this.notify,
+                    )
+                  : undefined,
+              );
+            } else {
+              let raw = "";
+              const pending = this.store.readPendingModelTurn(job.id, step);
+              const resumeId = pending?.threadId ?? threadId;
+              await this.codex.run(
+                project,
+                resumeId,
+                system + "\n\n" + (resumeId ? prompt : withPrevious()),
+                signal,
+                (text) => {
+                  raw += text;
                 },
-              },
-              details,
-            );
-            output = schema.parse(JSON.parse(raw));
+                (thread) => {
+                  threadId = thread;
+                  if (!signal.aborted && this.active.has(job.id))
+                    this.store.rememberAgentThread(job.id, member.id, thread);
+                },
+                z.json().parse(z.toJSONSchema(schema)),
+                () => {
+                  signal.throwIfAborted();
+                  this.store.log(
+                    job.sessionId,
+                    member.name +
+                      " · 이전 Codex 세션 " +
+                      resumeId +
+                      "을 불러올 수 없어 저장한 맥락으로 새 실행 연결",
+                    job.id,
+                  );
+                  return system + "\n\n" + withPrevious();
+                },
+                {
+                  resumeTurn: pending?.turnId ?? null,
+                  onTurn: (thread, turn) => {
+                    if (!signal.aborted)
+                      this.store.savePendingModelTurn(job.id, step, thread, turn);
+                  },
+                },
+                details,
+                codexMcpConfig(
+                  this.store.listMcpEndpoints(job.projectId),
+                  this.store.listMcpGrants(job.projectId),
+                  member,
+                ),
+              );
+              output = schema.parse(JSON.parse(raw));
+            }
+          } finally {
+            if (this.active.has(job.id))
+              this.store.recordModelRun(
+                job.sessionId,
+                job.id,
+                member,
+                performance.now() - started,
+                details,
+              );
           }
-        } finally {
-          if (this.active.has(job.id))
-            this.store.recordModelRun(
+          if (signal.aborted && this.active.has(job.id))
+            this.store.log(
               job.sessionId,
+              member.name +
+                " · 중단 이후 응답 도착 · 업무 결과에는 반영하지 않았어요.",
               job.id,
-              member,
-              performance.now() - started,
-              details,
             );
-        }
-        if (signal.aborted && this.active.has(job.id))
-          this.store.log(
-            job.sessionId,
-            member.name +
-              " · 중단 이후 응답 도착 · 업무 결과에는 반영하지 않았어요.",
+          signal.throwIfAborted();
+          if (member.provider === "local" && previous?.threadId)
+            this.store.log(
+              job.sessionId,
+              member.name +
+                " · Codex 세션 " +
+                previous.threadId +
+                "에서 로컬 모델로 전환 · 저장한 맥락 사용",
+              job.id,
+            );
+          this.store.saveAgentContext(
             job.id,
+            member.id,
+            threadId,
+            JSON.stringify(output),
           );
-        signal.throwIfAborted();
-        if (member.provider === "local" && previous?.threadId)
-          this.store.log(
-            job.sessionId,
-            member.name +
-              " · Codex 세션 " +
-              previous.threadId +
-              "에서 로컬 모델로 전환 · 저장한 맥락 사용",
-            job.id,
-          );
-        this.store.saveAgentContext(
-          job.id,
-          member.id,
-          threadId,
-          JSON.stringify(output),
-        );
-        this.store.clearModelRetry(job.id, step);
-        return output;
-      } catch (error) {
-        signal.throwIfAborted();
-        const failure = classifyModelFailure(error);
-        if (failure === "limit") {
           this.store.clearModelRetry(job.id, step);
-          const limit = new ModelLimitError(
-            member.name + " 담당 모델이 한도에 도달했어요.",
+          return output;
+        } catch (error) {
+          signal.throwIfAborted();
+          const failure = classifyModelFailure(error);
+          if (failure === "limit") {
+            this.store.clearModelRetry(job.id, step);
+            const limit = new ModelLimitError(
+              member.name + " 담당 모델이 한도에 도달했어요.",
+            );
+            this.active.get(job.id)?.abort(limit);
+            throw limit;
+          }
+          if (failure !== "connection") {
+            this.store.clearModelRetry(job.id, step);
+            throw error;
+          }
+          const count = this.store.scheduleModelRetry(
+            job,
+            step,
+            member.name,
+            maxRetries,
           );
-          this.active.get(job.id)?.abort(limit);
-          throw limit;
+          if (count === null)
+            throw new Error(
+              member.name +
+                "의 모델 연결을 자동 재시도한 뒤에도 복구하지 못했어요.",
+            );
+          this.notify();
+          await delay(150 * 2 ** (count - 1), undefined, { signal });
         }
-        if (failure !== "connection") {
-          this.store.clearModelRetry(job.id, step);
-          throw error;
-        }
-        const count = this.store.scheduleModelRetry(
-          job,
-          step,
-          member.name,
-          maxRetries,
-        );
-        if (count === null)
-          throw new Error(
-            member.name +
-              "의 모델 연결을 자동 재시도한 뒤에도 복구하지 못했어요.",
-          );
-        this.notify();
-        await delay(150 * 2 ** (count - 1), undefined, { signal });
       }
+    } finally {
+      this.store.endSkillUse(job.id, member.id);
     }
   }
 

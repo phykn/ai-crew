@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { Action, CrewMember, Snapshot } from "./actions";
 import { crewDefinition } from "./crew-definition";
+import { skillStateLabels } from "./skill-status";
 
 export function CrewSettings({
   member,
@@ -8,6 +9,9 @@ export function CrewSettings({
   run,
   close,
   openMemory,
+  openJob,
+  focusApproval,
+  focusSkill,
   error,
 }: {
   member: CrewMember;
@@ -15,12 +19,17 @@ export function CrewSettings({
   run: (action: Action) => Promise<boolean>;
   close: () => void;
   openMemory: () => void;
+  openJob: (jobId: string) => void;
+  focusApproval: (approvalId: string) => void;
+  focusSkill?: string | null;
   error: string;
 }) {
   const projectId = data.current!.id;
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<"skill" | "server" | null>(null);
   const skills = data.skills.filter(({ memberId }) => memberId === member.id);
+  const state = (skillId: string) =>
+    data.skillStates.find((status) => status.skillId === skillId);
   async function save(action: Action) {
     setBusy(true);
     try {
@@ -76,26 +85,59 @@ export function CrewSettings({
             추가
           </button>
         </header>
-        {skills.map((skill) => (
-          <details key={skill.id}>
-            <summary>{skill.name}</summary>
-            <pre>{skill.markdown}</pre>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void save({
-                  type: "crew.skill.remove",
-                  projectId,
-                  memberId: member.id,
-                  skillId: skill.id,
-                })
-              }
-            >
-              스킬 해제
-            </button>
-          </details>
-        ))}
+        {skills.map((skill) => {
+          const status = state(skill.id);
+          return (
+            <details key={skill.id} open={focusSkill === skill.id}>
+              <summary>
+                {skill.name} · {skillStateLabels[status?.state ?? "ready"]}
+                {status?.reason ? " · " + status.reason : ""}
+                {status?.tool && status.state !== "unavailable"
+                  ? " · " + status.tool
+                  : ""}
+              </summary>
+              <pre>{skill.markdown}</pre>
+              <div className="skill-actions">
+                {status?.state === "in-use" && status.jobId && (
+                  <button type="button" onClick={() => openJob(status.jobId!)}>
+                    실행 로그
+                  </button>
+                )}
+                {status?.state === "awaiting" && status.approvalId && (
+                  <button
+                    type="button"
+                    onClick={() => focusApproval(status.approvalId!)}
+                  >
+                    승인 질문
+                  </button>
+                )}
+                {status?.state === "unavailable" && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setForm(form === "server" ? null : "server")}
+                  >
+                    MCP 설정
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void save({
+                      type: "crew.skill.remove",
+                      projectId,
+                      memberId: member.id,
+                      skillId: skill.id,
+                    })
+                  }
+                >
+                  스킬 해제
+                </button>
+              </div>
+            </details>
+          );
+        })}
       </section>
 
       <section aria-label="MCP">
@@ -110,7 +152,10 @@ export function CrewSettings({
           </button>
         </header>
         {member.provider === "codex" && (
-          <p>범례의 읽기 도구는 로컬 모델에서 사용할 수 있어요.</p>
+          <p>
+            Codex 실행에는 읽기 도구만 전달돼요. 변경 도구는 앱의 승인 카드를
+            거치는 로컬 모델 실행에서 쓸 수 있어요.
+          </p>
         )}
         {data.mcpServers.map((server) => (
           <details key={server.id}>
@@ -155,22 +200,23 @@ export function CrewSettings({
                   grant.toolName === tool.name &&
                   grant.fingerprint === tool.fingerprint,
               );
-              const supported = member.provider === "local";
+              const supported = !tool.readOnly ? member.provider === "local" : true;
               return (
                 <details key={tool.name}>
                   <summary>
-                    {tool.name} · {tool.readOnly ? "읽기" : "변경 가능 도구"}
+                    {tool.name} · {tool.readOnly ? "읽기" : "변경 · 승인 필요"}
                   </summary>
                   {tool.description && <p>{tool.description}</p>}
                   <pre>{JSON.stringify(tool.inputSchema, null, 2)}</pre>
-                  {tool.readOnly && (supported || allow) && (
+                  {(tool.readOnly || supported) && (
                     <label>
                       <input
                         type="checkbox"
                         checked={allow}
                         disabled={
                           busy ||
-                          (!allow && (!supported || !server.enabled || !member.hired))
+                          (!allow &&
+                            (!supported || !server.enabled || !member.hired))
                         }
                         onChange={(event) =>
                           void save({
@@ -183,8 +229,11 @@ export function CrewSettings({
                           })
                         }
                       />
-                      읽기 허용
+                      {tool.readOnly ? "읽기 허용" : "변경 허용"}
                     </label>
+                  )}
+                  {!tool.readOnly && !supported && (
+                    <p>Codex 실행에서는 이 변경 도구를 쓸 수 없어요.</p>
                   )}
                 </details>
               );

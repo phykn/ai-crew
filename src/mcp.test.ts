@@ -78,13 +78,28 @@ test("MCP calls enforce the current grant and tool definition after joining the 
     const signal = new AbortController().signal;
     await broker.connect(projectId, serverId, "fixture", url);
     expect(store.snapshot().mcpServers[0].tools).toHaveLength(2);
-    expect(() =>
-      store.setMcpGrant(projectId, serverId, member.id, "write_fixture", true),
-    ).toThrow();
+    store.setMcpGrant(projectId, serverId, member.id, "write_fixture", true);
+    const writeAccess = broker.modelTools(job, member, signal)!;
+    expect(writeAccess.catalog.map(({ name }) => name)).toEqual([
+      "write_fixture",
+    ]);
+    const writeKey = writeAccess.catalog.find(
+      ({ name }) => name === "write_fixture",
+    )!.key;
+    expect(await writeAccess.call(writeKey, { path: "notice.txt" })).toEqual({
+      error: "승인 절차 없음",
+    });
+    expect(calls).toBe(0);
+    expect(
+      store.snapshot().activity.map(({ text }) => text),
+    ).toEqual(expect.arrayContaining([expect.stringContaining("승인 절차 없음")]));
 
     store.setMcpGrant(projectId, serverId, member.id, "read_fixture", true);
     const access = broker.modelTools(job, member, signal)!;
-    expect(access.catalog.map(({ name }) => name)).toEqual(["read_fixture"]);
+    expect(access.catalog.map(({ name }) => name)).toEqual([
+      "read_fixture",
+      "write_fixture",
+    ]);
     expect(await access.call(access.catalog[0].key, {})).toMatchObject({
       isError: false,
       data: expect.stringContaining("fixture value"),

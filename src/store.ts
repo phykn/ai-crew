@@ -27,9 +27,11 @@ import {
   type RoleId,
   type Session,
   type Snapshot,
+  type ToolApproval,
   type WikiPage,
   type WikiRevision,
 } from "./actions";
+import { skillStates } from "./skill-status";
 
 export class CrewStore {
   private db: DatabaseSync;
@@ -40,7 +42,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 26)
+    if (migration.user_version > 27)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -391,11 +393,39 @@ export class CrewStore {
         COMMIT;
       `);
     }
+    if (migration.user_version < 27) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE tool_approvals (
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES jobs(id),
+          project_id TEXT NOT NULL REFERENCES projects(id),
+          server_id TEXT NOT NULL, server_name TEXT NOT NULL,
+          member_id TEXT NOT NULL, member_name TEXT NOT NULL,
+          tool_name TEXT NOT NULL, scope TEXT NOT NULL, mode TEXT NOT NULL,
+          actor TEXT, decision TEXT, requested_at TEXT NOT NULL
+        );
+        CREATE INDEX tool_approvals_by_job ON tool_approvals(job_id, decision);
+        CREATE TABLE skill_uses (
+          id TEXT PRIMARY KEY, skill_id TEXT NOT NULL, member_id TEXT NOT NULL,
+          job_id TEXT NOT NULL REFERENCES jobs(id), started_at TEXT NOT NULL,
+          ended_at TEXT
+        );
+        CREATE INDEX skill_uses_by_job ON skill_uses(job_id, ended_at);
+        PRAGMA user_version = 27;
+        COMMIT;
+      `);
+    }
     this.db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",
     );
     this.db.exec(
       "UPDATE messages SET state = 'stopped' WHERE state IN ('running', 'stopping');",
+    );
+    this.db.exec(
+      "UPDATE tool_approvals SET decision = 'deny', actor = COALESCE(actor, '앱 종료') WHERE decision IS NULL;",
+    );
+    this.db.exec(
+      "UPDATE skill_uses SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ') WHERE ended_at IS NULL;",
     );
   }
 
@@ -674,8 +704,8 @@ export class CrewStore {
     if (!server || !member)
       throw new Error("이 프로젝트의 서버와 담당자를 선택해 주세요.");
     const tool = server.tools.find(({ name }) => name === toolName);
-    if (allow && (!server.enabled || !tool?.readOnly || !member.hired || member.provider !== "local"))
-      throw new Error("로컬 모델을 쓰는 고용된 담당자에게 연결된 읽기 도구를 허용할 수 있어요.");
+    if (allow && (!server.enabled || !tool || !member.hired))
+      throw new Error("연결된 서버의 도구를 고용된 담당자에게 허용할 수 있어요.");
     this.transaction(() => {
       const result = allow
         ? this.db
@@ -702,6 +732,168 @@ export class CrewStore {
             (allow ? "허용" : "회수"),
         );
     });
+  }
+
+  requestToolApproval(
+    job: Job,
+    member: CrewMember,
+    server: McpEndpoint,
+    toolName: string,
+    scope: string,
+    mode: ApprovalMode,
+  ) {
+    const approval: ToolApproval = {
+      id: randomUUID(),
+      jobId: job.id,
+      projectId: job.projectId,
+      serverId: server.id,
+      serverName: server.name,
+      memberId: member.id,
+      memberName: member.name,
+      toolName,
+      scope,
+      mode,
+      actor: null,
+      decision: null,
+      requestedAt: new Date().toISOString(),
+    };
+    this.transaction(() => {
+      this.db
+        .prepare(
+          "INSERT INTO tool_approvals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)",
+        )
+        .run(
+          approval.id,
+          approval.jobId,
+          approval.projectId,
+          approval.serverId,
+          approval.serverName,
+          approval.memberId,
+          approval.memberName,
+          approval.toolName,
+          approval.scope,
+          approval.mode,
+          approval.requestedAt,
+        );
+      this.log(
+        job.sessionId,
+        member.name +
+          " → 사용자 · MCP 변경 도구 승인 요청 · " +
+          server.name +
+          "/" +
+          toolName +
+          " · " +
+          scope,
+        job.id,
+      );
+    });
+    return approval;
+  }
+
+  answerToolApproval(
+    jobId: string,
+    requestId: string,
+    actor: string,
+    decision: "allow" | "deny",
+  ) {
+    const row = this.db
+      .prepare(
+        "SELECT job_id AS jobId FROM tool_approvals WHERE id = ? AND decision IS NULL",
+      )
+      .get(requestId) as { jobId: string } | undefined;
+    if (!row || row.jobId !== jobId) return undefined;
+    this.transaction(() => {
+      this.db
+        .prepare(
+          "UPDATE tool_approvals SET actor = ?, decision = ? WHERE id = ? AND decision IS NULL",
+        )
+        .run(actor, decision, requestId);
+      const approval = this.readToolApproval(requestId)!;
+      const job = this.getJob(jobId);
+      this.log(
+        job.sessionId,
+        actor +
+          " · MCP 변경 도구 " +
+          (decision === "allow" ? "허용" : "거절") +
+          " · " +
+          approval.serverName +
+          "/" +
+          approval.toolName,
+        jobId,
+      );
+    });
+    return this.readToolApproval(requestId);
+  }
+
+  readToolApproval(id: string) {
+    return this.db
+      .prepare(
+        `SELECT id, job_id AS jobId, project_id AS projectId, server_id AS serverId,
+         server_name AS serverName, member_id AS memberId, member_name AS memberName,
+         tool_name AS toolName, scope, mode, actor, decision, requested_at AS requestedAt
+         FROM tool_approvals WHERE id = ?`,
+      )
+      .get(id) as ToolApproval | undefined;
+  }
+
+  pendingToolApprovals(projectId: string) {
+    return this.db
+      .prepare(
+        `SELECT id, job_id AS jobId, project_id AS projectId, server_id AS serverId,
+         server_name AS serverName, member_id AS memberId, member_name AS memberName,
+         tool_name AS toolName, scope, mode, actor, decision, requested_at AS requestedAt
+         FROM tool_approvals WHERE project_id = ? AND decision IS NULL`,
+      )
+      .all(projectId) as ToolApproval[];
+  }
+
+  readToolApprovals(sessionId: string) {
+    return this.db
+      .prepare(
+        `SELECT a.id, a.job_id AS jobId, a.project_id AS projectId, a.server_id AS serverId,
+         a.server_name AS serverName, a.member_id AS memberId, a.member_name AS memberName,
+         a.tool_name AS toolName, a.scope, a.mode, a.actor, a.decision, a.requested_at AS requestedAt
+         FROM tool_approvals a JOIN jobs j ON j.id = a.job_id
+         WHERE j.session_id = ? ORDER BY a.rowid DESC LIMIT 40`,
+      )
+      .all(sessionId) as ToolApproval[];
+  }
+
+  startSkillUse(job: Job, memberId: string, skillIds: string[]) {
+    if (!skillIds.length) return;
+    const startedAt = new Date().toISOString();
+    this.transaction(() => {
+      const insert = this.db.prepare(
+        "INSERT INTO skill_uses VALUES (?, ?, ?, ?, ?, NULL)",
+      );
+      for (const skillId of skillIds)
+        insert.run(randomUUID(), skillId, memberId, job.id, startedAt);
+    });
+  }
+
+  endSkillUse(jobId: string, memberId: string) {
+    this.db
+      .prepare(
+        "UPDATE skill_uses SET ended_at = ? WHERE job_id = ? AND member_id = ? AND ended_at IS NULL",
+      )
+      .run(new Date().toISOString(), jobId, memberId);
+  }
+
+  activeSkillUses(projectId: string) {
+    return this.db
+      .prepare(
+        `SELECT u.skill_id AS skillId, u.member_id AS memberId, u.job_id AS jobId,
+         u.started_at AS startedAt
+         FROM skill_uses u JOIN jobs j ON j.id = u.job_id
+         WHERE j.project_id = ? AND u.ended_at IS NULL
+           AND j.state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping')`,
+      )
+      .all(projectId) as {
+      skillId: string;
+      memberId: string;
+      jobId: string;
+      startedAt: string;
+    }[];
   }
 
   private logMcpSetting(projectId: string, note: string) {
@@ -2056,6 +2248,17 @@ export class CrewStore {
       mcpServers: current ? this.listMcpEndpoints(current.id) : [],
       mcpGrants: current ? this.listMcpGrants(current.id) : [],
       skills: current ? this.listSkills(current.id) : [],
+      toolApprovals: session ? this.readToolApprovals(session.id) : [],
+      skillStates: current
+        ? skillStates({
+            members: this.readMembers(current.id),
+            skills: this.listSkills(current.id),
+            servers: this.listMcpEndpoints(current.id),
+            grants: this.listMcpGrants(current.id),
+            uses: this.activeSkillUses(current.id),
+            approvals: this.pendingToolApprovals(current.id),
+          })
+        : [],
       memories: current ? this.listMemories(current.id) : [],
       wiki: current ? this.listWiki(current.id) : [],
       assignees: session

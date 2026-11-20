@@ -258,6 +258,9 @@ async function startApp() {
           action.allow,
         );
         break;
+      case "mcp.answer":
+        workflow.answerTool(action.jobId, action.requestId, action.allow);
+        break;
       case "crew.skill.add":
         store.addSkill(action.projectId, {
           id: action.skillId,

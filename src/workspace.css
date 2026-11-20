@@ -110,9 +110,47 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-3);
   padding: 7px 0;
   font-size: var(--font-detail);
+}
+.crew-skills {
+  display: inline-flex;
+  gap: 3px;
+}
+.skill-chip {
+  min-width: 20px;
+  padding: 1px 3px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  color: var(--dim);
+  font-size: 11px;
+  line-height: 1.3;
+}
+.skill-chip[data-state="in-use"] {
+  color: var(--warm);
+  background: var(--selected);
+}
+.skill-chip[data-state="awaiting"] {
+  color: #f0d089;
+  border-color: #f0d08980;
+}
+.skill-chip[data-state="unavailable"] {
+  color: #8b8577;
+  border-style: dashed;
+}
+.skill-preview {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--dim);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.skill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 .crew-row + .crew-row {
   border-top: 1px solid var(--line);

@@ -4,14 +4,17 @@ import { CrewSettings } from "./crew-settings";
 import { MemoryPanel } from "./memory-panel";
 import { WikiPanel } from "./wiki-panel";
 import { findChatCommand, suggestChatCommands } from "./chat-commands";
+import { skillStateLabels, skillStateOrder } from "./skill-status";
 import {
   approvalLabels,
   planFiles,
   roles,
   type Action,
   type ApprovalMode,
+  type CrewMember,
   type Job,
   type ModelRun,
+  type SkillState,
   type Snapshot,
   type WorkCheck,
 } from "./actions";
@@ -86,6 +89,109 @@ function CheckList({ checks }: { checks: WorkCheck[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function SkillChips({
+  member,
+  data,
+  open,
+  preview,
+}: {
+  member: CrewMember;
+  data: Snapshot;
+  open: (skillId: string | null) => void;
+  preview: (text: string | null) => void;
+}) {
+  const owned = data.skills.filter(({ memberId }) => memberId === member.id);
+  if (!owned.length) return null;
+  const status = (skillId: string) =>
+    data.skillStates.find((item) => item.skillId === skillId);
+  const ordered = [...owned].sort(
+    (left, right) =>
+      skillStateOrder(status(left.id)?.state ?? "ready") -
+      skillStateOrder(status(right.id)?.state ?? "ready"),
+  );
+  const glyphs: Record<SkillState, string> = {
+    ready: "◇",
+    "in-use": "◆",
+    awaiting: "◔",
+    unavailable: "⊘",
+  };
+  const shown = ordered.slice(0, 3);
+  const read = (skillId: string) => {
+    const skill = owned.find(({ id }) => id === skillId)!;
+    const state = status(skillId);
+    const purpose =
+      skill.markdown
+        .split("\n")
+        .map((line) => line.replace(/^#+\s*/, "").trim())
+        .find(Boolean)
+        ?.slice(0, 60) ?? "";
+    return {
+      skill,
+      state,
+      text:
+        skill.name +
+        " · " +
+        skillStateLabels[state?.state ?? "ready"] +
+        (state?.reason ? " · " + state.reason : "") +
+        (purpose ? " · " + purpose : ""),
+    };
+  };
+  return (
+    <span className="crew-skills" aria-label={member.name + " 스킬"}>
+      {shown.map(({ id }) => {
+        const { state, text } = read(id);
+        return (
+          <button
+            key={id}
+            type="button"
+            className="skill-chip"
+            data-state={state?.state ?? "ready"}
+            title={text}
+            aria-label={text}
+            onFocus={() => preview(text)}
+            onMouseEnter={() => preview(text)}
+            onBlur={() => preview(null)}
+            onMouseLeave={() => preview(null)}
+            onClick={() => open(id)}
+          >
+            <span aria-hidden="true">{glyphs[state?.state ?? "ready"]}</span>
+          </button>
+        );
+      })}
+      {owned.length > shown.length && (
+        <button
+          type="button"
+          className="skill-chip more"
+          aria-label={
+            member.name + " 스킬 " + (owned.length - shown.length) + "개 더 보기"
+          }
+          onFocus={() =>
+            preview(
+              ordered
+                .slice(shown.length)
+                .map(({ id }) => read(id).skill.name)
+                .join(", "),
+            )
+          }
+          onMouseEnter={() =>
+            preview(
+              ordered
+                .slice(shown.length)
+                .map(({ id }) => read(id).skill.name)
+                .join(", "),
+            )
+          }
+          onBlur={() => preview(null)}
+          onMouseLeave={() => preview(null)}
+          onClick={() => open(null)}
+        >
+          +{owned.length - shown.length}
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -166,6 +272,12 @@ function Workspace() {
   const [addingMember, setAddingMember] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [settingsMember, setSettingsMember] = useState<string | null>(null);
+  const [focusSkill, setFocusSkill] = useState<string | null>(null);
+  const [skillPreview, setSkillPreview] = useState<{
+    memberId: string;
+    text: string;
+  } | null>(null);
+  const [toolFocus, setToolFocus] = useState<string | null>(null);
   const dataRef = useRef<Snapshot | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const messages = useRef<HTMLDivElement>(null);
@@ -309,6 +421,10 @@ function Workspace() {
   const approvalEvent = data?.fileApprovals.find(
     (item) => item.id === approval?.approvalId,
   );
+  const pendingTools =
+    data?.toolApprovals.filter(({ decision }) => decision === null) ?? [];
+  const toolApproval =
+    pendingTools.find(({ id }) => id === toolFocus) ?? pendingTools[0];
   const revisionJob = data?.jobs.find((job) => job.id === revision?.id);
   const firstQuestion = data?.jobs.find((job) => job.clarification);
   const followup = data?.followups[0];
@@ -494,12 +610,27 @@ function Workspace() {
                               : "쓰기 허용"}
                           </button>
                         )}
+                        <SkillChips
+                          member={member}
+                          data={data}
+                          open={(skillId) => {
+                            setError("");
+                            setFocusSkill(skillId);
+                            setSettingsMember(member.id);
+                          }}
+                          preview={(text) =>
+                            setSkillPreview(
+                              text ? { memberId: member.id, text } : null,
+                            )
+                          }
+                        />
                         <button
                           className="crew-configure"
                           type="button"
                           aria-label={member.name + " 스킬 및 MCP 설정"}
                           onClick={() => {
                             setError("");
+                            setFocusSkill(null);
                             setSettingsMember(
                               settingsMember === member.id ? null : member.id,
                             );
@@ -507,16 +638,37 @@ function Workspace() {
                         >
                           설정
                         </button>
+                        {skillPreview?.memberId === member.id && (
+                          <p className="skill-preview">{skillPreview.text}</p>
+                        )}
                       </div>
                     );
                   })}
                 {configuredMember && (
                   <CrewSettings
-                    key={configuredMember.id}
+                    key={
+                      configuredMember.id + (focusSkill ? ":" + focusSkill : "")
+                    }
                     member={configuredMember}
                     data={data}
                     run={run}
-                    close={() => setSettingsMember(null)}
+                    close={() => {
+                      setSettingsMember(null);
+                      setFocusSkill(null);
+                    }}
+                    focusSkill={focusSkill}
+                    openJob={(jobId) => {
+                      setSettingsMember(null);
+                      setFocusSkill(null);
+                      setLogJob(jobId);
+                      setView("log");
+                    }}
+                    focusApproval={(approvalId) => {
+                      setSettingsMember(null);
+                      setFocusSkill(null);
+                      setToolFocus(approvalId);
+                      setView("chat");
+                    }}
                     openMemory={() => {
                       setMemoryOwner(configuredMember.id);
                       setMemorySection("memory");
@@ -790,6 +942,20 @@ function Workspace() {
                       : "결정 기록 없음"}
                   </p>
                 ))}
+            {data?.toolApprovals
+              .filter(({ jobId }) => !logJob || jobId === logJob)
+              .map((item) => (
+                <p key={item.id}>
+                  MCP {item.serverName}/{item.toolName} · {item.memberName} ·{" "}
+                  {item.decision
+                    ? (item.decision === "allow" ? "허용" : "거절") +
+                      " · " +
+                      item.actor
+                    : "승인 대기 · " + approvalLabels[item.mode]}
+                  {" · "}
+                  <code>{item.scope}</code>
+                </p>
+              ))}
             {changes.map((change) => (
               <details className="change-log" key={change.id}>
                 <summary>
@@ -869,6 +1035,24 @@ function Workspace() {
                         onClick={() => setFocusedApprovalId(job.id)}
                       >
                         권한 요청
+                      </button>
+                    )}
+                    {pendingTools.some(
+                      ({ jobId, id }) =>
+                        jobId === job.id && id !== toolApproval?.id,
+                    ) && (
+                      <button
+                        className="job-action"
+                        type="button"
+                        onClick={() => {
+                          const next = pendingTools.find(
+                            ({ jobId }) => jobId === job.id,
+                          );
+                          if (next) setToolFocus(next.id);
+                          setView("chat");
+                        }}
+                      >
+                        도구 승인
                       </button>
                     )}
                     {job.clarification && (
@@ -1067,6 +1251,66 @@ function Workspace() {
                   >
                     답변
                   </button>
+                </section>
+              )}
+              {toolApproval && data && (
+                <section className="decision" aria-label="MCP 변경 도구 승인">
+                  <div className="decision-scope">
+                    <button
+                      className="decision-job"
+                      type="button"
+                      aria-label="승인 업무 로그 열기"
+                      onClick={() => {
+                        setLogJob(toolApproval.jobId);
+                        setView("log");
+                      }}
+                    >
+                      {data.jobs.find(({ id }) => id === toolApproval.jobId)
+                        ?.plan?.goal ??
+                        data.jobs.find(({ id }) => id === toolApproval.jobId)
+                          ?.request ??
+                        "업무"}
+                    </button>
+                    <p>
+                      <strong>
+                        {toolApproval.serverName}/{toolApproval.toolName}
+                      </strong>{" "}
+                      변경 도구를 실행할까요?
+                    </p>
+                    <small>
+                      {toolApproval.memberName} 요청 · {toolApproval.scope} ·
+                      요청 시 승인 {approvalLabels[toolApproval.mode]}
+                    </small>
+                  </div>
+                  <div className="decision-actions">
+                    <button
+                      className="approved"
+                      type="button"
+                      onClick={() =>
+                        void run({
+                          type: "mcp.answer",
+                          jobId: toolApproval.jobId,
+                          requestId: toolApproval.id,
+                          allow: true,
+                        })
+                      }
+                    >
+                      허용
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void run({
+                          type: "mcp.answer",
+                          jobId: toolApproval.jobId,
+                          requestId: toolApproval.id,
+                          allow: false,
+                        })
+                      }
+                    >
+                      거절
+                    </button>
+                  </div>
                 </section>
               )}
               {approval?.plan && approval.approvalId && (

@@ -61,7 +61,11 @@ function allowedMcpTools(
     external?.catalog.map((entry, index) => [
       `mcp_${index + 1}_${entry.name.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 48)}`,
       tool({
-        description: `Read from ${entry.server}. ${entry.description ?? entry.name}`,
+        description:
+          (entry.readOnly ? "Read from " : "Change data through ") +
+          entry.server +
+          ". " +
+          (entry.description || entry.name),
         inputSchema: jsonSchema<Record<string, unknown>>(entry.inputSchema),
         execute: (args) => external.call(entry.key, args),
       }),

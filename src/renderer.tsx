@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { CrewSettings } from "./crew-settings";
 import { MemoryPanel } from "./memory-panel";
+import { WikiPanel } from "./wiki-panel";
 import { findChatCommand, suggestChatCommands } from "./chat-commands";
 import {
   approvalLabels,
@@ -159,6 +160,7 @@ function Workspace() {
   );
   const [view, setView] = useState<"chat" | "log" | "memory">("chat");
   const [memoryOwner, setMemoryOwner] = useState<string | null | undefined>(undefined);
+  const [memorySection, setMemorySection] = useState<"wiki" | "memory">("memory");
   const [menu, setMenu] = useState<"projects" | "sessions" | null>(null);
   const [showCamp, setShowCamp] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
@@ -239,6 +241,17 @@ function Workspace() {
       setView("chat");
       setShowCamp(false);
       requestAnimationFrame(() => composer.current?.focus());
+    }
+  }
+
+  async function openMemorySource({ sourceSessionId, sourceJobId }: {
+    sourceSessionId: string;
+    sourceJobId: string | null;
+  }) {
+    await navigate({ type: "session.open", sessionId: sourceSessionId });
+    if (sourceJobId && dataRef.current?.session?.id === sourceSessionId) {
+      setLogJob(sourceJobId);
+      setView("log");
     }
   }
 
@@ -506,6 +519,7 @@ function Workspace() {
                     close={() => setSettingsMember(null)}
                     openMemory={() => {
                       setMemoryOwner(configuredMember.id);
+                      setMemorySection("memory");
                       setSettingsMember(null);
                       setView("memory");
                       setShowCamp(false);
@@ -726,23 +740,25 @@ function Workspace() {
           )}
         </header>
         {view === "memory" ? (
-          <MemoryPanel
-            data={data}
-            owner={memoryOwner}
-            select={setMemoryOwner}
-            remove={(memoryId) => data?.current
-              ? run({ type: "memory.remove", projectId: data.current.id, memoryId })
-              : Promise.resolve(false)}
-            source={(memory) => {
-              void navigate({ type: "session.open", sessionId: memory.sourceSessionId })
-                .then(() => {
-                  if (memory.sourceJobId && dataRef.current?.session?.id === memory.sourceSessionId) {
-                    setLogJob(memory.sourceJobId);
-                    setView("log");
-                  }
-                });
-            }}
-          />
+          <section className="knowledge-view" aria-label="메모리 작업 공간">
+            <div className="wiki-controls knowledge-nav">
+              <button type="button" aria-pressed={memorySection === "memory"} onClick={() => setMemorySection("memory")}>기억</button>
+              <button type="button" aria-pressed={memorySection === "wiki"} onClick={() => setMemorySection("wiki")}>프로젝트 위키</button>
+            </div>
+            {memorySection === "wiki" && data ? (
+              <WikiPanel key={data.current?.id} data={data} run={run} source={(revision) => void openMemorySource(revision)} error={error} />
+            ) : (
+              <MemoryPanel
+                data={data}
+                owner={memoryOwner}
+                select={setMemoryOwner}
+                remove={(memoryId) => data?.current
+                  ? run({ type: "memory.remove", projectId: data.current.id, memoryId })
+                  : Promise.resolve(false)}
+                source={(memory) => void openMemorySource(memory)}
+              />
+            )}
+          </section>
         ) : view === "log" ? (
           <div className="logs" aria-label="로그">
             {logJob && (

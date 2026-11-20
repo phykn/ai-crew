@@ -19,6 +19,7 @@ import { decideLocal } from "./local";
 import { CrewMcp } from "./mcp";
 import { classifyModelFailure, ModelLimitError } from "./model-errors";
 import type { CrewStore } from "./store";
+import { mentionsWiki, wikiTools } from "./wiki-tools";
 import {
   inspectFile,
   inspectDirectoryScope,
@@ -717,10 +718,12 @@ export class CrewWorkflow {
         ]),
       )
       .digest("hex");
+    const wiki = this.store.wikiOutline(job.projectId);
     system += "\n\n" + crewInstructions(
       member,
       skills,
       this.store.listMemories(job.projectId, member.id),
+      wiki,
     );
     let threadId =
       member.provider === "codex" ? (previous?.threadId ?? null) : null;
@@ -745,6 +748,15 @@ export class CrewWorkflow {
               signal,
               this.mcp.modelTools(job, member, signal),
               details,
+              wiki.length || mentionsWiki(job.request)
+                ? wikiTools(
+                    this.store,
+                    { projectId: job.projectId, sessionId: job.sessionId, jobId: job.id, canRead: wiki.length > 0 },
+                    member,
+                    signal,
+                    this.notify,
+                  )
+                : undefined,
             );
           } else {
             let raw = "";

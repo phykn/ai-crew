@@ -27,6 +27,8 @@ import {
   type RoleId,
   type Session,
   type Snapshot,
+  type WikiPage,
+  type WikiRevision,
 } from "./actions";
 
 export class CrewStore {
@@ -38,7 +40,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 25)
+    if (migration.user_version > 26)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -367,6 +369,25 @@ export class CrewStore {
         );
         CREATE INDEX crew_memories_by_project ON crew_memories(project_id, owner_id);
         PRAGMA user_version = 25;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 26) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE wiki_pages (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+          title TEXT NOT NULL, body TEXT NOT NULL, version INTEGER NOT NULL,
+          links TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX wiki_pages_by_project ON wiki_pages(project_id, deleted);
+        CREATE TABLE wiki_revisions (
+          page_id TEXT NOT NULL REFERENCES wiki_pages(id), version INTEGER NOT NULL,
+          title TEXT NOT NULL, body TEXT NOT NULL, author_name TEXT NOT NULL,
+          created_at TEXT NOT NULL, source_session_id TEXT NOT NULL, source_job_id TEXT,
+          PRIMARY KEY(page_id, version)
+        );
+        PRAGMA user_version = 26;
         COMMIT;
       `);
     }
@@ -1865,6 +1886,89 @@ export class CrewStore {
     this.db.prepare("DELETE FROM crew_memories WHERE project_id = ? AND id = ?").run(projectId, id);
   }
 
+  listWiki(projectId: string) {
+    const pages = this.db.prepare(`
+      SELECT id, title, body, version, links FROM wiki_pages
+      WHERE project_id = ? AND deleted = 0 ORDER BY title, id
+    `).all(projectId) as (Omit<WikiPage, "links" | "revisions"> & { links: string })[];
+    const ids = new Set(pages.map(({ id }) => id));
+    const readRevisions = this.db.prepare(`
+      SELECT version, title, body, author_name AS authorName, created_at AS createdAt,
+             source_session_id AS sourceSessionId, source_job_id AS sourceJobId
+      FROM wiki_revisions WHERE page_id = ? ORDER BY version DESC
+    `);
+    return pages.map(({ links, ...page }): WikiPage => ({
+      ...page,
+      links: (JSON.parse(links) as string[]).filter((id) => ids.has(id)),
+      revisions: readRevisions.all(page.id) as WikiRevision[],
+    }));
+  }
+
+  wikiOutline(projectId: string) {
+    return this.db.prepare(`
+      SELECT id, title, version, substr(body, 1, 220) AS excerpt FROM wiki_pages
+      WHERE project_id = ? AND deleted = 0 ORDER BY rowid DESC LIMIT 60
+    `).all(projectId) as { id: string; title: string; version: number; excerpt: string }[];
+  }
+
+  readWiki(projectId: string, id: string) {
+    const page = this.db.prepare(`
+      SELECT id, title, body, version, links FROM wiki_pages WHERE project_id = ? AND id = ? AND deleted = 0
+    `).get(projectId, id) as (Omit<WikiPage, "links" | "revisions"> & { links: string }) | undefined;
+    if (!page) return undefined;
+    const active = this.db.prepare("SELECT 1 FROM wiki_pages WHERE project_id = ? AND id = ? AND deleted = 0");
+    return {
+      ...page,
+      links: (JSON.parse(page.links) as string[]).filter((target) => active.get(projectId, target)),
+    };
+  }
+
+  saveWiki(
+    sessionId: string,
+    page: Pick<WikiPage, "id" | "version" | "title" | "body" | "links">,
+    author?: { name: string; jobId?: string },
+  ) {
+    const { projectId } = this.getSession(sessionId);
+    if (author?.jobId && this.getJob(author.jobId).sessionId !== sessionId)
+      throw new Error("이 세션의 업무를 선택해 주세요.");
+    this.transaction(() => {
+      const current = this.db.prepare(`
+        SELECT version, deleted FROM wiki_pages WHERE id = ? AND project_id = ?
+      `).get(page.id, projectId);
+      if (current?.deleted || page.version !== (current?.version ?? 0))
+        throw new Error("위키 문서가 바뀌었어요. 최신 내용을 확인해 주세요.");
+      const hasPage = this.db.prepare(`
+        SELECT 1 FROM wiki_pages WHERE id = ? AND project_id = ? AND deleted = 0
+      `);
+      const links = [...new Set(page.links)];
+      if (links.some((id) => id === page.id || !hasPage.get(id, projectId)))
+        throw new Error("현재 프로젝트의 다른 위키 문서만 연결할 수 있어요.");
+      const version = page.version + 1;
+      if (current) {
+        this.db.prepare(`
+          UPDATE wiki_pages SET title = ?, body = ?, version = ?, links = ? WHERE id = ? AND project_id = ?
+        `).run(page.title, page.body, version, JSON.stringify(links), page.id, projectId);
+      } else {
+        this.db.prepare(`
+          INSERT INTO wiki_pages (id, project_id, title, body, version, links) VALUES (?, ?, ?, ?, ?, ?)
+        `).run(page.id, projectId, page.title, page.body, version, JSON.stringify(links));
+      }
+      this.db.prepare("INSERT INTO wiki_revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+        page.id, version, page.title, page.body, author?.name ?? "사용자",
+        new Date().toISOString(), sessionId, author?.jobId ?? null,
+      );
+      this.log(sessionId, (author?.name ?? "사용자") + " · 위키 " + (current ? "수정" : "생성") + " · " + page.title, author?.jobId);
+    });
+  }
+
+  removeWiki(projectId: string, id: string, version: number) {
+    const removed = this.db.prepare(`
+      UPDATE wiki_pages SET deleted = 1 WHERE project_id = ? AND id = ? AND version = ? AND deleted = 0
+    `).run(projectId, id, version);
+    if (!removed.changes)
+      throw new Error("위키 문서가 바뀌었어요. 최신 내용을 확인해 주세요.");
+  }
+
   recordModelRun(
     sessionId: string,
     jobId: string | null,
@@ -1953,6 +2057,7 @@ export class CrewStore {
       mcpGrants: current ? this.listMcpGrants(current.id) : [],
       skills: current ? this.listSkills(current.id) : [],
       memories: current ? this.listMemories(current.id) : [],
+      wiki: current ? this.listWiki(current.id) : [],
       assignees: session
         ? (this.db
             .prepare(

@@ -151,6 +151,21 @@ export const actions = z.discriminatedUnion("type", [
     memoryId: identifier,
   }),
   z.strictObject({
+    type: z.literal("wiki.save"),
+    sessionId: identifier,
+    pageId: identifier,
+    version: z.int().nonnegative(),
+    title: z.string().trim().min(1).max(120),
+    body: z.string().trim().min(1).max(24000),
+    links: z.array(identifier).max(64),
+  }),
+  z.strictObject({
+    type: z.literal("wiki.remove"),
+    projectId: identifier,
+    pageId: identifier,
+    version: z.int().positive(),
+  }),
+  z.strictObject({
     type: z.literal("chat.send"),
     sessionId: identifier,
     requestId: identifier,
@@ -341,6 +356,7 @@ export type Snapshot = {
   mcpGrants: McpGrant[];
   skills: CrewSkill[];
   memories: CrewMemory[];
+  wiki: WikiPage[];
   assignees: { jobId: string; memberId: string; roleId: RoleId }[];
   messages: Message[];
   activity: Activity[];
@@ -366,6 +382,23 @@ export type CrewMemory = {
   sourceJobId: string | null;
   body: string;
   createdAt: string;
+};
+export type WikiPage = {
+  id: string;
+  title: string;
+  body: string;
+  version: number;
+  links: string[];
+  revisions: WikiRevision[];
+};
+export type WikiRevision = {
+  version: number;
+  title: string;
+  body: string;
+  authorName: string;
+  createdAt: string;
+  sourceSessionId: string;
+  sourceJobId: string | null;
 };
 export type ModelDetails = {
   model?: string;

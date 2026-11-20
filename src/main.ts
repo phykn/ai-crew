@@ -15,6 +15,7 @@ import { CrewMcp } from "./mcp";
 import { crewInstructions } from "./crew-definition";
 import { CrewStore } from "./store";
 import { CrewWorkflow } from "./workflow";
+import { mentionsWiki, wikiTools } from "./wiki-tools";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -78,10 +79,12 @@ async function startApp() {
     let failure: string | null = null;
     const started = performance.now();
     const details: ModelDetails = {};
+    const wiki = store.wikiOutline(project.id);
     const instructions = crewInstructions(
       assistant,
       store.listSkills(project.id),
       store.listMemories(project.id, assistant.id),
+      wiki,
     );
     const emit = (delta: string) => {
       if (closing || controller.signal.aborted) return;
@@ -144,6 +147,15 @@ async function startApp() {
             });
             publish(null);
           },
+          mentionsWiki(text)
+            ? wikiTools(
+                store,
+                { projectId: project.id, sessionId, canRead: wiki.length > 0 },
+                assistant,
+                controller.signal,
+                () => publish(null),
+              )
+            : undefined,
         );
       }
     } catch (error) {
@@ -262,6 +274,15 @@ async function startApp() {
         break;
       case "memory.remove":
         store.removeMemory(action.projectId, action.memoryId);
+        break;
+      case "wiki.save":
+        store.saveWiki(action.sessionId, {
+          id: action.pageId, version: action.version, title: action.title,
+          body: action.body, links: action.links,
+        });
+        break;
+      case "wiki.remove":
+        store.removeWiki(action.projectId, action.pageId, action.version);
         break;
       case "chat.send": {
         const command = findChatCommand(action.text);

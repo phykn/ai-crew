@@ -452,6 +452,66 @@ summary:focus-visible {
   display: inline-flex;
   gap: var(--space-1);
 }
+.knowledge-view {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.wiki-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+.wiki-controls button,
+.wiki-list button {
+  padding: 4px 8px;
+}
+.wiki-controls button[aria-pressed="true"],
+.wiki-list button[aria-current="true"] {
+  background: var(--card);
+}
+.knowledge-nav {
+  padding: var(--space-2) var(--pane-inset);
+  border-bottom: 1px solid var(--line);
+}
+.wiki-list {
+  padding: 0;
+  list-style: none;
+}
+.wiki-graph {
+  height: min(32vh, 310px);
+  min-height: 166px;
+  margin-block: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+.wiki-graph .react-flow__node button {
+  width: 100%;
+  height: 100%;
+  overflow-wrap: anywhere;
+}
+.wiki-graph .react-flow {
+  color-scheme: dark;
+}
+.wiki-editor,
+.wiki-editor label:not(.wiki-link) {
+  display: grid;
+  gap: var(--space-1);
+}
+.wiki-editor,
+.wiki-page {
+  margin-top: var(--space-3);
+}
+.wiki-editor textarea {
+  resize: vertical;
+}
+.wiki-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
 .command-list {
   margin-bottom: var(--space-1);
   padding-bottom: var(--space-1);

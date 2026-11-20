@@ -426,6 +426,29 @@ try {
   await savedMemory.getByRole("button", { name: "삭제 확인" }).click();
   await expect(savedMemory).toHaveCount(0);
   await page.getByRole("button", { name: "대화", exact: true }).click();
+  await send("공유 프로젝트 위키에 제목 '테스트 방법', 본문 '검증 코드는 WIKI-CREW-289'로 새 문서를 저장해줘. wiki_save 도구를 실제로 호출해줘.");
+  await expect(page.getByRole("button", { name: "응답 멈춤" })).toHaveCount(0);
+  await page.getByRole("button", { name: "메모리", exact: true }).click();
+  await page.getByRole("button", { name: "프로젝트 위키", exact: true }).click();
+  const wiki = page.getByRole("region", { name: "프로젝트 위키 문서" });
+  await wiki.getByRole("button", { name: "테스트 방법", exact: true }).click();
+  const wikiArticle = wiki.getByRole("article", { name: "테스트 방법" });
+  await expect(wikiArticle).toContainText("WIKI-CREW-289");
+  await wikiArticle.getByRole("button", { name: "편집" }).click();
+  await wiki.getByRole("textbox", { name: "본문" }).fill("검증 코드는 WIKI-CREW-289\n프로젝트 명령 npm test");
+  await wiki.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(wikiArticle.getByText("변경 이력 (2)")).toBeVisible();
+  await wiki.getByRole("button", { name: "문서 추가" }).click();
+  await wiki.getByRole("textbox", { name: "제목" }).fill("프로젝트 개요");
+  await wiki.getByRole("textbox", { name: "본문" }).fill("검증 방법을 참고하세요.");
+  await wiki.getByText("연결할 문서 (0)").click();
+  await wiki.getByRole("checkbox", { name: "테스트 방법" }).check();
+  await wiki.getByRole("button", { name: "저장", exact: true }).click();
+  await wiki.getByRole("button", { name: "노드", exact: true }).click();
+  await expect(wiki.locator(".react-flow__edge")).toHaveCount(1);
+  await wiki.locator(".wiki-graph").getByRole("button", { name: "테스트 방법" }).click();
+  await expect(wikiArticle).toContainText("npm test");
+  await page.getByRole("button", { name: "대화", exact: true }).click();
   if (process.env.AI_CREW_TEST_CODEX === "1") {
     await page.locator(".roster > summary").click();
     await page

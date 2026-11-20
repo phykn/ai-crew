@@ -130,3 +130,39 @@ test("keeps projects, conversation, draft and selected model through restart", (
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("versions project wiki pages, rejects stale edits, and keeps links by ID", () => {
+  const directory = mkdtempSync(join(tmpdir(), "crew-wiki-"));
+  const path = join(directory, "crew.sqlite");
+  let store = new CrewStore(path);
+  try {
+    store.openFolder("/work/wiki-test");
+    const { current, session } = store.snapshot();
+    const methods = { id: randomUUID(), title: "테스트 방법", body: "첫 테스트 규칙", links: [], version: 0 };
+    const overview = { id: randomUUID(), title: "개요", body: "테스트 방법 참조", links: [methods.id], version: 0 };
+    store.saveWiki(session!.id, methods, { name: "테스트 담당" });
+    store.saveWiki(session!.id, overview);
+    store.saveWiki(session!.id, { ...methods, title: "테스트 실행", body: "첫 테스트 규칙\n실행 명령 npm test", version: 1 }, { name: "개발 담당" });
+    expect(() => store.saveWiki(session!.id, { ...methods, body: "오래된 내용", version: 1 })).toThrow("최신 내용");
+    store.close();
+    store = new CrewStore(path);
+    const pages = store.snapshot().wiki;
+    expect(pages.find(({ id }) => id === overview.id)?.links).toEqual([methods.id]);
+    expect(pages.find(({ id }) => id === methods.id)).toMatchObject({
+      title: "테스트 실행", version: 2,
+      revisions: [
+        { body: "첫 테스트 규칙\n실행 명령 npm test", authorName: "개발 담당" },
+        { body: "첫 테스트 규칙", authorName: "테스트 담당" },
+      ],
+    });
+    store.openFolder("/work/unrelated");
+    const other = store.snapshot();
+    expect(other.wiki).toEqual([]);
+    expect(() => store.saveWiki(other.session!.id, { ...overview, id: randomUUID() })).toThrow("현재 프로젝트");
+    store.removeWiki(current!.id, methods.id, 2);
+    expect(store.listWiki(current!.id).map(({ id, links }) => ({ id, links }))).toEqual([{ id: overview.id, links: [] }]);
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

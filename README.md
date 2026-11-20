@@ -4,6 +4,17 @@
 
 ![AI Crew 캠프 콘셉트](docs/concept.png)
 
+## 앱 실행
+
+```sh
+npm install
+npm start
+```
+
+프로젝트 폴더를 열고 비서에게 메시지를 보냅니다. 로컬 LLM은 기본으로 `http://127.0.0.1:8082/v1`에 연결하며 `AI_CREW_LOCAL_URL`과 `AI_CREW_LOCAL_MODEL`로 주소와 모델 ID를 지정할 수 있습니다. 크루에서 역할별로 로컬 LLM 또는 설치된 Codex를 고릅니다. 세션과 초안은 앱 데이터 폴더의 SQLite에 저장됩니다. 단일 텍스트 파일의 변경을 요청하면 플랜을 확인한 뒤 수정을 승인하고, 세 검증 결과를 업무 로그에서 읽을 수 있습니다.
+
+`npm run package`로 데스크톱 앱을 만들고 `npm run check`와 `npm test`로 타입과 저장을 검사합니다. Apple Silicon에서는 로컬 모델을 띄운 뒤 `npm run test:desktop`으로 패키징한 앱의 폴더 선택·세션 복원·도구 호출·파일 승인 흐름을 확인할 수 있습니다.
+
 ## 목업 실행
 
 ```sh
@@ -12,7 +23,7 @@ python3 -m http.server 48723 --bind 127.0.0.1 --directory demo
 
 [브라우저에서 열기](http://127.0.0.1:48723/). 대화에서 예시 요청을 골라 보내면 플랜, 개발, 병렬 리뷰·스타일·테스트를 거쳐 결과를 받습니다. 폴더와 승인 모드는 보내기 줄에서, 세션은 상단 ☰에서 고릅니다. 메모리에서 공유 위키와 담당자 기억을 열고, 워크플로우에서 연결점을 끌어 단계 순서를 편집할 수 있습니다.
 
-목업은 브라우저에서 실행을 모의합니다. 제품은 Electron과 로컬 SQLite로 프로젝트와 세션을 관리하고, 사용자가 고른 Codex와 로컬 LLM으로 실행할 계획입니다. [제품 구상](docs/concept.md) · [화면과 동작 명세](docs/interaction.md) · [구현 계획](docs/groove/PLAN.md) · [선행 조사](docs/research.md)
+목업에서는 완성본의 캠프와 워크플로우 편집을 미리 볼 수 있습니다. [제품 구상](docs/concept.md) · [화면과 동작 명세](docs/interaction.md) · [구현 계획](docs/groove/PLAN.md) · [선행 조사](docs/research.md)
 
 ## 참고
 

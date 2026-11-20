@@ -21,6 +21,20 @@
 
 제품에서 특히 참고할 점은 **대화방에서 실제 진행 상태를 보고, 결과가 돌아오면 보드의 검토 카드로 이어지는 흐름**이다. 사무실 화면의 캐릭터와 배치는 운영 상태를 읽기 쉽게 만드는 표현이다. 같은 화면 구조에서도 업무를 누가 가져가고 누가 완료를 확정하는지에 따라 협업 방식이 달라진다. [한국어 README](https://github.com/EngChooN/ai-office/blob/v1.4.4/README.ko.md), [공식 명세](https://github.com/EngChooN/ai-office/blob/v1.4.4/SPEC.md)
 
+## AgentsRoom
+
+2026년 11월 20일 공식 소개와 기능 문서를 확인했다. 아래 오른쪽 열은 AI Crew에 적용할 설계다. [한국어 소개](https://agentsroom.dev/ko)
+
+| 운영 주제 | 공식 자료에서 확인한 동작 | AI Crew에 적용할 점 |
+|---|---|---|
+| 팀 실행과 계획 검토 | 팀 노드가 구조화된 인계를 넘기고, 수정 루프에서 기존 담당 세션을 이어 쓴다. 계획 내용에 의견을 달고 버전 간 차이를 읽을 수 있다. [Agent Teams](https://agentsroom.dev/features/teams), [Plan Review](https://agentsroom.dev/features/plan-review) | 업무와 단계 ID에 인계·조건 분기·검증을 연결하고 계획 버전별 승인과 수정 의견을 기록한다. |
+| 쓰기 격리와 변경 추적 | 업무별 워크트리, 담당별 변경분, 한 줄 의견을 지원한다. 담당을 판별하기 어려운 경우 미귀속으로 남긴다. [Git Worktrees](https://agentsroom.dev/features/git-worktrees), [Per-Agent Review](https://agentsroom.dev/features/per-agent-review) | 격리는 Git 업무의 선택 사항으로 두고, 반영 결과와 검증 결과를 각각 기록한다. 버전과 근거를 기준으로 누가 무엇을 바꿨는지 추적한다. |
+| 재개와 메시지 대기열 | 저장한 대기 메시지를 재실행 뒤에도 유지하고, 인계 문서로 새 모델 실행을 시작할 수 있다. [Message Queue](https://agentsroom.dev/features/message-queue), [Hand Over and Restart](https://agentsroom.dev/features/hand-over-and-restart) | 전송 대기와 업무 지시 버전을 보관하고, 원래 세션을 이어갈 수 없을 때 업무 체크포인트에서 복구한다. |
+| 운영 상태와 알림 | 작업 완료·사용자 응답 필요 등의 신호를 알리고 에이전트가 만든 프로세스 상태를 보여준다. [알림](https://agentsroom.dev/features/agent-notifications), [전체 기능 문서](https://agentsroom.dev/features#monitoring) | 확정된 업무 사건으로 알림을 만들고, 소유한 실행의 정지 여부를 확인한다. |
+| 도구·산출물 | 자체 MCP, 스킬 배정·호출, 로컬 산출물 열기를 제공한다. [AgentsRoom MCP](https://agentsroom.dev/features/agentsroom-mcp), [Agent Artifacts](https://agentsroom.dev/features/agent-artifacts), [전체 기능 문서](https://agentsroom.dev/features) | 기존 앱 MCP 실행기에 버전·권한·업무 소속을 연결하고, 보고와 로그에서 같은 산출물 기록을 연다. |
+
+실행 동작과 검수 기준은 [업무 실행과 복구](execution.md)에 반영했다.
+
 ## 다른 GitHub 프로젝트와 도구
 
 | 프로젝트 | 업무 조율 방식 | 참고할 부분과 범위 |

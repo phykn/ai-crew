@@ -8,6 +8,7 @@ import {
   type Message,
   type WorkPlan,
 } from "./actions";
+import { sanitizeText } from "./diagnostic-sanitizer";
 import { StoreWorkspace } from "./store-workspace";
 export class StoreJobs extends StoreWorkspace {
   getMessages(sessionId: string) {
@@ -96,7 +97,7 @@ export class StoreJobs extends StoreWorkspace {
       .prepare(
         "UPDATE messages SET state = ?, error = ? WHERE id = ? AND state IN ('running', 'stopping', 'queued')",
       )
-      .run(state, error, id);
+      .run(state, error === null ? null : sanitizeText(error), id);
   }
 
   getCodexThread(sessionId: string) {

@@ -211,6 +211,10 @@ export const actions = z.discriminatedUnion("type", [
     enabled: z.boolean().optional(),
   }),
   z.strictObject({ type: z.literal("model.remove"), id: identifier }),
+  z.strictObject({
+    type: z.literal("diagnostics.run"),
+    projectId: identifier,
+  }),
   z.strictObject({ type: z.literal("app.quit") }),
   z.strictObject({
     type: z.literal("view.set"),

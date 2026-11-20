@@ -12,7 +12,7 @@ export function initStoreSchema(db: DatabaseSync) {
     const migration = db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 34)
+    if (migration.user_version > 35)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       db.exec(`
@@ -475,6 +475,19 @@ export function initStoreSchema(db: DatabaseSync) {
           created_at TEXT NOT NULL
         );
         PRAGMA user_version = 34;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 35) {
+      db.exec(`
+        BEGIN;
+        CREATE TABLE audit_logs (
+          id INTEGER PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+          session_id TEXT, job_id TEXT, event TEXT NOT NULL, outcome TEXT NOT NULL,
+          actor TEXT, subject TEXT, detail TEXT, recorded_at TEXT NOT NULL
+        );
+        CREATE INDEX audit_logs_by_project ON audit_logs(project_id, id);
+        PRAGMA user_version = 35;
         COMMIT;
       `);
     }

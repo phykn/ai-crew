@@ -67,6 +67,9 @@ export function createAppMcpServer(runner: ActionRunner) {
                 status: outcome.status,
                 message:
                   outcome.status === "waiting" ? outcome.message : "적용했어요.",
+                ...(outcome.status === "diagnostics"
+                  ? { report: outcome.report }
+                  : {}),
                 actions: actionCatalog.length,
                 state: appRead(runner.store),
               },

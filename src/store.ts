@@ -3,6 +3,7 @@
 // carries exactly the same public methods as before.
 //
 //   StoreBase      SQLite handle, transaction/log/notify helpers, projects, sessions
+//   StoreAudit     the audit log of approvals and changes to the user's resources
 //   StoreCrew      crew members, skills, MCP, tool approvals, skill usage
 //   StoreMembers   hiring, member settings, write permissions, assignment
 //   StoreWorkflow  saved workflows and versions, model connections

@@ -14,8 +14,8 @@ import {
   type RoleId,
   type ToolApproval,
 } from "./actions";
-import { StoreBase } from "./store-base";
-export class StoreCrew extends StoreBase {
+import { StoreAudit } from "./store-audit";
+export class StoreCrew extends StoreAudit {
   readMembers(projectId: string, roleId?: RoleId): CrewMember[] {
     const defaults = this.db
       .prepare(
@@ -261,6 +261,16 @@ export class StoreCrew extends StoreBase {
           scope,
         job.id,
       );
+      this.recordAudit({
+        projectId: job.projectId,
+        sessionId: job.sessionId,
+        jobId: job.id,
+        event: "tool.approval",
+        outcome: "requested",
+        actor: member.name,
+        subject: server.name + "/" + toolName,
+        detail: scope,
+      });
     });
     return approval;
   }
@@ -296,6 +306,16 @@ export class StoreCrew extends StoreBase {
           approval.toolName,
         jobId,
       );
+      this.recordAudit({
+        projectId: job.projectId,
+        sessionId: job.sessionId,
+        jobId,
+        event: "tool.approval",
+        outcome: decision === "allow" ? "allowed" : "denied",
+        actor,
+        subject: approval.serverName + "/" + approval.toolName,
+        detail: approval.scope,
+      });
     });
     return this.readToolApproval(requestId);
   }

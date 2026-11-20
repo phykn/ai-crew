@@ -130,6 +130,16 @@ export class StoreWorkspace extends StoreWorkflow {
           : "비서 · 원본 반영 대기 · " + note,
         job.id,
       );
+      this.recordAudit({
+        projectId: job.projectId,
+        sessionId: job.sessionId,
+        jobId: job.id,
+        event: "workspace.apply",
+        outcome: state,
+        actor: state === "applied" ? "사용자" : "비서",
+        subject: job.branch ?? job.worktree,
+        detail: note,
+      });
     });
     return this.getJob(jobId);
   }

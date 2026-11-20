@@ -4,6 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { sanitizeText } from "./diagnostic-sanitizer";
 import {
   type AppNotification,
   type ApprovalMode,
@@ -174,12 +175,18 @@ export class StoreBase {
       );
   }
 
+  /** 기록으로 남기는 문구는 비밀값을 지운 뒤 저장한다. */
   log(sessionId: string, text: string, jobId: string | null = null) {
     this.db
       .prepare(
         "INSERT INTO activity (session_id, text, job_id, recorded_at) VALUES (?, ?, ?, ?)",
       )
-      .run(sessionId, text, jobId, new Date().toISOString());
+      .run(
+        sessionId,
+        sanitizeText(text),
+        jobId,
+        new Date().toISOString(),
+      );
   }
 
   readJobs(sessionId: string) {

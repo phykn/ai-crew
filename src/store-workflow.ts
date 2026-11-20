@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { defaultGraph, remainingStages, validateGraph } from "./workflow-graph";
 import { type ModelConnection, type Workflow, type WorkflowGraph } from "./actions";
+import { validateEndpointUrl } from "./diagnostics";
 import { StoreMembers } from "./store-members";
 export class StoreWorkflow extends StoreMembers {
   saveWorkflow(
@@ -219,6 +220,7 @@ export class StoreWorkflow extends StoreMembers {
           new Date().toISOString(),
         );
       this.logCurrent("사용자 · 모델 연결 추가 · " + connection.name);
+      this.auditModelConnection("추가", connection);
     });
   }
 
@@ -243,6 +245,7 @@ export class StoreWorkflow extends StoreMembers {
           id,
         );
       this.logCurrent("사용자 · 모델 연결 수정 · " + next.name);
+      this.auditModelConnection("수정", next);
     });
     return next;
   }
@@ -253,6 +256,7 @@ export class StoreWorkflow extends StoreMembers {
       .get(id);
     if (!row) throw new Error("모델 연결을 찾을 수 없어요.");
     this.logCurrent("사용자 · 모델 연결 제거 · " + row.name);
+    this.auditModelConnection("제거", { name: String(row.name), baseUrl: null });
     return row.name as string;
   }
 
@@ -262,14 +266,29 @@ export class StoreWorkflow extends StoreMembers {
     if (connection.provider === "local") {
       if (!connection.baseUrl)
         throw new Error("로컬 모델 연결에는 OpenAI 호환 주소가 필요해요.");
-      const url = new URL(connection.baseUrl);
-      if (
-        !["http:", "https:"].includes(url.protocol) ||
-        url.username ||
-        url.password
-      )
-        throw new Error("인증값을 포함하지 않은 HTTP 주소를 입력해 주세요.");
+      validateEndpointUrl(connection.baseUrl, "model");
     }
+  }
+
+  /** 모델 연결은 프로젝트와 별개라, 지금 열어 둔 프로젝트의 감사 기록에 남긴다. */
+  private auditModelConnection(
+    change: "추가" | "수정" | "제거",
+    connection: { name: string; baseUrl: string | null },
+  ) {
+    const current = this.db
+      .prepare("SELECT value FROM settings WHERE key = 'current_project'")
+      .get()?.value;
+    if (typeof current !== "string") return;
+    if (!this.db.prepare("SELECT 1 FROM projects WHERE id = ?").get(current))
+      return;
+    this.recordAudit({
+      projectId: current,
+      event: "model.connection",
+      outcome: "changed",
+      actor: "사용자",
+      subject: connection.name,
+      detail: change + (connection.baseUrl ? " · " + connection.baseUrl : ""),
+    });
   }
 
   logCurrent(note: string) {

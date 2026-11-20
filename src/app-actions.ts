@@ -10,13 +10,18 @@ import {
 } from "./actions";
 import type { CrewMcp } from "./mcp";
 import type { CrewStore } from "./store";
+import {
+  runDiagnostics,
+  type DiagnosticsReport,
+} from "./diagnostics";
 import type { CrewWorkflow } from "./workflow";
 
 export type ActionMode = "ui" | "app";
 
 export type ActionOutcome =
   | { status: "applied"; snapshot: Snapshot }
-  | { status: "waiting"; message: string; snapshot: Snapshot };
+  | { status: "waiting"; message: string; snapshot: Snapshot }
+  | { status: "diagnostics"; report: DiagnosticsReport; snapshot: Snapshot };
 
 export type ActionDeps = {
   store: CrewStore;
@@ -26,6 +31,8 @@ export type ActionDeps = {
   pickFolder?: () => Promise<string | null>;
   quit?: () => void;
   applyModelConnections?: (connections: ModelConnection[]) => void;
+  /** 진단 실행기. 테스트와 다른 실행 환경에서 바꿔 끼운다. */
+  diagnostics?: (projectId: string) => Promise<DiagnosticsReport>;
 };
 
 const applied = new Map<string, string>();
@@ -214,6 +221,12 @@ export class ActionRunner {
         store.removeModelConnection(action.id);
         this.syncModels();
         break;
+      case "diagnostics.run":
+        return {
+          status: "diagnostics",
+          report: await this.diagnose(action.projectId),
+          snapshot: store.snapshot(),
+        };
       case "app.quit":
         store.logCurrent("사용자 · 앱 종료 요청");
         this.deps.quit?.();
@@ -277,6 +290,12 @@ export class ActionRunner {
     this.deps.applyModelConnections?.(this.deps.store.listModelConnections());
   }
 
+  private diagnose(projectId: string) {
+    return this.deps.diagnostics
+      ? this.deps.diagnostics(projectId)
+      : runDiagnostics({ store: this.deps.store, projectId });
+  }
+
   private async prepareWorkspace(jobId: string) {
     const job = this.deps.store.getJob(jobId);
     if (this.deps.workflow.isRunning(jobId))
@@ -326,6 +345,8 @@ const descriptions: Record<string, string> = {
   "model.add": "모델 연결을 추가해요.",
   "model.update": "모델 연결 이름·주소·모델·사용 여부를 바꿔요.",
   "model.remove": "모델 연결을 제거해요.",
+  "diagnostics.run":
+    "Git 저장소·Codex 설치·로컬 모델·MCP 서버 상태를 점검해요.",
   "app.quit": "앱을 종료해요. 진행 중인 실행은 기존 종료 절차를 따라요.",
   "chat.send": "비서에게 메시지를 보내요.",
   "chat.stop": "응답 생성을 멈춰요.",

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Job, CrewMember, McpEndpoint, McpTool } from "./actions";
+import { validateEndpointUrl } from "./diagnostics";
 import type { CrewStore } from "./store";
 
 type ToolContext = Pick<Job, "projectId" | "sessionId"> & { id?: string };
@@ -56,14 +57,7 @@ export class CrewMcp {
     address: string,
   ) {
     this.store.getProject(projectId);
-    const url = new URL(address);
-    if (
-      !["https:", "http:"].includes(url.protocol) ||
-      url.username ||
-      url.password ||
-      url.hash
-    )
-      throw new Error("인증값을 포함하지 않은 HTTP MCP 주소를 입력해 주세요.");
+    const url = new URL(validateEndpointUrl(address, "mcp"));
     const previous = this.store
       .listMcpEndpoints(projectId)
       .find(({ id }) => id === serverId);

@@ -10,6 +10,7 @@ import {
   type RoleId,
   type WorkPlan,
 } from "./actions";
+import { sanitizeText } from "./diagnostic-sanitizer";
 import { StoreChanges } from "./store-changes";
 export class StoreRun extends StoreChanges {
   proposeWorkPlan(job: Job, plan: WorkPlan) {
@@ -271,13 +272,23 @@ export class StoreRun extends StoreChanges {
       | { id: string; actor: string; decision: "allow" | "deny" },
   ) {
     this.transaction(() => {
-      if (approvalEvent && "mode" in approvalEvent)
+      if (approvalEvent && "mode" in approvalEvent) {
         this.db
           .prepare(
             "INSERT INTO file_approvals (id, job_id, mode) VALUES (?, ?, ?)",
           )
           .run(approval, job.id, approvalEvent.mode);
-      else if (approvalEvent)
+        this.recordAudit({
+          projectId: job.projectId,
+          sessionId: job.sessionId,
+          jobId: job.id,
+          event: "file.approval",
+          outcome: "requested",
+          actor: "비서",
+          subject: describeTargets(plan ?? job.plan),
+          detail: note,
+        });
+      } else if (approvalEvent) {
         this.db
           .prepare(
             "UPDATE file_approvals SET actor = ?, decision = ? WHERE id = ? AND job_id = ? AND decision IS NULL",
@@ -288,6 +299,18 @@ export class StoreRun extends StoreChanges {
             approvalEvent.id,
             job.id,
           );
+        this.recordAudit({
+          projectId: job.projectId,
+          sessionId: job.sessionId,
+          jobId: job.id,
+          event: "file.approval",
+          outcome:
+            approvalEvent.decision === "allow" ? "allowed" : "denied",
+          actor: approvalEvent.actor,
+          subject: describeTargets(job.plan),
+          detail: note,
+        });
+      }
       this.db
         .prepare(
           `UPDATE jobs SET execution_plan_id = CASE
@@ -317,7 +340,12 @@ export class StoreRun extends StoreChanges {
           .prepare(
             "INSERT INTO messages (id, session_id, role, text, state, job_id) VALUES (?, ?, 'assistant', ?, 'complete', ?)",
           )
-          .run(randomUUID(), job.sessionId, report, job.id);
+          .run(randomUUID(), job.sessionId, sanitizeText(report), job.id);
     });
   }
+}
+
+/** 감사 기록에 남길 승인 대상 파일 목록. 계획이 없으면 비워 둔다. */
+function describeTargets(plan: WorkPlan | null | undefined) {
+  return plan ? planTargets(plan) : null;
 }

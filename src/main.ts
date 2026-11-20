@@ -179,6 +179,13 @@ async function startApp() {
       case "crew.member.update":
         store.updateMember(action.projectId, action.memberId, action);
         break;
+      case "crew.workspace.write":
+        store.setWorkspaceWrite(
+          action.projectId,
+          action.memberId,
+          action.allow,
+        );
+        break;
       case "chat.send": {
         const current = runs.get(action.sessionId);
         if (

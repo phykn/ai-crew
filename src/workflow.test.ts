@@ -1423,3 +1423,113 @@ test("dismissing an assigned developer twice preserves its running handoff and b
     rmSync(folder, { recursive: true, force: true });
   }
 });
+
+test.each(["manual", "auto", "always"] as const)(
+  "records the %s approval and respects current write grants",
+  async (mode) => {
+    const folder = realpathSync(mkdtempSync(join(tmpdir(), "crew-approval-")));
+    const store = new CrewStore(":memory:");
+    const workflow = new CrewWorkflow(store, new CodexConnection(), () => {});
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let automaticDecisions = 0;
+    try {
+      vi.mocked(decideLocal).mockImplementation(async (system) => {
+        if (system.startsWith("Plan only the changes"))
+          return {
+            paths: ["note.txt"],
+            moves: [],
+            directories: [],
+            goal: "확인",
+            criterion: "After",
+          };
+        if (system.startsWith("Approve an in-project")) {
+          automaticDecisions++;
+          return { allow: true };
+        }
+        if (system.startsWith("Implement only")) {
+          started.resolve();
+          if (mode === "always") await release.promise;
+          return {
+            content: "After",
+            ending: "as-written",
+            consult: "none",
+            question: "",
+          };
+        }
+        if (system.startsWith("Choose an independent"))
+          return {
+            kind: "text",
+            expected: "After",
+            exact: true,
+            ending: "as-written",
+            reason: "",
+          };
+        return { passed: true, note: "확인했어요.", findings: [] };
+      });
+      store.openFolder(folder);
+      const session = store.snapshot().session!;
+      store.setApprovalMode(session.projectId, mode);
+      const { id } = workflow.delegate(
+        session.id,
+        randomUUID(),
+        "메모 파일 생성",
+      );
+      if (mode === "manual") {
+        await vi.waitFor(() => expect(store.getJob(id).state).toBe("approval"));
+        const approval = store.getJob(id).approvalId!;
+        store.setApprovalMode(session.projectId, "always");
+        workflow.answer(id, randomUUID(), true);
+        expect(store.getJob(id).state).toBe("approval");
+        workflow.answer(id, approval, false);
+        expect(store.getJob(id).state).toBe("denied");
+        expect(store.snapshot().fileApprovals[0]).toMatchObject({
+          id: approval,
+          mode,
+          scope: "note.txt",
+          actor: "사용자",
+          decision: "deny",
+        });
+        expect(() => readFileSync(join(folder, "note.txt"))).toThrow();
+      } else if (mode === "always") {
+        await started.promise;
+        expect(() =>
+          store.setWorkspaceWrite(session.projectId, "review", true),
+        ).toThrow();
+        store.newSession(session.projectId);
+        store.setWorkspaceWrite(session.projectId, "development", false);
+        store.openSession(session.id);
+        release.resolve();
+        await vi.waitFor(() => expect(store.getJob(id).state).toBe("failed"));
+        expect(store.getMessages(session.id).at(-1)?.text).toContain(
+          "파일 쓰기 권한이 없어요",
+        );
+        expect(() => readFileSync(join(folder, "note.txt"))).toThrow();
+        expect(store.readChanges(session.id)).toEqual([]);
+        store.openFolder(join(folder, "other-project"));
+        const otherProject = store.snapshot().current!;
+        expect(otherProject.approvalMode).toBe("manual");
+        expect(
+          store.readMembers(otherProject.id, "development")[0].writeAllowed,
+        ).toBe(true);
+        store.openSession(session.id);
+      } else {
+        await vi.waitFor(() => expect(store.getJob(id).state).toBe("complete"));
+        expect(readFileSync(join(folder, "note.txt"), "utf8")).toBe("After");
+      }
+      if (mode !== "manual")
+        expect(store.snapshot().fileApprovals[0]).toMatchObject({
+          mode,
+          scope: "note.txt",
+          actor: "비서",
+          decision: "allow",
+        });
+      expect(automaticDecisions).toBe(mode === "auto" ? 1 : 0);
+    } finally {
+      release.resolve();
+      workflow.close();
+      store.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
+  },
+);

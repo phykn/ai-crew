@@ -300,6 +300,11 @@ export class CrewWorkflow {
     const job = this.store.getJob(id);
     if (job.state !== "approval" || job.approvalId !== requestId || !job.plan)
       return;
+    const decision = {
+      id: requestId,
+      actor,
+      decision: allow ? "allow" : "deny",
+    } as const;
     if (!allow) {
       this.store.recordJob(
         job,
@@ -308,6 +313,7 @@ export class CrewWorkflow {
         job.plan,
         null,
         "파일 수정 요청을 거절했어요. 작업 파일은 그대로예요.",
+        decision,
       );
       this.applyQueuedFollowup(job.id);
       return;
@@ -322,14 +328,32 @@ export class CrewWorkflow {
         actor + " · 수정 승인 · " + paths + "의 앞 업무가 끝날 때까지 대기",
         job.plan,
         job.approvalId,
+        undefined,
+        decision,
       );
       return;
     }
-    this.startDevelopment(job, actor + " → 개발 · " + paths + " 수정 승인");
+    this.startDevelopment(
+      job,
+      actor + " → 개발 · " + paths + " 수정 승인",
+      decision,
+    );
   }
 
-  private startDevelopment(job: Job, note: string) {
-    this.store.recordJob(job, "developing", note, job.plan, job.approvalId);
+  private startDevelopment(
+    job: Job,
+    note: string,
+    decision?: { id: string; actor: string; decision: "allow" | "deny" },
+  ) {
+    this.store.recordJob(
+      job,
+      "developing",
+      note,
+      job.plan,
+      job.approvalId,
+      undefined,
+      decision,
+    );
     this.reserved.set(job.id, this.reservation(job));
     this.start(job, "developing");
   }
@@ -924,6 +948,8 @@ export class CrewWorkflow {
       "플랜 → 비서 · " + planTargets(plan) + " · " + plan.criterion,
       plan,
       approvalId,
+      undefined,
+      { mode },
     );
     return auto ? approvalId : undefined;
   }
@@ -1231,6 +1257,9 @@ export class CrewWorkflow {
 
       let batchId: string | undefined;
       for (const { file, content, hash, movedFrom, source } of writes) {
+        const checkWrite = () =>
+          this.store.requireWorkspaceWrite(job, file.path);
+        checkWrite();
         const id = this.store.prepareChange(
           job,
           file.path,
@@ -1252,6 +1281,7 @@ export class CrewWorkflow {
             },
             content,
             signal,
+            checkWrite,
           );
         else
           await writeWorkspaceFile(
@@ -1260,6 +1290,7 @@ export class CrewWorkflow {
             file.hash,
             content,
             signal,
+            checkWrite,
           );
         if (!this.active.has(job.id)) return;
         this.store.confirmChange(job, id, hash);

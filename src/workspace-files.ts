@@ -111,6 +111,7 @@ export async function writeWorkspaceFile(
   expected: string | null,
   content: string,
   signal: AbortSignal,
+  checkWrite: () => void,
   fileMode?: number,
 ) {
   const entry = await inspectFile(root, path);
@@ -119,6 +120,8 @@ export async function writeWorkspaceFile(
       "계획을 승인한 뒤 파일이 바뀌었어요. 최신 파일을 기준으로 다시 계획해 주세요.",
     );
   validateWorkspaceText(content);
+  signal.throwIfAborted();
+  checkWrite();
   const temporary = resolve(dirname(entry.target), ".crew-" + randomUUID());
   const file = await open(temporary, "wx", fileMode ?? entry.mode);
   try {
@@ -132,6 +135,7 @@ export async function writeWorkspaceFile(
     if ((await inspectFile(root, path)).hash !== expected)
       throw new Error("저장 직전에 파일이 바뀌었어요.");
     signal.throwIfAborted();
+    checkWrite();
     if (expected === null) await link(temporary, entry.target);
     else await rename(temporary, entry.target);
   } finally {
@@ -148,11 +152,20 @@ export async function moveWorkspaceFile(
   expected: { sourceHash: string; destinationHash: string },
   content: string,
   signal: AbortSignal,
+  checkWrite: () => void,
 ) {
   const source = await inspectFile(root, from);
   if (source.hash !== expected.sourceHash)
     throw new Error("이동할 원본이 승인 이후 바뀌었어요.");
-  await writeWorkspaceFile(root, to, null, content, signal, source.mode);
+  await writeWorkspaceFile(
+    root,
+    to,
+    null,
+    content,
+    signal,
+    checkWrite,
+    source.mode,
+  );
   const destination = await inspectFile(root, to);
   if (
     destination.hash !== expected.destinationHash ||
@@ -160,5 +173,6 @@ export async function moveWorkspaceFile(
   )
     throw new Error("이동 중 파일이 바뀌었어요. 원본 경로는 보존했어요.");
   signal.throwIfAborted();
+  checkWrite();
   await unlink(source.target);
 }

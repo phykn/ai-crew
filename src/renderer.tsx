@@ -94,6 +94,9 @@ function Workspace() {
     questionId?: string;
   } | null>(null);
   const [logJob, setLogJob] = useState<string | null>(null);
+  const [focusedApprovalId, setFocusedApprovalId] = useState<string | null>(
+    null,
+  );
   const [view, setView] = useState<"chat" | "log">("chat");
   const [menu, setMenu] = useState<"projects" | "sessions" | null>(null);
   const [showCamp, setShowCamp] = useState(false);
@@ -164,6 +167,7 @@ function Workspace() {
   async function navigate(action: Action) {
     setMenu(null);
     setLogJob(null);
+    setFocusedApprovalId(null);
     setAddingMember(false);
     setEditingMember(null);
     if (await run(action)) {
@@ -219,16 +223,22 @@ function Workspace() {
   const running = data?.messages.find((message) =>
     ["running", "stopping"].includes(message.state),
   );
-  const approval = data?.jobs.find((job) => job.state === "approval");
+  const approval =
+    data?.jobs.find(
+      (job) => job.id === focusedApprovalId && job.state === "approval",
+    ) ?? data?.jobs.find((job) => job.state === "approval");
+  const selectedLogJob = data?.jobs.find((job) => job.id === logJob);
+  const approvalEvent = data?.fileApprovals.find(
+    (item) => item.id === approval?.approvalId,
+  );
   const revisionJob = data?.jobs.find((job) => job.id === revision?.id);
   const firstQuestion = data?.jobs.find((job) => job.clarification);
   const followup = data?.followups[0];
   const composeText = revision?.text ?? draft;
   const clearing = !revision && composeText.trim() === "/clear";
   const currentJobs =
-    data?.jobs.filter(
-      (job) => job !== approval && !["complete", "denied"].includes(job.state),
-    ) || [];
+    data?.jobs.filter((job) => !["complete", "denied"].includes(job.state)) ||
+    [];
   const activity =
     data?.activity.filter((entry) => !logJob || entry.jobId === logJob) || [];
   const changes =
@@ -378,6 +388,27 @@ function Workspace() {
                           <option value="local">로컬 LLM</option>
                           <option value="codex">Codex</option>
                         </select>
+                        {member.roleId === "development" && (
+                          <button
+                            className="crew-write"
+                            type="button"
+                            aria-pressed={member.writeAllowed !== false}
+                            aria-label={member.name + " 파일 쓰기 권한"}
+                            onClick={() => {
+                              if (data.current)
+                                void run({
+                                  type: "crew.workspace.write",
+                                  projectId: data.current.id,
+                                  memberId: member.id,
+                                  allow: member.writeAllowed === false,
+                                });
+                            }}
+                          >
+                            {member.writeAllowed === false
+                              ? "쓰기 회수됨"
+                              : "쓰기 허용"}
+                          </button>
+                        )}
                       </div>
                     );
                   })}
@@ -581,10 +612,33 @@ function Workspace() {
         {view === "log" ? (
           <div className="logs" aria-label="로그">
             {logJob && (
-              <button className="log-link" onClick={() => setLogJob(null)}>
-                ← 전체 기록
-              </button>
+              <div className="job-log-header">
+                <button className="log-link" onClick={() => setLogJob(null)}>
+                  ← 전체 기록
+                </button>
+                {selectedLogJob && (
+                  <button className="log-link" onClick={() => setView("chat")}>
+                    업무로 돌아가기
+                  </button>
+                )}
+                {selectedLogJob && (
+                  <h2>{selectedLogJob.plan?.goal ?? selectedLogJob.request}</h2>
+                )}
+              </div>
             )}
+            {selectedLogJob &&
+              data?.fileApprovals
+                .filter(({ jobId }) => jobId === selectedLogJob.id)
+                .map((item) => (
+                  <p key={item.id}>
+                    승인 {approvalLabels[item.mode]} · {item.scope} ·{" "}
+                    {item.decision
+                      ? (item.decision === "allow" ? "허용" : "거절") +
+                        " · " +
+                        item.actor
+                      : "결정 기록 없음"}
+                  </p>
+                ))}
             {changes.map((change) => (
               <details className="change-log" key={change.id}>
                 <summary>
@@ -657,6 +711,15 @@ function Workspace() {
                       {job.plan?.goal || job.request}
                     </button>
                     <small>{phase[job.state]}</small>
+                    {job.state === "approval" && job.id !== approval?.id && (
+                      <button
+                        className="job-action"
+                        type="button"
+                        onClick={() => setFocusedApprovalId(job.id)}
+                      >
+                        권한 요청
+                      </button>
+                    )}
                     {job.clarification && (
                       <button
                         className="job-action"
@@ -681,16 +744,17 @@ function Workspace() {
                       "queued",
                       "recovering",
                       "clarification",
-                    ].includes(job.state) && (
-                      <button
-                        className="job-action"
-                        onClick={() =>
-                          void run({ type: "job.stop", jobId: job.id })
-                        }
-                      >
-                        멈춤
-                      </button>
-                    )}
+                    ].includes(job.state) &&
+                      job.id !== approval?.id && (
+                        <button
+                          className="job-action"
+                          onClick={() =>
+                            void run({ type: "job.stop", jobId: job.id })
+                          }
+                        >
+                          멈춤
+                        </button>
+                      )}
                     {["stopped", "failed"].includes(job.state) && (
                       <button
                         className="job-action"
@@ -856,7 +920,18 @@ function Workspace() {
               )}
               {approval?.plan && approval.approvalId && (
                 <section className="decision" aria-label="권한 승인">
-                  <div>
+                  <div className="decision-scope">
+                    <button
+                      className="decision-job"
+                      type="button"
+                      aria-label="승인 업무 로그 열기"
+                      onClick={() => {
+                        setLogJob(approval.id);
+                        setView("log");
+                      }}
+                    >
+                      {approval.plan.goal}
+                    </button>
                     <p>
                       {approval.plan.moves?.length ? (
                         "이 경로로 파일을 옮길까요?"
@@ -896,7 +971,9 @@ function Workspace() {
                       <p>폴더 예약 · {approval.plan.directories.join(", ")}</p>
                     ) : null}
                     <small>
-                      {approval.plan.goal} · {approval.plan.criterion}
+                      {approval.plan.criterion}
+                      {approvalEvent &&
+                        " · 요청 시 승인 " + approvalLabels[approvalEvent.mode]}
                     </small>
                   </div>
                   <div className="decision-actions">

@@ -100,6 +100,12 @@ export const actions = z.discriminatedUnion("type", [
     hired: z.boolean().optional(),
   }),
   z.strictObject({
+    type: z.literal("crew.workspace.write"),
+    projectId: identifier,
+    memberId: z.union([roleId, identifier]),
+    allow: z.boolean(),
+  }),
+  z.strictObject({
     type: z.literal("chat.send"),
     sessionId: identifier,
     requestId: identifier,
@@ -145,6 +151,7 @@ export type CrewMember = {
   hired: boolean;
   assignmentJobId?: string;
   specialty?: string;
+  writeAllowed?: boolean;
 };
 export type ApprovalMode = z.infer<typeof approvalMode>;
 export type Project = {
@@ -263,6 +270,14 @@ export type Snapshot = {
   messages: Message[];
   activity: Activity[];
   jobs: Job[];
+  fileApprovals: {
+    id: string;
+    jobId: string;
+    mode: ApprovalMode;
+    actor: string | null;
+    decision: "allow" | "deny" | null;
+    scope: string;
+  }[];
   followups: { id: string; text: string; candidateIds: string[] }[];
   changes: WorkChange[];
 };

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
+  planFiles,
   planTargets,
   roles,
   type Activity,
@@ -31,7 +32,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 19)
+    if (migration.user_version > 21)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -283,6 +284,31 @@ export class CrewStore {
         COMMIT;
       `);
     }
+    if (migration.user_version < 20) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE file_approvals (
+          id TEXT PRIMARY KEY REFERENCES work_plans(id),
+          job_id TEXT NOT NULL REFERENCES jobs(id),
+          mode TEXT NOT NULL, actor TEXT, decision TEXT
+        );
+        PRAGMA user_version = 20;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 21) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE crew_workspace_write (
+          project_id TEXT NOT NULL REFERENCES projects(id),
+          member_id TEXT NOT NULL,
+          allowed INTEGER NOT NULL,
+          PRIMARY KEY (project_id, member_id)
+        );
+        PRAGMA user_version = 21;
+        COMMIT;
+      `);
+    }
     this.db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",
     );
@@ -413,7 +439,9 @@ export class CrewStore {
       .prepare(
         "SELECT id, role AS roleId, name, provider, hired, assignment_job_id AS assignmentJobId, specialty FROM crew_members WHERE project_id = ? ORDER BY rowid",
       )
-      .all(projectId) as (Omit<CrewMember, "hired"> & { hired: number })[];
+      .all(projectId) as (Omit<CrewMember, "hired" | "writeAllowed"> & {
+      hired: number;
+    })[];
     return roles
       .filter((role) => !roleId || role.id === roleId)
       .flatMap((role) => {
@@ -425,17 +453,87 @@ export class CrewStore {
             name: (saved?.name as string | null) ?? role.name,
             provider: (saved?.provider as Provider) ?? "local",
             hired: saved?.hired !== 0,
+            ...(role.id === "development"
+              ? {
+                  writeAllowed: this.isWorkspaceWriteAllowed(
+                    projectId,
+                    role.id,
+                  ),
+                }
+              : {}),
           },
           ...members
             .filter((member) => member.roleId === role.id)
             .map(({ assignmentJobId, specialty, ...member }) => ({
               ...member,
               hired: Boolean(member.hired),
+              ...(role.id === "development"
+                ? {
+                    writeAllowed: this.isWorkspaceWriteAllowed(
+                      projectId,
+                      member.id,
+                    ),
+                  }
+                : {}),
               ...(assignmentJobId ? { assignmentJobId } : {}),
               ...(specialty ? { specialty } : {}),
             })),
         ];
       });
+  }
+
+  private isWorkspaceWriteAllowed(projectId: string, memberId: string) {
+    return (
+      this.db
+        .prepare(
+          "SELECT allowed FROM crew_workspace_write WHERE project_id = ? AND member_id = ?",
+        )
+        .get(projectId, memberId)?.allowed !== 0
+    );
+  }
+
+  setWorkspaceWrite(projectId: string, memberId: string, allow: boolean) {
+    const member = this.readMembers(projectId, "development").find(
+      ({ id }) => memberId === id,
+    );
+    if (!member)
+      throw new Error("개발 역할의 파일 쓰기 권한만 변경할 수 있어요.");
+    if (member.writeAllowed === allow) return;
+    this.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO crew_workspace_write VALUES (?, ?, ?)
+        ON CONFLICT(project_id, member_id) DO UPDATE SET allowed = excluded.allowed`,
+        )
+        .run(projectId, memberId, Number(allow));
+      const session = this.db
+        .prepare("SELECT last_session FROM projects WHERE id = ?")
+        .get(projectId)?.last_session;
+      if (typeof session === "string")
+        this.log(
+          session,
+          "사용자 · " +
+            member.name +
+            " · 파일 쓰기 권한 " +
+            (allow ? "부여" : "회수"),
+        );
+    });
+  }
+
+  requireWorkspaceWrite(job: Job, path: string) {
+    const current = this.getJob(job.id);
+    if (
+      current.state !== "developing" ||
+      !current.plan ||
+      !planFiles(current.plan).some((file) => file.path === path)
+    )
+      throw new Error("현재 승인 범위에서 파일을 쓸 수 없어요. " + path);
+    const writer = this.getAssignee(job.id, "development");
+    if (
+      typeof writer !== "string" ||
+      !this.isWorkspaceWriteAllowed(job.projectId, writer)
+    )
+      throw new Error("개발 담당의 파일 쓰기 권한이 없어요. " + path);
   }
 
   recruitMember(
@@ -1466,8 +1564,28 @@ export class CrewStore {
     plan = job.plan,
     approval: string | null = null,
     report?: string,
+    approvalEvent?:
+      | { mode: ApprovalMode }
+      | { id: string; actor: string; decision: "allow" | "deny" },
   ) {
     this.transaction(() => {
+      if (approvalEvent && "mode" in approvalEvent)
+        this.db
+          .prepare(
+            "INSERT INTO file_approvals (id, job_id, mode) VALUES (?, ?, ?)",
+          )
+          .run(approval, job.id, approvalEvent.mode);
+      else if (approvalEvent)
+        this.db
+          .prepare(
+            "UPDATE file_approvals SET actor = ?, decision = ? WHERE id = ? AND job_id = ? AND decision IS NULL",
+          )
+          .run(
+            approvalEvent.actor,
+            approvalEvent.decision,
+            approvalEvent.id,
+            job.id,
+          );
       this.db
         .prepare(
           `UPDATE jobs SET execution_plan_id = CASE
@@ -1526,6 +1644,25 @@ export class CrewStore {
       session,
       messages: session ? this.getMessages(session.id) : [],
       jobs: session ? this.readJobs(session.id) : [],
+      fileApprovals: session
+        ? (
+            this.db
+              .prepare(
+                `
+        SELECT a.id, a.job_id AS jobId, a.mode, a.actor, a.decision, p.plan
+        FROM file_approvals a JOIN jobs j ON j.id = a.job_id JOIN work_plans p ON p.id = a.id
+        WHERE j.session_id = ? ORDER BY a.rowid DESC
+      `,
+              )
+              .all(session.id) as (Omit<
+              Snapshot["fileApprovals"][number],
+              "scope"
+            > & { plan: string })[]
+          ).map(({ plan, ...item }) => ({
+            ...item,
+            scope: planTargets(JSON.parse(plan) as WorkPlan),
+          }))
+        : [],
       followups: session ? this.readFollowups(session.id) : [],
       members: current ? this.readMembers(current.id) : [],
       assignees: session

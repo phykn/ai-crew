@@ -90,6 +90,13 @@ try {
   await expect(
     roster.getByRole("button", { name: "새 플랜 담당", exact: true }),
   ).toBeVisible();
+  const writePermission = roster.getByRole("button", {
+    name: "모루 파일 쓰기 권한",
+  });
+  await writePermission.click();
+  await expect(writePermission).toHaveAttribute("aria-pressed", "false");
+  await writePermission.click();
+  await expect(writePermission).toHaveAttribute("aria-pressed", "true");
   await roster.getByRole("button", { name: "플랜 고용", exact: true }).click();
   await roster.getByRole("button", { name: "개발 고용", exact: true }).click();
   await page.locator(".roster summary").click();
@@ -98,6 +105,43 @@ try {
   );
   const question = page.getByRole("region", { name: "권한 승인" });
   await expect(question).toContainText("notes.txt", { timeout: 45000 });
+  await expect(
+    page.getByRole("region", { name: "권한 승인", exact: true }),
+  ).toHaveCount(1);
+  await expect(page.locator(".current-jobs .job")).toContainText("승인 대기");
+  await question.getByRole("button", { name: "승인 업무 로그 열기" }).click();
+  await expect(
+    page.getByRole("region", { name: "권한 승인", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("승인 수동 · notes.txt · 결정 기록 없음", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "업무로 돌아가기" }).click();
+  await expect(question).toContainText("notes.txt");
+  await application.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].setSize(440, 620),
+  );
+  await expect(page.locator(".compose-tools .folder")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "승인 모드" })).toBeVisible();
+  const sessionsButton = page.getByRole("button", {
+    name: "세션 목록",
+    exact: true,
+  });
+  await sessionsButton.click();
+  await page.keyboard.press("Escape");
+  await expect(sessionsButton).toHaveAttribute("aria-expanded", "false");
+  await sessionsButton.click();
+  await page
+    .getByRole("button", { name: /새 대화/ })
+    .first()
+    .click();
+  await expect(question).toHaveCount(0);
+  await sessionsButton.click();
+  await page.getByRole("button", { name: /오늘의 확인 코드는/ }).click();
+  await expect(question).toContainText("notes.txt");
+  await application.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].setSize(1320, 850),
+  );
   expect(await readFile(projectFile, "utf8")).toBe("Before\n");
   await question.getByRole("button", { name: "허용" }).click();
   const completed = page.getByText(/notes.txt 파일을 변경했어요/);

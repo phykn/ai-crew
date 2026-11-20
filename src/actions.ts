@@ -146,6 +146,38 @@ export const actions = z.discriminatedUnion("type", [
     allow: z.boolean(),
   }),
   z.strictObject({
+    type: z.literal("workflow.save"),
+    projectId: identifier,
+    workflowId: identifier,
+    version: z.int().nonnegative(),
+    name: z.string().trim().min(1).max(64),
+    graph: z.strictObject({
+      stages: z
+        .array(
+          z.strictObject({
+            id: z.string().min(1).max(48),
+            title: z.string().trim().min(1).max(64),
+            roleId: roleId,
+            criterion: z.string().trim().min(1).max(300),
+            artifact: z.string().trim().max(300),
+            condition: z.string().trim().max(300),
+            required: z.boolean(),
+            x: z.number().finite(),
+            y: z.number().finite(),
+          }),
+        )
+        .max(24),
+      edges: z
+        .array(z.strictObject({ from: z.string().min(1).max(48), to: z.string().min(1).max(48) }))
+        .max(64),
+    }),
+  }),
+  z.strictObject({
+    type: z.literal("workflow.select"),
+    sessionId: identifier,
+    workflowId: identifier.nullable(),
+  }),
+  z.strictObject({
     type: z.literal("memory.add"),
     sessionId: identifier,
     ownerId: z.union([roleId, identifier]).nullable(),
@@ -282,6 +314,7 @@ export type Session = {
   projectId: string;
   title: string;
   draft: string;
+  workflowId: string | null;
 };
 export type Completion =
   | "running"
@@ -376,6 +409,31 @@ export type Job = {
   approvalId: string | null;
   clarification: { id: string; text: string } | null;
   plan: WorkPlan | null;
+  workflowId: string | null;
+  workflowVersion: number | null;
+};
+export type WorkflowStage = {
+  id: string;
+  title: string;
+  roleId: RoleId;
+  criterion: string;
+  artifact: string;
+  condition: string;
+  required: boolean;
+  x: number;
+  y: number;
+};
+export type WorkflowGraph = {
+  stages: WorkflowStage[];
+  edges: { from: string; to: string }[];
+};
+export type Workflow = {
+  id: string;
+  name: string;
+  version: number;
+  graph: WorkflowGraph;
+  author: string;
+  savedAt: string;
 };
 export type Snapshot = {
   projects: Project[];
@@ -388,6 +446,7 @@ export type Snapshot = {
   skills: CrewSkill[];
   skillStates: SkillStatus[];
   toolApprovals: ToolApproval[];
+  workflows: Workflow[];
   memories: CrewMemory[];
   wiki: WikiPage[];
   assignees: { jobId: string; memberId: string; roleId: RoleId }[];

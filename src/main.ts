@@ -261,6 +261,18 @@ async function startApp() {
       case "mcp.answer":
         workflow.answerTool(action.jobId, action.requestId, action.allow);
         break;
+      case "workflow.save":
+        store.saveWorkflow(action.projectId, {
+          id: action.workflowId,
+          version: action.version,
+          name: action.name,
+          graph: action.graph,
+          author: "사용자",
+        });
+        break;
+      case "workflow.select":
+        store.setSessionWorkflow(action.sessionId, action.workflowId);
+        break;
       case "crew.skill.add":
         store.addSkill(action.projectId, {
           id: action.skillId,

@@ -30,8 +30,11 @@ import {
   type ToolApproval,
   type WikiPage,
   type WikiRevision,
+  type Workflow,
+  type WorkflowGraph,
 } from "./actions";
 import { skillStates } from "./skill-status";
+import { defaultGraph, validateGraph } from "./workflow-graph";
 
 export class CrewStore {
   private db: DatabaseSync;
@@ -42,7 +45,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 27)
+    if (migration.user_version > 28)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -415,6 +418,25 @@ export class CrewStore {
         COMMIT;
       `);
     }
+    if (migration.user_version < 28) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE workflows (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+          name TEXT NOT NULL, created_at TEXT NOT NULL
+        );
+        CREATE TABLE workflow_versions (
+          workflow_id TEXT NOT NULL REFERENCES workflows(id), version INTEGER NOT NULL,
+          graph TEXT NOT NULL, author TEXT NOT NULL, saved_at TEXT NOT NULL,
+          PRIMARY KEY(workflow_id, version)
+        );
+        ALTER TABLE sessions ADD COLUMN workflow_id TEXT;
+        ALTER TABLE jobs ADD COLUMN workflow_id TEXT;
+        ALTER TABLE jobs ADD COLUMN workflow_version INTEGER;
+        PRAGMA user_version = 28;
+        COMMIT;
+      `);
+    }
     this.db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",
     );
@@ -458,7 +480,7 @@ export class CrewStore {
   getSession(id: string) {
     const session = this.db
       .prepare(
-        "SELECT id, project_id AS projectId, title, draft FROM sessions WHERE id = ?",
+        "SELECT id, project_id AS projectId, title, draft, workflow_id AS workflowId FROM sessions WHERE id = ?",
       )
       .get(id) as Session | undefined;
     if (!session) throw new Error("세션을 찾을 수 없어요.");
@@ -490,13 +512,13 @@ export class CrewStore {
       .run(id);
   }
 
-  private insertSession(projectId: string) {
+  private insertSession(projectId: string, workflowId: string | null = null) {
     const id = randomUUID();
     this.db
       .prepare(
-        "INSERT INTO sessions (id, project_id, title) VALUES (?, ?, '새 대화')",
+        "INSERT INTO sessions (id, project_id, title, workflow_id) VALUES (?, ?, '새 대화', ?)",
       )
-      .run(id, projectId);
+      .run(id, projectId, workflowId);
     this.db
       .prepare("UPDATE projects SET last_session = ? WHERE id = ?")
       .run(id, projectId);
@@ -896,6 +918,150 @@ export class CrewStore {
     }[];
   }
 
+  saveWorkflow(
+    projectId: string,
+    input: {
+      id: string;
+      version: number;
+      name: string;
+      graph: WorkflowGraph;
+      author: string;
+    },
+  ) {
+    this.getProject(projectId);
+    const problems = validateGraph(input.graph);
+    if (problems.length) throw new Error(problems[0]);
+    return this.transaction(() => {
+      const existing = this.db
+        .prepare("SELECT project_id FROM workflows WHERE id = ?")
+        .get(input.id) as { project_id: string } | undefined;
+      let version: number;
+      if (existing) {
+        if (existing.project_id !== projectId)
+          throw new Error("다른 프로젝트의 워크플로우는 저장할 수 없어요.");
+        const latest = this.db
+          .prepare(
+            "SELECT MAX(version) FROM workflow_versions WHERE workflow_id = ?",
+          )
+          .get(input.id) as { "MAX(version)": number };
+        if (latest["MAX(version)"] !== input.version)
+          throw new Error(
+            "워크플로우가 바뀌었어요. 최신 내용을 확인한 뒤 다시 저장해 주세요.",
+          );
+        version = input.version + 1;
+        this.db
+          .prepare("UPDATE workflows SET name = ? WHERE id = ?")
+          .run(input.name, input.id);
+      } else {
+        if (input.version !== 0)
+          throw new Error("처음 저장하는 워크플로우는 버전 0에서 시작해 주세요.");
+        version = 1;
+        this.db
+          .prepare("INSERT INTO workflows VALUES (?, ?, ?, ?)")
+          .run(input.id, projectId, input.name, new Date().toISOString());
+      }
+      this.db
+        .prepare("INSERT INTO workflow_versions VALUES (?, ?, ?, ?, ?)")
+        .run(
+          input.id,
+          version,
+          JSON.stringify(input.graph),
+          input.author,
+          new Date().toISOString(),
+        );
+      const session = this.db
+        .prepare("SELECT last_session FROM projects WHERE id = ?")
+        .get(projectId)?.last_session;
+      if (typeof session === "string")
+        this.log(
+          session,
+          input.author +
+            " · 워크플로우 저장 · " +
+            input.name +
+            " v" +
+            version,
+        );
+      return this.getWorkflow(input.id)!;
+    });
+  }
+
+  getWorkflow(id: string) {
+    const row = this.db
+      .prepare(
+        `SELECT w.id, w.name, v.version, v.graph, v.author, v.saved_at AS savedAt
+         FROM workflows w JOIN workflow_versions v ON v.workflow_id = w.id
+         WHERE w.id = ? ORDER BY v.version DESC LIMIT 1`,
+      )
+      .get(id) as (Omit<Workflow, "graph"> & { graph: string }) | undefined;
+    if (!row) return undefined;
+    return { ...row, graph: JSON.parse(row.graph) as WorkflowGraph };
+  }
+
+  listWorkflows(projectId: string): Workflow[] {
+    this.getProject(projectId);
+    this.ensureWorkflow(projectId);
+    const rows = this.db
+      .prepare(
+        `SELECT w.id, w.name, v.version, v.graph, v.author, v.saved_at AS savedAt
+         FROM workflows w JOIN workflow_versions v ON v.workflow_id = w.id
+         WHERE w.project_id = ? AND v.version = (
+           SELECT MAX(version) FROM workflow_versions WHERE workflow_id = w.id
+         ) ORDER BY w.rowid`,
+      )
+      .all(projectId) as (Omit<Workflow, "graph"> & { graph: string })[];
+    return rows.map((row) => ({
+      ...row,
+      graph: JSON.parse(row.graph) as WorkflowGraph,
+    }));
+  }
+
+  private ensureWorkflow(projectId: string) {
+    const existing = this.db
+      .prepare("SELECT 1 FROM workflows WHERE project_id = ?")
+      .get(projectId);
+    if (existing) return;
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    this.transaction(() => {
+      this.db
+        .prepare("INSERT INTO workflows VALUES (?, ?, ?, ?)")
+        .run(id, projectId, "기본 개발 흐름", now);
+      this.db
+        .prepare("INSERT INTO workflow_versions VALUES (?, 1, ?, ?, ?)")
+        .run(id, JSON.stringify(defaultGraph()), "기본", now);
+    });
+  }
+
+  setSessionWorkflow(sessionId: string, workflowId: string | null) {
+    const session = this.getSession(sessionId);
+    if (
+      workflowId &&
+      !this.listWorkflows(session.projectId).some(({ id }) => id === workflowId)
+    )
+      throw new Error("이 프로젝트의 워크플로우를 선택해 주세요.");
+    if (session.workflowId === workflowId) return;
+    this.db
+      .prepare("UPDATE sessions SET workflow_id = ? WHERE id = ?")
+      .run(workflowId, sessionId);
+    const workflow = workflowId
+      ? this.listWorkflows(session.projectId).find(({ id }) => id === workflowId)
+      : undefined;
+    this.log(
+      sessionId,
+      "사용자 · 워크플로우 선택 · " +
+        (workflow ? workflow.name + " v" + workflow.version : "프로젝트 기본"),
+    );
+  }
+
+  private jobWorkflow(projectId: string, workflowId: string | null) {
+    const workflows = this.listWorkflows(projectId);
+    return (
+      workflows.find(({ id }) => id === workflowId) ??
+      workflows[0] ??
+      null
+    );
+  }
+
   private logMcpSetting(projectId: string, note: string) {
     const session = this.db
       .prepare("SELECT last_session FROM projects WHERE id = ?")
@@ -1165,11 +1331,11 @@ export class CrewStore {
         throw new Error("다른 전송에 쓰인 요청이에요.");
       return;
     }
-    const { projectId } = this.getSession(sessionId);
+    const { projectId, workflowId } = this.getSession(sessionId);
     this.transaction(() => {
       this.openProject(projectId);
       this.saveDraft(sessionId, "");
-      this.insertSession(projectId);
+      this.insertSession(projectId, workflowId);
       this.db
         .prepare(
           "INSERT INTO requests (id, session_id, text) VALUES (?, ?, '/clear')",
@@ -1245,12 +1411,21 @@ export class CrewStore {
   }
 
   createJob(sessionId: string, requestId: string, request: string) {
-    const { projectId } = this.getSession(sessionId);
+    const session = this.getSession(sessionId);
+    const { projectId } = session;
+    const workflow = this.jobWorkflow(projectId, session.workflowId);
     this.db
       .prepare(
-        "INSERT INTO jobs (id, project_id, session_id, request, state) VALUES (?, ?, ?, ?, 'planning')",
+        "INSERT INTO jobs (id, project_id, session_id, request, state, workflow_id, workflow_version) VALUES (?, ?, ?, ?, 'planning', ?, ?)",
       )
-      .run(requestId, projectId, sessionId, request);
+      .run(
+        requestId,
+        projectId,
+        sessionId,
+        request,
+        workflow?.id ?? null,
+        workflow?.version ?? null,
+      );
     return this.getJob(requestId);
   }
 
@@ -1258,6 +1433,7 @@ export class CrewStore {
     const rows = this.db
       .prepare(
         `SELECT id, project_id AS projectId, session_id AS sessionId, request, state, approval_id AS approvalId, plan,
+          workflow_id AS workflowId, workflow_version AS workflowVersion,
           CASE WHEN j.state = 'clarification' THEN (
             SELECT json_object('id', q.id, 'text', q.text) FROM job_questions q WHERE q.job_id = j.id ORDER BY q.rowid DESC LIMIT 1
           ) END AS clarification
@@ -2198,7 +2374,7 @@ export class CrewStore {
     const sessions = current
       ? (this.db
           .prepare(
-            "SELECT id, project_id AS projectId, title, draft FROM sessions WHERE project_id = ? ORDER BY rowid DESC",
+            "SELECT id, project_id AS projectId, title, draft, workflow_id AS workflowId FROM sessions WHERE project_id = ? ORDER BY rowid DESC",
           )
           .all(current.id) as Session[])
       : [];
@@ -2248,6 +2424,7 @@ export class CrewStore {
       mcpServers: current ? this.listMcpEndpoints(current.id) : [],
       mcpGrants: current ? this.listMcpGrants(current.id) : [],
       skills: current ? this.listSkills(current.id) : [],
+      workflows: current ? this.listWorkflows(current.id) : [],
       toolApprovals: session ? this.readToolApprovals(session.id) : [],
       skillStates: current
         ? skillStates({

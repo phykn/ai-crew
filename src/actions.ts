@@ -114,6 +114,13 @@ export const actions = z.discriminatedUnion("type", [
   }),
   z.strictObject({ type: z.literal("job.stop"), jobId: identifier }),
   z.strictObject({ type: z.literal("job.resume"), jobId: identifier }),
+  z.strictObject({
+    type: z.literal("job.revise"),
+    jobId: identifier,
+    sessionId: identifier,
+    requestId: identifier,
+    text: z.string().trim().min(1).max(32000),
+  }),
 ]);
 
 export type Action = z.infer<typeof actions>;
@@ -144,11 +151,13 @@ export type Message = {
   text: string;
   state: Completion;
   error: string | null;
+  jobId: string | null;
 };
 export type Activity = { id: number; text: string; jobId: string | null };
 export type JobState =
   | "planning"
   | "approval"
+  | "queued"
   | "developing"
   | "reviewing"
   | "stopping"

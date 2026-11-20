@@ -80,6 +80,16 @@ try {
     timeout: 45000,
   });
   expect(await readFile(projectFile, "utf8")).toBe("After\n");
+  await page.getByRole("button", { name: "추가 지시" }).click();
+  await expect(page.locator(".revision-target")).toBeVisible();
+  await send("같은 notes.txt 내용을 Final로 바꿔줘. 줄바꿈 한 개를 유지해줘.");
+  await expect(question).toContainText("notes.txt", { timeout: 45000 });
+  expect(await readFile(projectFile, "utf8")).toBe("After\n");
+  await question.getByRole("button", { name: "허용" }).click();
+  await expect(page.getByText(/notes.txt 파일을 변경했어요/)).toHaveCount(2, {
+    timeout: 45000,
+  });
+  expect(await readFile(projectFile, "utf8")).toBe("Final\n");
   if (process.env.AI_CREW_TEST_CODEX === "1") {
     await page.locator(".roster summary").click();
     await page
@@ -134,7 +144,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "PASS packaged Electron: folder, Qwen chat and tool, restart, context, stop, /clear, delegated planning and approved file write",
+    "PASS packaged Electron: folder, Qwen chat and tool, restart, context, stop, /clear, approved file write and follow-up",
   );
 } finally {
   await application?.close().catch(() => {});

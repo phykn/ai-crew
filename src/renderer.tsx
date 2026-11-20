@@ -20,6 +20,7 @@ const sprites = [sprite0, sprite1, sprite2, sprite3];
 const phase = {
   planning: "플랜",
   approval: "승인 대기",
+  queued: "같은 파일 작업 대기",
   developing: "개발",
   reviewing: "검증",
   stopping: "중단 중",
@@ -50,6 +51,9 @@ function Workspace() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [revision, setRevision] = useState<{ id: string; text: string } | null>(
+    null,
+  );
   const [logJob, setLogJob] = useState<string | null>(null);
   const [view, setView] = useState<"chat" | "log">("chat");
   const [menu, setMenu] = useState<"projects" | "sessions" | null>(null);
@@ -60,6 +64,7 @@ function Workspace() {
   const following = useRef(true);
 
   function apply(next: Snapshot, resetDraft = false) {
+    if (next.session?.id !== dataRef.current?.session?.id) setRevision(null);
     if (resetDraft || next.session?.id !== dataRef.current?.session?.id) {
       setDraft(next.session?.draft ?? "");
       following.current = true;
@@ -136,20 +141,27 @@ function Workspace() {
 
   async function send(event: FormEvent) {
     event.preventDefault();
-    const text = draft.trim();
-    if (!data?.session || !text || sending || (running && text !== "/clear"))
+    const text = (revision?.text ?? draft).trim();
+    if (
+      !data?.session ||
+      !text ||
+      sending ||
+      (running && (revision || text !== "/clear"))
+    )
       return;
     setSending(true);
     following.current = true;
-    await run(
-      {
-        type: "chat.send",
-        sessionId: data.session.id,
-        requestId: crypto.randomUUID(),
-        text,
-      },
-      true,
-    );
+    const request = {
+      sessionId: data.session.id,
+      requestId: crypto.randomUUID(),
+      text,
+    };
+    if (revision) {
+      if (await run({ type: "job.revise", jobId: revision.id, ...request }))
+        setRevision(null);
+    } else {
+      await run({ type: "chat.send", ...request }, true);
+    }
     setSending(false);
     composer.current?.focus();
   }
@@ -158,6 +170,9 @@ function Workspace() {
     ["running", "stopping"].includes(message.state),
   );
   const approval = data?.jobs.find((job) => job.state === "approval");
+  const revisionJob = data?.jobs.find((job) => job.id === revision?.id);
+  const composeText = revision?.text ?? draft;
+  const clearing = !revision && composeText.trim() === "/clear";
   const currentJobs =
     data?.jobs.filter(
       (job) => job !== approval && !["complete", "denied"].includes(job.state),
@@ -414,6 +429,7 @@ function Workspace() {
                       "developing",
                       "reviewing",
                       "approval",
+                      "queued",
                     ].includes(job.state) && (
                       <button
                         className="job-action"
@@ -465,6 +481,30 @@ function Workspace() {
                       {message.error && (
                         <small role="status">{message.error}</small>
                       )}
+                      {message.role === "assistant" &&
+                        message.jobId &&
+                        data?.jobs.some(
+                          (job) =>
+                            job.id === message.jobId &&
+                            job.state === "complete",
+                        ) &&
+                        data.messages.findLast(
+                          (item) =>
+                            item.role === "assistant" &&
+                            item.jobId === message.jobId,
+                        )?.id === message.id && (
+                          <button
+                            type="button"
+                            className="follow-up"
+                            disabled={sending}
+                            onClick={() => {
+                              setRevision({ id: message.jobId!, text: "" });
+                              composer.current?.focus();
+                            }}
+                          >
+                            추가 지시
+                          </button>
+                        )}
                     </div>
                   ))}
                 </div>
@@ -537,15 +577,38 @@ function Workspace() {
                 </p>
               )}
               <form className="composer" onSubmit={(event) => void send(event)}>
+                {revisionJob && (
+                  <div className="revision-target">
+                    <span title={revisionJob.plan?.goal ?? revisionJob.request}>
+                      추가 지시 ·{" "}
+                      {revisionJob.plan?.goal ?? revisionJob.request}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={sending}
+                      onClick={() => setRevision(null)}
+                    >
+                      취소
+                    </button>
+                  </div>
+                )}
                 <textarea
                   ref={composer}
                   aria-label="비서에게 메시지"
-                  value={draft}
+                  value={composeText}
                   maxLength={32000}
                   rows={2}
                   disabled={!data?.session || sending}
-                  placeholder="비서에게 메시지 보내기…"
-                  onChange={(event) => saveDraft(event.target.value)}
+                  placeholder={
+                    revision
+                      ? "이 업무에서 바꿀 내용을 알려 주세요…"
+                      : "비서에게 메시지 보내기…"
+                  }
+                  onChange={(event) => {
+                    if (revision)
+                      setRevision({ ...revision, text: event.target.value });
+                    else saveDraft(event.target.value);
+                  }}
                   onKeyDown={(event) => {
                     if (
                       event.key === "Enter" &&
@@ -639,13 +702,15 @@ function Workspace() {
                         <Icon name="stop" />
                       </button>
                     )}
-                    {(!running || draft.trim() === "/clear") && (
+                    {(!running || clearing) && (
                       <button
                         className="icon-button send"
                         type="submit"
                         aria-label="보내기"
                         title="보내기"
-                        disabled={!data?.session || !draft.trim() || sending}
+                        disabled={
+                          !data?.session || !composeText.trim() || sending
+                        }
                       >
                         <Icon name="send" />
                       </button>

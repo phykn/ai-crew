@@ -214,6 +214,14 @@ async function startApp() {
       case "job.resume":
         workflow.resume(action.jobId);
         break;
+      case "job.revise":
+        workflow.revise(
+          action.jobId,
+          action.sessionId,
+          action.requestId,
+          action.text,
+        );
+        break;
       case "chat.stop": {
         const run = runs.get(action.sessionId);
         if (run?.id === action.responseId && !run.controller.signal.aborted) {

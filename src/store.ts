@@ -26,7 +26,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 4)
+    if (migration.user_version > 8)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -74,8 +74,57 @@ export class CrewStore {
         COMMIT;
       `);
     }
+    if (migration.user_version < 5) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE peer_requests (
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES jobs(id),
+          sender TEXT NOT NULL, recipient TEXT NOT NULL, path TEXT NOT NULL,
+          baseline TEXT, question TEXT NOT NULL, answer TEXT
+        );
+        PRAGMA user_version = 5;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 6) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE messages ADD COLUMN job_id TEXT REFERENCES jobs(id);
+        CREATE TABLE job_revisions (
+          request_id TEXT PRIMARY KEY REFERENCES requests(id),
+          job_id TEXT NOT NULL REFERENCES jobs(id),
+          previous_request TEXT NOT NULL,
+          previous_plan TEXT
+        );
+        PRAGMA user_version = 6;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 7) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE work_plans (
+          id TEXT PRIMARY KEY,
+          job_id TEXT NOT NULL REFERENCES jobs(id),
+          request TEXT NOT NULL,
+          plan TEXT NOT NULL,
+          review_passed INTEGER,
+          review_note TEXT
+        );
+        PRAGMA user_version = 7;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 8) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE agent_context ADD COLUMN revision_id TEXT REFERENCES job_revisions(request_id);
+        PRAGMA user_version = 8;
+        COMMIT;
+      `);
+    }
     this.db.exec(
-      "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'developing', 'reviewing', 'stopping');",
+      "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'stopping');",
     );
     this.db.exec(
       "UPDATE messages SET state = 'stopped' WHERE state IN ('running', 'stopping');",
@@ -227,7 +276,7 @@ export class CrewStore {
   getMessages(sessionId: string) {
     return this.db
       .prepare(
-        "SELECT id, role, text, state, error FROM messages WHERE session_id = ? ORDER BY rowid",
+        "SELECT id, role, text, state, error, job_id AS jobId FROM messages WHERE session_id = ? ORDER BY rowid",
       )
       .all(sessionId) as Message[];
   }
@@ -320,14 +369,6 @@ export class CrewStore {
       .run(sessionId, text, jobId);
   }
 
-  report(sessionId: string, text: string) {
-    this.db
-      .prepare(
-        "INSERT INTO messages (id, session_id, role, text, state) VALUES (?, ?, 'assistant', ?, 'complete')",
-      )
-      .run(randomUUID(), sessionId, text);
-  }
-
   createJob(sessionId: string, requestId: string, request: string) {
     const { projectId } = this.getSession(sessionId);
     this.db
@@ -363,10 +404,115 @@ export class CrewStore {
     return job;
   }
 
+  nextQueuedJob(projectId: string, path: string) {
+    const next = this.db
+      .prepare(
+        "SELECT id, plan FROM jobs WHERE project_id = ? AND state = 'queued' ORDER BY rowid",
+      )
+      .all(projectId)
+      .find(
+        (row) =>
+          (JSON.parse(String(row.plan)) as WorkPlan).path.toLowerCase() ===
+          path.toLowerCase(),
+      );
+    return next && this.getJob(String(next.id));
+  }
+
+  reviseJob(job: Job, requestId: string, text: string) {
+    return this.transaction(() => {
+      const previous = this.db
+        .prepare(
+          "SELECT requests.text, job_revisions.job_id FROM requests LEFT JOIN job_revisions ON request_id = requests.id WHERE requests.id = ?",
+        )
+        .get(requestId);
+      if (previous) {
+        if (previous.job_id !== job.id || previous.text !== text)
+          throw new Error("다른 전송에 쓰인 요청이에요.");
+        return false;
+      }
+      if (job.state !== "complete")
+        throw new Error("완료된 업무에 추가 지시를 보낼 수 있어요.");
+      this.db
+        .prepare("INSERT INTO requests (id, session_id, text) VALUES (?, ?, ?)")
+        .run(requestId, job.sessionId, text);
+      this.db
+        .prepare("INSERT INTO job_revisions VALUES (?, ?, ?, ?)")
+        .run(
+          requestId,
+          job.id,
+          job.request,
+          job.plan && JSON.stringify(job.plan),
+        );
+      this.db
+        .prepare(
+          "INSERT INTO messages (id, session_id, role, text, state, job_id) VALUES (?, ?, 'user', ?, 'complete', ?)",
+        )
+        .run(randomUUID(), job.sessionId, text, job.id);
+      this.db
+        .prepare(
+          "UPDATE jobs SET request = ?, state = 'planning', plan = NULL, approval_id = NULL WHERE id = ?",
+        )
+        .run(text, job.id);
+      this.log(job.sessionId, "비서 → 플랜 · 완료 업무의 추가 지시", job.id);
+      return true;
+    });
+  }
+
+  previousJobInstruction(jobId: string) {
+    const row = this.db
+      .prepare(
+        "SELECT previous_request AS request, previous_plan AS plan FROM job_revisions WHERE job_id = ? ORDER BY rowid DESC LIMIT 1",
+      )
+      .get(jobId) as { request: string; plan: string | null } | undefined;
+    return (
+      row && {
+        request: row.request,
+        plan: row.plan ? (JSON.parse(row.plan) as WorkPlan) : null,
+      }
+    );
+  }
+
+  proposeWorkPlan(job: Job, plan: WorkPlan) {
+    const id = randomUUID();
+    this.transaction(() => {
+      this.db
+        .prepare(
+          "INSERT INTO work_plans (id, job_id, request, plan) VALUES (?, ?, ?, ?)",
+        )
+        .run(id, job.id, job.request, JSON.stringify(plan));
+      this.log(
+        job.sessionId,
+        "플랜 → 리뷰 · " + plan.path + " · " + plan.criterion,
+        job.id,
+      );
+    });
+    return id;
+  }
+
+  reviewWorkPlan(job: Job, id: string, passed: boolean, note: string) {
+    this.transaction(() => {
+      const saved = this.db
+        .prepare(
+          "UPDATE work_plans SET review_passed = ?, review_note = ? WHERE id = ? AND job_id = ? AND review_passed IS NULL",
+        )
+        .run(passed ? 1 : 0, note, id, job.id);
+      if (saved.changes)
+        this.log(
+          job.sessionId,
+          "리뷰 → 플랜 · " + (passed ? "계획 확인 · " : "계획 보완 · ") + note,
+          job.id,
+        );
+    });
+  }
+
   getAgentContext(jobId: string, role: RoleId) {
     return this.db
       .prepare(
-        "SELECT thread_id AS threadId, result FROM agent_context WHERE job_id = ? AND role = ?",
+        `SELECT thread_id AS threadId,
+          CASE WHEN revision_id IS (
+            SELECT request_id FROM job_revisions WHERE job_id = context.job_id ORDER BY rowid DESC LIMIT 1
+          ) THEN result ELSE '' END AS result
+        FROM agent_context AS context WHERE job_id = ? AND role = ?`,
       )
       .get(jobId, role) as
       | { threadId: string | null; result: string }
@@ -381,9 +527,58 @@ export class CrewStore {
   ) {
     this.db
       .prepare(
-        "INSERT INTO agent_context VALUES (?, ?, ?, ?) ON CONFLICT(job_id, role) DO UPDATE SET thread_id = excluded.thread_id, result = excluded.result",
+        `INSERT INTO agent_context (job_id, role, thread_id, result, revision_id)
+        VALUES (?, ?, ?, ?, (SELECT request_id FROM job_revisions WHERE job_id = ? ORDER BY rowid DESC LIMIT 1))
+        ON CONFLICT(job_id, role) DO UPDATE SET
+          thread_id = excluded.thread_id, result = excluded.result, revision_id = excluded.revision_id`,
       )
-      .run(jobId, role, threadId, result);
+      .run(jobId, role, threadId, result, jobId);
+  }
+
+  openPeerRequest(
+    id: string,
+    job: Job,
+    recipient: "style" | "review",
+    path: string,
+    baseline: string | null,
+    question: string,
+  ) {
+    return this.transaction(() => {
+      const inserted = this.db
+        .prepare(
+          "INSERT OR IGNORE INTO peer_requests (id, job_id, sender, recipient, path, baseline, question) VALUES (?, ?, 'development', ?, ?, ?, ?)",
+        )
+        .run(id, job.id, recipient, path, baseline, question);
+      const role = recipient === "style" ? "스타일" : "리뷰";
+      if (inserted.changes)
+        this.log(
+          job.sessionId,
+          "개발 → " + role + " · " + path + " · " + question,
+          job.id,
+        );
+      const row = this.db
+        .prepare("SELECT answer FROM peer_requests WHERE id = ?")
+        .get(id);
+      return row?.answer as string | null;
+    });
+  }
+
+  answerPeerRequest(
+    id: string,
+    job: Job,
+    recipient: "style" | "review",
+    answer: string,
+  ) {
+    this.transaction(() => {
+      const saved = this.db
+        .prepare(
+          "UPDATE peer_requests SET answer = ? WHERE id = ? AND job_id = ? AND answer IS NULL",
+        )
+        .run(answer, id, job.id);
+      const role = recipient === "style" ? "스타일" : "리뷰";
+      if (saved.changes)
+        this.log(job.sessionId, role + " → 개발 · " + answer, job.id);
+    });
   }
 
   recordJob(
@@ -401,7 +596,12 @@ export class CrewStore {
         )
         .run(state, plan ? JSON.stringify(plan) : null, approval, job.id);
       this.log(job.sessionId, note, job.id);
-      if (report) this.report(job.sessionId, report);
+      if (report)
+        this.db
+          .prepare(
+            "INSERT INTO messages (id, session_id, role, text, state, job_id) VALUES (?, ?, 'assistant', ?, 'complete', ?)",
+          )
+          .run(randomUUID(), job.sessionId, report, job.id);
     });
   }
 

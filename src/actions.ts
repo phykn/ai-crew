@@ -194,6 +194,25 @@ export const actions = z.discriminatedUnion("type", [
     notificationId: z.string().min(1).max(200),
   }),
   z.strictObject({
+    type: z.literal("model.add"),
+    id: identifier,
+    name: z.string().trim().min(1).max(64),
+    provider: z.enum(["local", "codex"]),
+    baseUrl: z.url().max(2048).nullable(),
+    model: z.string().trim().max(120).nullable(),
+    enabled: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal("model.update"),
+    id: identifier,
+    name: z.string().trim().min(1).max(64).optional(),
+    baseUrl: z.url().max(2048).nullable().optional(),
+    model: z.string().trim().max(120).nullable().optional(),
+    enabled: z.boolean().optional(),
+  }),
+  z.strictObject({ type: z.literal("model.remove"), id: identifier }),
+  z.strictObject({ type: z.literal("app.quit") }),
+  z.strictObject({
     type: z.literal("view.set"),
     sessionId: identifier,
     patch: z.strictObject({
@@ -481,6 +500,14 @@ export type CampMemberState = {
   highlighted: boolean;
   line: string | null;
 };
+export type ModelConnection = {
+  id: string;
+  name: string;
+  provider: "local" | "codex";
+  baseUrl: string | null;
+  model: string | null;
+  enabled: boolean;
+};
 export type ViewState = {
   tab: "chat" | "log" | "memory" | "workflow";
   camp: boolean;
@@ -529,6 +556,7 @@ export type Snapshot = {
   artifacts: Artifact[];
   notifications: AppNotification[];
   camp: { members: CampMemberState[]; highlightedJobId: string | null };
+  modelConnections: ModelConnection[];
   memories: CrewMemory[];
   wiki: WikiPage[];
   assignees: { jobId: string; memberId: string; roleId: RoleId }[];

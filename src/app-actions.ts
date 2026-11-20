@@ -4,6 +4,7 @@ import {
   type Action,
   type AppNotification,
   type Artifact,
+  type ModelConnection,
   type Snapshot,
   type ToolApproval,
 } from "./actions";
@@ -24,6 +25,7 @@ export type ActionDeps = {
   /** 운영체제 폴더 선택기. 앱 MCP에서는 선택기를 열지 않고 입력 대기를 돌려준다. */
   pickFolder?: () => Promise<string | null>;
   quit?: () => void;
+  applyModelConnections?: (connections: ModelConnection[]) => void;
 };
 
 const applied = new Map<string, string>();
@@ -193,6 +195,29 @@ export class ActionRunner {
       case "job.cleanup":
         await store.cleanupWorkspace(action.jobId);
         break;
+      case "model.add":
+        store.addModelConnection({
+          id: action.id,
+          name: action.name,
+          provider: action.provider,
+          baseUrl: action.baseUrl,
+          model: action.model,
+          enabled: action.enabled,
+        });
+        this.syncModels();
+        break;
+      case "model.update":
+        store.updateModelConnection(action.id, action);
+        this.syncModels();
+        break;
+      case "model.remove":
+        store.removeModelConnection(action.id);
+        this.syncModels();
+        break;
+      case "app.quit":
+        store.logCurrent("사용자 · 앱 종료 요청");
+        this.deps.quit?.();
+        break;
       case "notification.read":
         store.markNotificationRead(action.sessionId, action.notificationId);
         break;
@@ -248,6 +273,10 @@ export class ActionRunner {
   private stopResponse: ((sessionId: string, responseId: string) => void) | null =
     null;
 
+  private syncModels() {
+    this.deps.applyModelConnections?.(this.deps.store.listModelConnections());
+  }
+
   private async prepareWorkspace(jobId: string) {
     const job = this.deps.store.getJob(jobId);
     if (this.deps.workflow.isRunning(jobId))
@@ -294,6 +323,10 @@ const descriptions: Record<string, string> = {
   "job.apply": "검증을 마친 업무 브랜치를 원본에 반영해요.",
   "job.cleanup": "끝난 업무의 워크트리를 정리하고 기록은 남겨요.",
   "notification.read": "업무 알림을 읽음으로 표시해요.",
+  "model.add": "모델 연결을 추가해요.",
+  "model.update": "모델 연결 이름·주소·모델·사용 여부를 바꿔요.",
+  "model.remove": "모델 연결을 제거해요.",
+  "app.quit": "앱을 종료해요. 진행 중인 실행은 기존 종료 절차를 따라요.",
   "chat.send": "비서에게 메시지를 보내요.",
   "chat.stop": "응답 생성을 멈춰요.",
   "job.answer": "권한 요청에 허용·거절로 답해요.",
@@ -339,6 +372,7 @@ export type AppRead = {
   view: Snapshot["view"];
   artifacts: Artifact[];
   notifications: AppNotification[];
+  modelConnections: ModelConnection[];
   camp: Snapshot["camp"];
   jobs: Snapshot["jobs"];
   pendingApprovals: { id: string; jobId: string }[];
@@ -385,6 +419,7 @@ export function appRead(store: CrewStore): AppRead {
     view: snapshot.view,
     artifacts: snapshot.artifacts,
     notifications: snapshot.notifications,
+    modelConnections: snapshot.modelConnections,
     camp: snapshot.camp,
     jobs: snapshot.jobs,
     pendingApprovals: snapshot.fileApprovals

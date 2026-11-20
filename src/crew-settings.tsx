@@ -26,7 +26,7 @@ export function CrewSettings({
 }) {
   const projectId = data.current!.id;
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState<"skill" | "server" | null>(null);
+  const [form, setForm] = useState<"skill" | "server" | "model" | null>(null);
   const skills = data.skills.filter(({ memberId }) => memberId === member.id);
   const state = (skillId: string) =>
     data.skillStates.find((status) => status.skillId === skillId);
@@ -47,7 +47,17 @@ export function CrewSettings({
     if (!name || !value || busy) return;
     const id = crypto.randomUUID();
     const action: Action =
-      form === "server"
+      form === "model"
+        ? {
+            type: "model.add",
+            id,
+            name,
+            provider: "local",
+            baseUrl: value,
+            model: String(input.get("model") ?? "").trim() || null,
+            enabled: true,
+          }
+        : form === "server"
         ? { type: "mcp.connect", projectId, serverId: id, name, url: value }
         : {
             type: "crew.skill.add",
@@ -242,13 +252,78 @@ export function CrewSettings({
         ))}
       </section>
 
+      <section aria-label="모델 연결">
+        <header>
+          <strong>모델 연결</strong>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setForm(form === "model" ? null : "model")}
+          >
+            연결 추가
+          </button>
+        </header>
+        {data.modelConnections.length ? (
+          data.modelConnections.map((connection) => (
+            <div className="model-connection" key={connection.id}>
+              <span>
+                {connection.name} · {connection.provider}
+                {connection.baseUrl ? " · " + connection.baseUrl : ""}
+                {connection.model ? " · " + connection.model : ""}
+                {connection.enabled ? "" : " · 사용 안 함"}
+              </span>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void save({
+                    type: "model.update",
+                    id: connection.id,
+                    enabled: !connection.enabled,
+                  })
+                }
+              >
+                {connection.enabled ? "사용 중지" : "사용"}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void save({ type: "model.remove", id: connection.id })
+                }
+              >
+                제거
+              </button>
+            </div>
+          ))
+        ) : (
+          <p className="muted">등록한 모델 연결이 없어요. 환경의 기본 주소를 써요.</p>
+        )}
+      </section>
+
       {form && (
         <form key={form} onSubmit={(event) => void submit(event)}>
           <label>
             이름
             <input name="name" required maxLength={64} />
           </label>
-          {form === "server" ? (
+          {form === "model" ? (
+            <>
+              <label>
+                OpenAI 호환 주소
+                <input
+                  name="value"
+                  type="url"
+                  required
+                  placeholder="http://127.0.0.1:8082/v1"
+                />
+              </label>
+              <label>
+                모델 이름 (선택)
+                <input name="model" maxLength={120} />
+              </label>
+            </>
+          ) : form === "server" ? (
             <label>
               서버 주소
               <input
@@ -265,7 +340,13 @@ export function CrewSettings({
             </label>
           )}
           <button type="submit" disabled={busy}>
-            {busy ? "처리 중" : form === "server" ? "연결" : "추가"}
+            {busy
+              ? "처리 중"
+              : form === "server"
+                ? "연결"
+                : form === "model"
+                  ? "추가"
+                  : "추가"}
           </button>
         </form>
       )}

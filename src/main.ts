@@ -12,7 +12,7 @@ import { appTools } from "./app-tools";
 import { findChatCommand } from "./chat-commands";
 import { CodexConnection } from "./codex";
 import { classifyModelFailure } from "./model-errors";
-import { runLocal } from "./local";
+import { runLocal, setLocalConnection } from "./local";
 import { CrewMcp } from "./mcp";
 import { crewInstructions } from "./crew-definition";
 import { CrewStore } from "./store";
@@ -196,10 +196,24 @@ async function startApp() {
     }
   }
 
+  const applyModelConnections = (
+    connections: { provider: string; baseUrl: string | null; model: string | null; enabled: boolean }[],
+  ) => {
+    const local = connections.find(
+      ({ provider, enabled }) => provider === "local" && enabled,
+    );
+    setLocalConnection(
+      local ? { baseUrl: local.baseUrl, model: local.model } : null,
+    );
+  };
+  applyModelConnections(store.listModelConnections());
+
   const runner = new ActionRunner({
     store,
     workflow,
     mcp,
+    applyModelConnections,
+    quit: () => app.quit(),
     pickFolder: async () => {
       const selected = await dialog.showOpenDialog(window!, {
         properties: ["openDirectory"],

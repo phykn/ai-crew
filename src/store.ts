@@ -35,6 +35,7 @@ import {
   type ViewState,
   type AppNotification,
   type Artifact,
+  type ModelConnection,
 } from "./actions";
 import { campState } from "./camp";
 import { skillStates } from "./skill-status";
@@ -65,7 +66,7 @@ export class CrewStore {
     const migration = this.db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 33)
+    if (migration.user_version > 34)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       this.db.exec(`
@@ -516,6 +517,18 @@ export class CrewStore {
         BEGIN;
         ALTER TABLE work_checks ADD COLUMN label TEXT NOT NULL DEFAULT '';
         PRAGMA user_version = 33;
+        COMMIT;
+      `);
+    }
+    if (migration.user_version < 34) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE model_connections (
+          id TEXT PRIMARY KEY, name TEXT NOT NULL, provider TEXT NOT NULL,
+          base_url TEXT, model TEXT, enabled INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL
+        );
+        PRAGMA user_version = 34;
         COMMIT;
       `);
     }
@@ -1191,6 +1204,97 @@ export class CrewStore {
           .run(latest.id, job.sessionId);
     });
     return latest;
+  }
+
+  listModelConnections() {
+    return this.db
+      .prepare(
+        `SELECT id, name, provider, base_url AS baseUrl, model, enabled
+         FROM model_connections ORDER BY rowid`,
+      )
+      .all()
+      .map((row) => ({ ...row, enabled: Boolean(row.enabled) })) as ModelConnection[];
+  }
+
+  addModelConnection(connection: ModelConnection) {
+    this.checkConnection(connection);
+    this.transaction(() => {
+      this.db
+        .prepare(
+          "INSERT INTO model_connections VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          connection.id,
+          connection.name,
+          connection.provider,
+          connection.baseUrl,
+          connection.model,
+          Number(connection.enabled),
+          new Date().toISOString(),
+        );
+      this.logCurrent("사용자 · 모델 연결 추가 · " + connection.name);
+    });
+  }
+
+  updateModelConnection(
+    id: string,
+    patch: Partial<Omit<ModelConnection, "id" | "provider">>,
+  ) {
+    const current = this.listModelConnections().find((item) => item.id === id);
+    if (!current) throw new Error("모델 연결을 찾을 수 없어요.");
+    const next = { ...current, ...patch };
+    this.checkConnection(next);
+    this.transaction(() => {
+      this.db
+        .prepare(
+          "UPDATE model_connections SET name = ?, base_url = ?, model = ?, enabled = ? WHERE id = ?",
+        )
+        .run(
+          next.name,
+          next.baseUrl,
+          next.model,
+          Number(next.enabled),
+          id,
+        );
+      this.logCurrent("사용자 · 모델 연결 수정 · " + next.name);
+    });
+    return next;
+  }
+
+  removeModelConnection(id: string) {
+    const row = this.db
+      .prepare("DELETE FROM model_connections WHERE id = ? RETURNING name")
+      .get(id);
+    if (!row) throw new Error("모델 연결을 찾을 수 없어요.");
+    this.logCurrent("사용자 · 모델 연결 제거 · " + row.name);
+    return row.name as string;
+  }
+
+  private checkConnection(connection: ModelConnection) {
+    if (!connection.name.trim())
+      throw new Error("연결 이름을 적어 주세요.");
+    if (connection.provider === "local") {
+      if (!connection.baseUrl)
+        throw new Error("로컬 모델 연결에는 OpenAI 호환 주소가 필요해요.");
+      const url = new URL(connection.baseUrl);
+      if (
+        !["http:", "https:"].includes(url.protocol) ||
+        url.username ||
+        url.password
+      )
+        throw new Error("인증값을 포함하지 않은 HTTP 주소를 입력해 주세요.");
+    }
+  }
+
+  logCurrent(note: string) {
+    const session = this.db
+      .prepare("SELECT value FROM settings WHERE key = 'current_project'")
+      .get()?.value;
+    if (typeof session !== "string") return;
+    const last = this.db
+      .prepare("SELECT last_session FROM projects WHERE id = ?")
+      .get(session)?.last_session;
+    if (typeof last === "string") this.log(last, note);
   }
 
   viewState(sessionId: string): ViewState {
@@ -2809,6 +2913,7 @@ export class CrewStore {
       skills: current ? this.listSkills(current.id) : [],
       workflows: current ? this.listWorkflows(current.id) : [],
       artifacts: current ? this.listArtifacts(current.id) : [],
+      modelConnections: this.listModelConnections(),
       camp: current
         ? campState({
             members: this.readMembers(current.id),

@@ -15,6 +15,26 @@ import type { CrewMcp } from "./mcp";
 
 import { reportedCost } from "./model-cost";
 
+let configured: { baseUrl: string | null; model: string | null } | null = null;
+
+/** 사용자가 등록한 로컬 모델 연결을 실행에 적용한다. */
+export function setLocalConnection(
+  next: { baseUrl: string | null; model: string | null } | null,
+) {
+  configured = next;
+}
+
+export function localTarget() {
+  return {
+    baseUrl: (
+      configured?.baseUrl ||
+      process.env.AI_CREW_LOCAL_URL ||
+      "http://127.0.0.1:8082/v1"
+    ).replace(/\/+$/, ""),
+    model: configured?.model || process.env.AI_CREW_LOCAL_MODEL || undefined,
+  };
+}
+
 const modelList = z.object({
   data: z.array(
     z.object({ id: z.string().min(1), loaded: z.boolean().optional() }),
@@ -22,10 +42,8 @@ const modelList = z.object({
 });
 
 async function connectLocal(signal: AbortSignal) {
-  const baseURL = (
-    process.env.AI_CREW_LOCAL_URL || "http://127.0.0.1:8082/v1"
-  ).replace(/\/+$/, "");
-  let model = process.env.AI_CREW_LOCAL_MODEL;
+  const { baseUrl: baseURL, model: configuredModel } = localTarget();
+  let model = configuredModel;
   if (!model) {
     const result = await fetch(baseURL + "/models", {
       signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),

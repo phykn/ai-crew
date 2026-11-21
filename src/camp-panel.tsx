@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { roles, type Action, type Snapshot } from "./actions";
 import {
+  campFire,
   campObjects,
   initialActors,
   stepActor,
@@ -11,6 +12,8 @@ import {
   type CampActorSeed,
 } from "./camp-behavior";
 import { CampAtmosphere } from "./camp-atmosphere";
+import { createCampStage, type CampStage } from "./camp-pixi";
+import { crewHeight, depthScale } from "./camp-pixi-layout";
 import { CrewSettings } from "./crew-settings";
 import { Icon, SkillChips, sprites } from "./renderer-ui";
 import camp from "../demo/assets/camp.webp";
@@ -43,10 +46,6 @@ type CampPanelProps = {
 
 // 캐릭터마다 다른 깊이를 주어 배경보다 조금 더 크게 따라 움직이게 한다.
 const depthOf = (y: number) => (0.9 + Math.min(Math.max(y, 40), 92) / 130).toFixed(2);
-
-// 멀리(y가 작은) 서면 작게, 앞마당에 서면 크게. 오두막 문·통나무 의자와 비율을 맞춘다.
-const depthScale = (y: number) =>
-  (0.78 + (Math.min(Math.max(y - 46, 0), 44) / 44) * 0.28).toFixed(3);
 
 // 모닥불 가까이 서면 따뜻한 빛을 받는다.
 const fireGlow = (x: number, y: number) =>
@@ -100,6 +99,12 @@ export function CampPanel({
   const characterRefs = useRef(new Map<string, HTMLDivElement>());
   const objectRefs = useRef(new Map<string, HTMLButtonElement>());
   const runtime = useRef<CampActor[]>([]);
+  // PixiJS 캔버스가 그리는 캠프. WebGL을 못 쓰면 "css"로 떨어져 CSS 캠프를 그린다.
+  const stageHost = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<CampStage | null>(null);
+  const [stageMode, setStageMode] = useState<"pending" | "canvas" | "css">(
+    "pending",
+  );
   const anyWorking = data?.camp.members.some((member) => member.working) ?? false;
 
   // 캠프에 보이는 크루의 배정 상태만 순수 계산의 씨앗으로 넘긴다.
@@ -143,6 +148,15 @@ export function CampPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [memberKey],
   );
+
+  // 캔버스에 올릴 크루 스프라이트. 고용된 크루만 캠프를 걷는다.
+  const crewSprites = (data?.members ?? [])
+    .filter((member) => member.hired)
+    .map((member) => ({
+      id: member.id,
+      url: sprites[roles.find(({ id }) => id === member.roleId)?.sprite ?? 0],
+    }));
+  const spriteKey = crewSprites.map(({ id, url }) => id + ":" + url).join("|");
 
   useEffect(() => {
     const now = Date.now();
@@ -193,7 +207,7 @@ export function CampPanel({
         );
         element.dataset.facing = actor.facing;
         element.dataset.posture = actor.posture;
-        element.style.setProperty("--scale", depthScale(actor.y));
+        element.style.setProperty("--scale", depthScale(actor.y).toFixed(3));
         element.style.setProperty("--depth", depthOf(actor.y));
         element.style.setProperty("--fire-glow", fireGlow(actor.x, actor.y));
         element.classList.toggle("is-sitting", actor.posture === "sit");
@@ -216,7 +230,27 @@ export function CampPanel({
           runtime.current.some((actor) => actor.spotId === seat.id),
         );
       }
+      // 캔버스가 그리는 캐릭터도 같은 좌표를 쓴다.
+      stageRef.current?.render(
+        runtime.current,
+        runtime.current.some((actor) => actor.working),
+      );
     };
+
+    // 캐릭터 키를 캠프 높이에 맞춰 한 곳에서 정한다. 이름표(DOM)와 그림(캔버스)이
+    // 같은 `--crew-h`를 쓰므로 어느 화면 크기에서도 머리 위에 붙어 있다.
+    const measure = () => {
+      const area = scene.current;
+      if (!area) return;
+      const box = area.getBoundingClientRect();
+      if (!box.width || !box.height) return;
+      area.style.setProperty(
+        "--crew-h",
+        crewHeight({ width: box.width, height: box.height }).toFixed(2) + "px",
+      );
+      stageRef.current?.resize();
+    };
+    measure();
 
     const reduced = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -224,7 +258,12 @@ export function CampPanel({
     // 움직임을 줄이면 걷지 않고, 일하는 크루는 작업 자리에 선 채로 둔다.
     if (reduced) runtime.current = initialActors(hiredSeeds, now);
     paint();
-    if (reduced) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(scene.current!);
+    if (reduced)
+      return () => {
+        observer.disconnect();
+      };
     let frame = 0;
     let last = performance.now();
     const tick = (time: number) => {
@@ -247,7 +286,10 @@ export function CampPanel({
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
     // seedsKey가 바뀔 때만 캐릭터 배정을 다시 맞춘다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seedsKey]);
@@ -298,6 +340,8 @@ export function CampPanel({
 
     const move = (event: globalThis.PointerEvent) => {
       if (reduced.matches) return;
+      // 캔버스가 떠 있으면 배경 패럴랙스와 랜턴 빛은 PixiJS 스테이지가 맡는다.
+      if (stageRef.current) return;
       const box = area.getBoundingClientRect();
       if (!box.width || !box.height) return;
       const nx = event.clientX / box.width - 0.5;
@@ -329,9 +373,53 @@ export function CampPanel({
     };
   }, []);
 
+  // 캠프 그림·조명·캐릭터·불티를 PixiJS 캔버스에 맡긴다. 캔버스를 만들지 못하는
+  // 환경(서버 렌더, WebGL 없음)에서는 stageMode가 "css"로 남아 기존 CSS 캠프가
+  // 그대로 보인다.
+  useEffect(() => {
+    const host = stageHost.current;
+    if (!host) return;
+    let alive = true;
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    void createCampStage({
+      host,
+      surface: scene.current,
+      background: camp,
+      crew: crewSprites,
+      fire: campFire,
+      objects: campObjects.map(({ id, kind, x, y }) => ({ id, kind, x, y })),
+      reducedMotion: reduced,
+    }).then((stage) => {
+      if (!alive) {
+        stage?.destroy();
+        return;
+      }
+      if (!stage) {
+        setStageMode("css");
+        return;
+      }
+      stageRef.current = stage;
+      setStageMode("canvas");
+      stage.resize();
+      stage.render(
+        runtime.current,
+        runtime.current.some((actor) => actor.working),
+      );
+    });
+    return () => {
+      alive = false;
+      stageRef.current?.destroy();
+      stageRef.current = null;
+    };
+    // 크루 구성이 바뀔 때만 스테이지를 다시 만든다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spriteKey]);
+
   return (
     <section
-      className="camp"
+      className={"camp" + (stageMode === "canvas" ? " camp-pixi" : "")}
       aria-label="캠프"
       ref={scene}
     >
@@ -340,8 +428,9 @@ export function CampPanel({
         aria-hidden="true"
         style={{ backgroundImage: `url(${camp})` }}
       />
-      <CampAtmosphere />
+      {stageMode !== "canvas" && <CampAtmosphere />}
       <div className="camp-glow" aria-hidden="true" />
+      <div className="camp-canvas-host" aria-hidden="true" ref={stageHost} />
       <div className="camp-tools">
         <strong className="camp-badge">
           <Icon name="fire" />
@@ -665,6 +754,7 @@ export function CampPanel({
             title={object.label}
             onClick={() => {
               setPoked(object.id);
+              stageRef.current?.poke(object.id);
               window.setTimeout(
                 () =>
                   setPoked((current) =>
@@ -721,7 +811,7 @@ export function CampPanel({
                   top: top + "%",
                   zIndex: Math.round(top * 10) + 2,
                   "--depth": depthOf(top),
-                  "--scale": depthScale(top),
+                  "--scale": depthScale(top).toFixed(3),
                   "--fire-glow": fireGlow(left, top),
                   "--delay": `${(member.id.length % 5) * 0.6}s`,
                 } as CSSProperties

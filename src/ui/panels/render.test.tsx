@@ -76,7 +76,8 @@ test("a waiting answer shows a crew sprite and a state badge, not a chat line", 
     store.beginResponse(sessionId, randomUUID(), "배경을 바꿔줘");
     const html = renderChat(store.snapshot());
     expect(html).toContain('class="bubble-pending"');
-    expect(html).toContain("crew-0");
+    // 기다리는 동안 크루의 픽셀아트 초상(pixlrt SVG)이 보인다.
+    expect(html).toMatch(/bubble-pending[\s\S]*?<img src="data:image\/svg\+xml;base64,/);
     expect(html).toContain("진행 중");
     expect(html).not.toContain("답변을 준비하고 있어요");
     expect(html).not.toContain("앞선 답변 뒤에 이어서");

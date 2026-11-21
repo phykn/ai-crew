@@ -1,33 +1,40 @@
-// 캠프 픽셀아트 스테이지. 배경·조명·캐릭터·불티를 PixiJS로 한 장의 캔버스에 그리고,
-// 캐릭터의 자리 이동·호흡·착석·방향 전환은 GSAP으로 다듬는다. PixiJS와 GSAP은 이
-// 파일 안에서만 동적 import 하므로, 서버 렌더(react-dom/server)나 WebGL이 없는
-// 환경에서는 모듈만 읽히고 캔버스는 만들어지지 않는다. 초기화에 실패하면 null을
-// 돌려주고, 화면은 기존 CSS 캠프로 그대로 폴백한다.
+// 캠프 픽셀아트 스테이지. 바닥 타일·오브젝트·크루를 모두 pixlrt로 그린 그림에서
+// 만든 텍스처로 한 장의 캔버스에 얹고, 크루의 이동·호흡·걷기·착석·방향 전환은
+// GSAP과 AnimatedSprite로 다듬는다. PixiJS와 GSAP은 이 파일 안에서만 동적 import
+// 하므로 서버 렌더나 WebGL이 없는 환경에서는 캔버스가 만들어지지 않고, 화면은
+// CSS 캠프로 그대로 폴백한다(pixlrt 그림을 SVG로 쓴 같은 그림이다).
 
+import { renderToCanvas } from "pixlrt/core";
 import {
-  coverFit,
+  artUnit,
   crewHeight,
-  crewScale,
-  depthScale,
   fireLight,
   flicker,
-  seatPose,
   sortZ,
   stagePoint,
   webglAvailable,
   type StagePoint,
   type StageSize,
 } from "./pixi-layout";
+import {
+  campGround,
+  crewAnimations,
+  crewFrame,
+  objectArt,
+  type CrewPose,
+  type ObjectKind,
+} from "./art/scene";
+import { mapCenter, tileSize } from "./art/ground";
 
 type PixiModule = typeof import("pixi.js");
 type GsapModule = typeof import("gsap");
 type PixiContainer = InstanceType<PixiModule["Container"]>;
 type PixiSprite = InstanceType<PixiModule["Sprite"]>;
+type PixiAnimated = InstanceType<PixiModule["AnimatedSprite"]>;
 type PixiTexture = InstanceType<PixiModule["Texture"]>;
 type PixiTween = ReturnType<GsapModule["gsap"]["to"]>;
-type PixiTimeline = ReturnType<GsapModule["gsap"]["timeline"]>;
 
-type StageActor = {
+export type StageActor = {
   memberId: string;
   x: number;
   y: number;
@@ -36,26 +43,23 @@ type StageActor = {
   working: boolean;
 };
 
-type CrewSprite = { id: string; url: string };
+type CampCrew = { id: string; role: number };
 
-/** 캠프 그림 위에 얹는 개별 오브젝트(모닥불·벤치·천막·마차·보급 상자). */
-type StageObject = {
+/** 캠프에 놓는 오브젝트. 크기는 아트 픽셀 단위다. */
+export type StageObject = {
   id: string;
-  kind: "campfire" | "bench" | "tent" | "wagon" | "crates";
+  kind: ObjectKind;
   x: number;
   y: number;
-  /** 캠프 높이에 대한 그림 높이(%). 너비는 그림의 가로세로 비율을 따른다. */
+  w: number;
   h: number;
-  /** 투명 WebP 스프라이트 주소. */
-  sprite: string;
 };
 
 type CampStageOptions = {
   host: HTMLElement;
   /** 포인터를 받는 요소. 캔버스 자체는 입력을 받지 않는다. */
   surface?: HTMLElement | null;
-  background: string;
-  crew: CrewSprite[];
+  crew: CampCrew[];
   fire: StagePoint;
   objects?: StageObject[];
   reducedMotion?: boolean;
@@ -68,42 +72,16 @@ export type CampStage = {
   destroy(): void;
 };
 
-type Pose = {
-  sink: number; // 0~1, 앉는 깊이
-  squashX: number;
-  squashY: number;
-  facing: number; // 1 또는 -1
-  bob: number; // px
-  tilt: number; // rad
-};
-
 type ActorView = {
   id: string;
+  role: number;
   root: PixiContainer;
-  breath: PixiContainer;
-  body: PixiContainer;
-  sprite: PixiSprite;
-  shadow: PixiSprite;
+  sprite: PixiAnimated;
   aura: PixiSprite;
-  pose: Pose;
-  base: number;
-  walking: boolean;
-  sitting: boolean;
+  animation: string;
   quickX: (value: number) => unknown;
   quickY: (value: number) => unknown;
-  breathing: PixiTween | null;
-  bobTimeline: PixiTimeline | null;
-  sitTween: PixiTween | null;
-  faceTween: PixiTimeline | null;
-};
-
-type EmberState = { rise: number; drift: number; alpha: number };
-type EmberView = { sprite: PixiSprite; state: EmberState; size: number };
-type FireflyState = { dx: number; dy: number; alpha: number };
-type FireflyView = {
-  sprite: PixiSprite;
-  home: StagePoint;
-  state: FireflyState;
+  tweens: PixiTween[];
 };
 
 const warmLight: [number, string][] = [
@@ -113,40 +91,17 @@ const warmLight: [number, string][] = [
   [1, "rgba(255,130,40,0)"],
 ];
 
-const dotLight: [number, string][] = [
-  [0, "rgba(255,255,255,1)"],
-  [0.45, "rgba(255,226,160,0.55)"],
-  [1, "rgba(255,180,90,0)"],
-];
-
 const softShadow: [number, string][] = [
-  [0, "rgba(0,0,0,0.85)"],
-  [0.55, "rgba(0,0,0,0.34)"],
+  [0, "rgba(0,0,0,0.8)"],
+  [0.55, "rgba(0,0,0,0.3)"],
   [1, "rgba(0,0,0,0)"],
 ];
-
-function loadImage(url: string) {
-  return new Promise<HTMLImageElement | null>((resolve) => {
-    const image = new Image();
-    image.decoding = "async";
-    image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
-    image.src = url;
-  });
-}
 
 function random(min: number, max: number) {
   return min + Math.random() * (max - min);
 }
 
-/**
- * 캔버스를 얹을 자리의 크기. 아직 화면에 붙지 않아 높이가 0이면, 포인터를 받는
- * 캠프 영역의 크기를 대신 쓴다.
- */
-function measureStage(
-  host: HTMLElement,
-  surface?: HTMLElement | null,
-): StageSize {
+function measureStage(host: HTMLElement, surface?: HTMLElement | null): StageSize {
   const width = Math.max(1, host.clientWidth || host.offsetWidth || 0);
   const height = Math.max(1, host.clientHeight || host.offsetHeight || 0);
   if (width > 1 && height > 1) return { width, height };
@@ -160,10 +115,11 @@ function measureStage(
 export async function createCampStage(
   options: CampStageOptions,
 ): Promise<CampStage | null> {
-  if (typeof window === "undefined" || typeof document === "undefined")
-    return null;
+  if (typeof window === "undefined" || typeof document === "undefined") return null;
   if (!options.host) return null;
-  if (!webglAvailable(() => document.createElement("canvas"))) return null;
+  if (!webglAvailable(() => document.createElement("canvas"))) {
+    return null;
+  }
 
   let PIXI: PixiModule;
   let gsap: GsapModule["gsap"];
@@ -175,7 +131,6 @@ export async function createCampStage(
   }
 
   const size: StageSize = measureStage(options.host, options.surface);
-
   const app = new PIXI.Application();
   try {
     await app.init({
@@ -211,6 +166,28 @@ export async function createCampStage(
   const particles = new PIXI.Container();
   app.stage.addChild(world, lights, particles);
 
+  let unit = artUnit(size);
+
+  /** 픽셀아트 그림을 그대로 옮긴 텍스처. 확대해도 각이 살아 있게 nearest로 둔다. */
+  function pixelTexture(art: { width: number; height: number }) {
+    const surface = document.createElement("canvas");
+    renderToCanvas(art as never, surface);
+    const texture = PIXI.Texture.from(surface);
+    texture.source.scaleMode = "nearest";
+    return texture;
+  }
+
+  const poseTextures = new Map<string, PixiTexture[]>();
+  function crewTextures(role: number, poses: readonly CrewPose[]) {
+    const key = role + ":" + poses.join(",");
+    let textures = poseTextures.get(key);
+    if (!textures) {
+      textures = poses.map((pose) => pixelTexture(crewFrame(role, pose)));
+      poseTextures.set(key, textures);
+    }
+    return textures;
+  }
+
   function radial(stops: [number, string][], pixelSize = 128) {
     const surface = document.createElement("canvas");
     surface.width = pixelSize;
@@ -218,67 +195,66 @@ export async function createCampStage(
     const context = surface.getContext("2d");
     if (!context) return null;
     const half = pixelSize / 2;
-    const gradient = context.createRadialGradient(
-      half,
-      half,
-      0,
-      half,
-      half,
-      half,
-    );
+    const gradient = context.createRadialGradient(half, half, 0, half, half, half);
     for (const [offset, color] of stops) gradient.addColorStop(offset, color);
     context.fillStyle = gradient;
     context.fillRect(0, 0, pixelSize, pixelSize);
     return PIXI.Texture.from(surface);
   }
 
+  /** 불티·반딧불이 쓰는 2x2 픽셀 점. */
+  function pixelDot() {
+    const surface = document.createElement("canvas");
+    surface.width = 2;
+    surface.height = 2;
+    const context = surface.getContext("2d");
+    if (!context) return null;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, 2, 2);
+    const texture = PIXI.Texture.from(surface);
+    texture.source.scaleMode = "nearest";
+    return texture;
+  }
+
   const glowTexture = radial(warmLight);
-  const dotTexture = radial(dotLight, 64);
+  const dotTexture = pixelDot();
   const shadowTexture = radial(softShadow, 64);
 
-  // ── 배경 ────────────────────────────────────────────────────────────────
-  const backgroundImage = await loadImage(options.background);
-  const background = backgroundImage
-    ? new PIXI.Sprite(PIXI.Texture.from(backgroundImage))
-    : null;
-  if (background) {
-    background.texture.source.scaleMode = "nearest";
-    background.zIndex = -1_000_000;
-    world.addChild(background);
-  }
-
-  // ── 캐릭터 텍스처 ───────────────────────────────────────────────────────
-  const crewTextures = new Map<string, PixiTexture>();
-  const crewImages = await Promise.all(
-    options.crew.map((crew) => loadImage(crew.url)),
-  );
-  for (const [index, image] of crewImages.entries()) {
-    if (!image) continue;
-    const texture = PIXI.Texture.from(image);
-    texture.source.scaleMode = "nearest";
-    crewTextures.set(options.crew[index].id, texture);
-  }
+  // ── 바닥 타일 ───────────────────────────────────────────────────────────
+  // 캠프 좌표의 (50,50)이 모닥불 타일이므로, 그 타일을 무대 가운데에 둔다.
+  const groundTexture = pixelTexture(campGround());
+  const ground = new PIXI.Sprite(groundTexture);
+  ground.zIndex = -1_000_000;
+  world.addChild(ground);
 
   // ── 오브젝트 스프라이트 ─────────────────────────────────────────────────
-  // 천막·마차·모닥불·벤치·보급 상자는 투명 WebP 한 장씩을 그대로 얹는다.
-  // 캐릭터와 같은 sortableChildren 안에 두어 발밑 y로 앞뒤가 갈린다.
-  const objectTextures = new Map<string, PixiTexture>();
-  const objectUrls = [
-    ...new Set((options.objects ?? []).map((object) => object.sprite)),
-  ];
-  const objectImages = await Promise.all(objectUrls.map((url) => loadImage(url)));
-  for (const [index, image] of objectImages.entries()) {
-    if (!image) continue;
-    const texture = PIXI.Texture.from(image);
-    texture.source.scaleMode = "nearest";
-    objectTextures.set(objectUrls[index], texture);
+  const objectTextures = new Map<string, PixiTexture[]>();
+  function objectFrames(kind: ObjectKind, frames: number) {
+    let textures = objectTextures.get(kind);
+    if (!textures) {
+      textures = Array.from({ length: frames }, (_, index) =>
+        pixelTexture(objectArt(kind, index)),
+      );
+      objectTextures.set(kind, textures);
+    }
+    return textures;
   }
 
-  const objectViews: { object: StageObject; sprite: PixiSprite }[] = [];
+  type ObjectView = { object: StageObject; sprite: PixiSprite };
+  const objectViews: ObjectView[] = [];
+  let campfire: PixiAnimated | null = null;
   for (const object of options.objects ?? []) {
-    const texture = objectTextures.get(object.sprite);
-    if (!texture) continue;
-    const sprite = new PIXI.Sprite(texture);
+    const textures =
+      object.kind === "campfire" ? objectFrames("campfire", 3) : objectFrames(object.kind, 1);
+    const sprite =
+      object.kind === "campfire"
+        ? new PIXI.AnimatedSprite(textures)
+        : new PIXI.Sprite(textures[0]);
+    if (sprite instanceof PIXI.AnimatedSprite) {
+      sprite.animationSpeed = reducedMotion ? 0 : 0.06;
+      sprite.gotoAndPlay(0);
+      campfire = sprite;
+    }
     sprite.anchor.set(0.5, 1);
     sprite.zIndex = sortZ(object.y, object.id);
     world.addChild(sprite);
@@ -286,46 +262,22 @@ export async function createCampStage(
   }
 
   // ── 조명 ────────────────────────────────────────────────────────────────
-  const fireGlow =
-    glowTexture ? new PIXI.Sprite(glowTexture) : new PIXI.Sprite();
+  const fireGlow = glowTexture ? new PIXI.Sprite(glowTexture) : new PIXI.Sprite();
   fireGlow.anchor.set(0.5, 0.62);
   fireGlow.blendMode = "add";
   fireGlow.tint = 0xffc078;
-  fireGlow.zIndex = sortZ(options.fire.y, "campfire-light");
+  fireGlow.zIndex = 10_000_000;
   world.addChild(fireGlow);
 
-  const fireCore = dotTexture ? new PIXI.Sprite(dotTexture) : new PIXI.Sprite();
-  fireCore.anchor.set(0.5, 0.62);
-  fireCore.blendMode = "add";
-  fireCore.tint = 0xffd9a0;
-  fireCore.zIndex = sortZ(options.fire.y, "campfire-core");
-  world.addChild(fireCore);
-
-  // 보급 상자 위 등불과 천막 입구의 따뜻한 빛.
-  const lanternObject = (options.objects ?? []).find(
-    (object) => object.kind === "crates",
-  );
-  const lanternLight =
-    lanternObject && glowTexture ? new PIXI.Sprite(glowTexture) : null;
-  if (lanternLight && lanternObject) {
+  const lantern = (options.objects ?? []).find((object) => object.kind === "crates");
+  const tent = (options.objects ?? []).find((object) => object.kind === "tent");
+  const lanternLight = lantern && glowTexture ? new PIXI.Sprite(glowTexture) : null;
+  if (lanternLight) {
     lanternLight.anchor.set(0.5, 0.5);
     lanternLight.blendMode = "add";
     lanternLight.tint = 0xffb668;
-    lanternLight.zIndex = sortZ(lanternObject.y, "lantern-light");
+    lanternLight.zIndex = 9_999_999;
     world.addChild(lanternLight);
-  }
-
-  const tentObject = (options.objects ?? []).find(
-    (object) => object.kind === "tent",
-  );
-  const tentLight =
-    tentObject && glowTexture ? new PIXI.Sprite(glowTexture) : null;
-  if (tentLight && tentObject) {
-    tentLight.anchor.set(0.5, 0.5);
-    tentLight.blendMode = "add";
-    tentLight.tint = 0xffcf92;
-    tentLight.zIndex = sortZ(tentObject.y, "tent-light");
-    world.addChild(tentLight);
   }
 
   const cursorLight = glowTexture ? new PIXI.Sprite(glowTexture) : null;
@@ -338,70 +290,99 @@ export async function createCampStage(
   }
   const cursorAt = { x: 0, y: 0 };
 
-  // ── 캐릭터 ──────────────────────────────────────────────────────────────
+  // ── 크루 ────────────────────────────────────────────────────────────────
   const views = new Map<string, ActorView>();
-  const allTweens: (PixiTween | PixiTimeline)[] = [];
+  const allTweens: { kill: () => void }[] = [];
+  const roles = new Map(options.crew.map((crew) => [crew.id, crew.role]));
 
-  const bgFit = { scale: 1, x: 0, y: 0 };
-  const parallax = { x: 0, y: 0 };
+  function buildActor(actor: StageActor): ActorView | null {
+    const role = roles.get(actor.memberId);
+    if (role === undefined) return null;
+    const root = new PIXI.Container();
+    const sprite = new PIXI.AnimatedSprite(crewTextures(role, crewAnimations.stand));
+    sprite.anchor.set(0.5, 1);
+    sprite.animationSpeed = reducedMotion ? 0 : 0.03;
+    sprite.play();
 
-  function placeBackground() {
-    if (!background) return;
-    // 가장자리가 드러나지 않게 6% 여유를 두고 채운 뒤, 포인터를 따라 조금씩 민다.
-    const fit = coverFit(
-      { width: background.texture.width, height: background.texture.height },
-      { width: size.width * 1.06, height: size.height * 1.06 },
+    const aura = new PIXI.Sprite(glowTexture ?? PIXI.Texture.WHITE);
+    aura.anchor.set(0.5, 0.5);
+    aura.blendMode = "add";
+    aura.tint = 0xffb050;
+    aura.alpha = 0;
+
+    sprite.scale.set(unit, unit);
+    root.addChild(aura, sprite);
+    root.position.set(
+      (actor.x / 100) * size.width,
+      (actor.y / 100) * size.height,
     );
-    bgFit.scale = fit.scale;
-    bgFit.x = fit.x - size.width * 0.03;
-    bgFit.y = fit.y - size.height * 0.03;
-    background.scale.set(fit.scale);
-    background.position.set(bgFit.x + parallax.x, bgFit.y + parallax.y);
+    world.addChild(root);
+
+    const view: ActorView = {
+      id: actor.memberId,
+      role,
+      root,
+      sprite,
+      aura,
+      animation: "stand",
+      quickX: gsap.quickTo(root, "x", { duration: 0.1, ease: "none" }),
+      quickY: gsap.quickTo(root, "y", { duration: 0.1, ease: "none" }),
+      tweens: [],
+    };
+    views.set(actor.memberId, view);
+    return view;
   }
 
-  function placeObjects() {
-    // 그림 높이만 캠프 높이에 비례시키고, 너비는 원본 비율을 따라 늘어나지 않는다.
+  function animate(view: ActorView, animation: keyof typeof crewAnimations) {
+    if (view.animation === animation) return;
+    const poses = crewAnimations[animation];
+    view.sprite.textures = crewTextures(view.role, poses);
+    if (reducedMotion || poses.length === 1) {
+      view.sprite.gotoAndStop(0);
+    } else {
+      view.sprite.animationSpeed =
+        animation === "walk" ? 0.14 : animation === "work" ? 0.05 : 0.03;
+      view.sprite.gotoAndPlay(0);
+    }
+    view.animation = animation;
+  }
+
+  function sizeSprites() {
+    unit = artUnit(size);
+    ground.scale.set(unit);
+    ground.position.set(
+      size.width / 2 - (mapCenter.col + 0.5) * tileSize * unit,
+      size.height / 2 - (mapCenter.row + 0.5) * tileSize * unit,
+    );
     for (const { object, sprite } of objectViews) {
       const point = stagePoint(size, object);
-      const height = (object.h / 100) * size.height;
       sprite.position.set(point.x, point.y);
-      sprite.height = height;
-      sprite.width = height * (sprite.texture.width / sprite.texture.height);
+      sprite.width = object.w * unit;
+      sprite.height = object.h * unit;
     }
-  }
-
-  /** 모닥불 그림의 불꽃 한가운데(스테이지 픽셀). 불티와 빛이 여기서 피어오른다. */
-  function fireCentre() {
-    const base = stagePoint(size, options.fire);
-    return { x: base.x, y: base.y - size.height * 0.06 };
+    for (const view of views.values()) {
+      view.sprite.scale.set(
+        unit * (view.sprite.scale.x < 0 ? -1 : 1),
+        unit,
+      );
+      view.aura.width = crewHeight(size) * 0.8;
+      view.aura.height = Math.max(14, crewHeight(size) * 0.2);
+    }
   }
 
   function placeLights() {
     const fire = stagePoint(size, options.fire);
-    const heart = fireCentre();
     fireGlow.position.set(fire.x, fire.y - size.height * 0.02);
     fireGlow.width = size.width * 0.34;
     fireGlow.height = size.height * 0.34;
-    fireCore.position.set(heart.x, heart.y);
-    fireCore.width = size.width * 0.085;
-    fireCore.height = size.width * 0.085;
-    if (lanternLight && lanternObject) {
-      const lantern = stagePoint(size, lanternObject);
+    if (lanternLight && lantern) {
+      const point = stagePoint(size, lantern);
       lanternLight.position.set(
-        lantern.x,
-        lantern.y - size.height * (lanternObject.h / 100) * 0.72,
+        point.x + size.width * 0.02,
+        point.y - lantern.h * unit * 0.72,
       );
       lanternLight.width = size.width * 0.16;
       lanternLight.height = size.width * 0.16;
-    }
-    if (tentLight && tentObject) {
-      const tent = stagePoint(size, tentObject);
-      tentLight.position.set(
-        tent.x - size.width * 0.01,
-        tent.y - size.height * (tentObject.h / 100) * 0.28,
-      );
-      tentLight.width = size.width * 0.2;
-      tentLight.height = size.width * 0.16;
     }
     if (cursorLight) {
       cursorLight.width = size.width * 0.34;
@@ -409,134 +390,16 @@ export async function createCampStage(
     }
   }
 
-  function sizeActor(view: ActorView) {
-    const height = crewHeight(size);
-    view.base = crewScale(
-      { width: view.sprite.texture.width, height: view.sprite.texture.height },
-      size,
-    );
-    view.sprite.scale.set(view.base);
-    view.shadow.width = height * 0.42;
-    view.shadow.height = Math.max(6, height * 0.1);
-    view.aura.width = height * 0.78;
-    view.aura.height = Math.max(16, height * 0.22);
-  }
-
-  function buildActor(id: string): ActorView | null {
-    const texture = crewTextures.get(id);
-    if (!texture) return null;
-    const root = new PIXI.Container();
-    const breath = new PIXI.Container();
-    const body = new PIXI.Container();
-    const sprite = new PIXI.Sprite(texture);
-    sprite.anchor.set(0.5, 1);
-
-    const shadow = new PIXI.Sprite(shadowTexture ?? PIXI.Texture.WHITE);
-    shadow.anchor.set(0.5, 0.5);
-    shadow.tint = 0x000000;
-    shadow.alpha = 0.42;
-
-    const aura = new PIXI.Sprite(glowTexture ?? PIXI.Texture.WHITE);
-    aura.anchor.set(0.5, 0.5);
-    aura.blendMode = "add";
-    aura.tint = 0xffb050;
-    aura.alpha = 0;
-    aura.y = -1;
-
-    body.addChild(sprite);
-    breath.addChild(body);
-    root.addChild(shadow, aura, breath);
-    world.addChild(root);
-
-    const pose: Pose = {
-      sink: 0,
-      squashX: 1,
-      squashY: 1,
-      facing: 1,
-      bob: 0,
-      tilt: 0,
-    };
-    const view: ActorView = {
-      id,
-      root,
-      breath,
-      body,
-      sprite,
-      shadow,
-      aura,
-      pose,
-      base: 1,
-      walking: false,
-      sitting: false,
-      quickX: gsap.quickTo(root, "x", { duration: 0.1, ease: "none" }),
-      quickY: gsap.quickTo(root, "y", { duration: 0.1, ease: "none" }),
-      breathing: null,
-      bobTimeline: null,
-      sitTween: null,
-      faceTween: null,
-    };
-    sizeActor(view);
-    if (!reducedMotion) {
-      view.breathing = gsap.to(body.scale, {
-        y: 1.015,
-        duration: 2.6 + (id.length % 5) * 0.24,
-        repeat: -1,
-        yoyo: true,
-        ease: "sine.inOut",
-        delay: (id.length % 7) * 0.16,
-      });
-      view.bobTimeline = gsap.timeline({ paused: true, repeat: -1, yoyo: true }).to(pose, {
-        bob: -3.2,
-        tilt: 0.03,
-        duration: 0.26,
-        ease: "sine.inOut",
-      });
-      allTweens.push(view.breathing, view.bobTimeline);
-    }
-    views.set(id, view);
-    return view;
-  }
-
-  function sitDown(view: ActorView, down: boolean) {
-    view.sitting = down;
-    view.sitTween?.kill();
-    const rest = seatPose(down ? 1 : 0);
-    if (reducedMotion) {
-      // 움직임을 줄이는 환경에서는 보간 없이 앉은 자세로 바로 둔다.
-      view.pose.sink = down ? 1 : 0;
-      view.pose.squashY = rest.squashY;
-      view.pose.squashX = rest.squashX;
-      return;
-    }
-    view.sitTween = gsap.to(view.pose, {
-      sink: down ? 1 : 0,
-      squashY: rest.squashY,
-      squashX: rest.squashX,
-      duration: down ? 0.42 : 0.34,
-      ease: down ? "power2.out" : "power2.inOut",
-      overwrite: "auto",
-    });
-  }
-
-  function turnTo(view: ActorView, facing: "left" | "right") {
-    const sign = facing === "left" ? -1 : 1;
-    if (view.pose.facing === sign) return;
-    view.faceTween?.kill();
-    if (reducedMotion) {
-      view.pose.facing = sign;
-      return;
-    }
-    // 뒤집히는 순간만 살짝 납작해져 고개를 돌리는 것처럼 보인다.
-    view.faceTween = gsap
-      .timeline()
-      .to(view.pose, { squashX: 0.74, duration: 0.09, ease: "power1.in" })
-      .to(view.pose, { facing: sign, duration: 0.001 })
-      .to(view.pose, { squashX: 1, duration: 0.12, ease: "power1.out" });
-  }
-
   // ── 불티와 반딧불이 ─────────────────────────────────────────────────────
-  const embers: EmberView[] = [];
-  const fireflies: FireflyView[] = [];
+  type Ember = { sprite: PixiSprite; state: { rise: number; drift: number; alpha: number }; size: number };
+  type Firefly = { sprite: PixiSprite; home: StagePoint; state: { dx: number; dy: number; alpha: number } };
+  const embers: Ember[] = [];
+  const fireflies: Firefly[] = [];
+
+  function fireCentre() {
+    const base = stagePoint(size, options.fire);
+    return { x: base.x, y: base.y - size.height * 0.05 };
+  }
 
   function spawnParticles() {
     if (!dotTexture) return;
@@ -547,67 +410,38 @@ export async function createCampStage(
       sprite.tint = index % 3 === 0 ? 0xfff0c0 : 0xffa850;
       sprite.alpha = 0;
       particles.addChild(sprite);
-      const state: EmberState = { rise: 0, drift: 0, alpha: 0 };
-      const ember: EmberView = {
-        sprite,
-        state,
-        size: random(3, 7),
-      };
-      embers.push(ember);
-      const rise = random(56, 150);
-      const drift = random(-22, 22);
+      const state = { rise: 0, drift: 0, alpha: 0 };
+      embers.push({ sprite, state, size: random(2, 4) });
+      const rise = random(50, 130);
+      const drift = random(-20, 20);
       const span = random(1.6, 3.4);
-      const timeline = gsap
-        .timeline({ repeat: -1, delay: random(0, 2.6) })
-        .set(state, { rise: 0, drift: 0, alpha: 0 })
-        .to(state, {
-          rise: rise * 0.55,
-          drift: drift * 0.55,
-          alpha: 0.95,
-          duration: span * 0.45,
-          ease: "sine.out",
-        })
-        .to(state, {
-          rise,
-          drift,
-          alpha: 0,
-          duration: span * 0.55,
-          ease: "sine.in",
-        });
-      allTweens.push(timeline);
+      allTweens.push(
+        gsap
+          .timeline({ repeat: -1, delay: random(0, 2.6) })
+          .set(state, { rise: 0, drift: 0, alpha: 0 })
+          .to(state, { rise: rise * 0.55, drift: drift * 0.55, alpha: 0.95, duration: span * 0.45, ease: "sine.out" })
+          .to(state, { rise, drift, alpha: 0, duration: span * 0.55, ease: "sine.in" }),
+      );
     }
-    for (let index = 0; index < 12; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       const sprite = new PIXI.Sprite(dotTexture);
       sprite.anchor.set(0.5);
       sprite.blendMode = "add";
       sprite.tint = 0xdcff8a;
       sprite.alpha = 0;
-      sprite.width = random(2.4, 4.6);
-      sprite.height = sprite.width;
       particles.addChild(sprite);
       const home = { x: random(6, 94), y: random(14, 60) };
-      const state: FireflyState = { dx: 0, dy: 0, alpha: 0 };
+      const state = { dx: 0, dy: 0, alpha: 0 };
       fireflies.push({ sprite, home, state });
       const reach = random(4, 10);
       const span = random(1.6, 2.8);
-      const timeline = gsap
-        .timeline({ repeat: -1, delay: random(0, 4) })
-        .set(state, { dx: 0, dy: 0, alpha: 0 })
-        .to(state, {
-          dx: reach,
-          dy: -reach * 0.55,
-          alpha: 0.8,
-          duration: span,
-          ease: "sine.inOut",
-        })
-        .to(state, {
-          dx: -reach * 0.7,
-          dy: reach * 0.45,
-          alpha: 0.1,
-          duration: span * 1.1,
-          ease: "sine.inOut",
-        });
-      allTweens.push(timeline);
+      allTweens.push(
+        gsap
+          .timeline({ repeat: -1, delay: random(0, 4) })
+          .set(state, { dx: 0, dy: 0, alpha: 0 })
+          .to(state, { dx: reach, dy: -reach * 0.55, alpha: 0.8, duration: span, ease: "sine.inOut" })
+          .to(state, { dx: -reach * 0.7, dy: reach * 0.45, alpha: 0.1, duration: span * 1.1, ease: "sine.inOut" }),
+      );
     }
   }
 
@@ -616,48 +450,29 @@ export async function createCampStage(
     for (const ember of embers) {
       ember.sprite.x = fire.x + ember.state.drift;
       ember.sprite.y = fire.y - ember.state.rise;
-      ember.sprite.width = ember.size;
-      ember.sprite.height = ember.size;
+      ember.sprite.width = ember.size * unit * 0.8;
+      ember.sprite.height = ember.size * unit * 0.8;
       ember.sprite.alpha = ember.state.alpha;
     }
     for (const firefly of fireflies) {
-      firefly.sprite.x =
-        ((firefly.home.x + firefly.state.dx * 0.6) / 100) * size.width;
-      firefly.sprite.y =
-        ((firefly.home.y + firefly.state.dy * 0.6) / 100) * size.height;
+      firefly.sprite.x = ((firefly.home.x + firefly.state.dx * 0.6) / 100) * size.width;
+      firefly.sprite.y = ((firefly.home.y + firefly.state.dy * 0.6) / 100) * size.height;
+      firefly.sprite.width = 2 * unit * 0.9;
+      firefly.sprite.height = 2 * unit * 0.9;
       firefly.sprite.alpha = firefly.state.alpha;
     }
   }
 
   // ── 프레임 ──────────────────────────────────────────────────────────────
-  function paint() {
-    // 통나무에 걸터앉으면 발끝을 축으로 몸을 내리고 눌러 앉힌다.
-    const sink = crewHeight(size) * 0.02;
-    for (const view of views.values()) {
-      if (!view.root.visible) continue;
-      view.breath.y = view.pose.sink * sink + view.pose.bob;
-      view.breath.rotation = view.pose.tilt;
-      view.sprite.scale.set(
-        view.base * view.pose.facing * view.pose.squashX,
-        view.base * view.pose.squashY,
-      );
-    }
-  }
-
-  const pointerSurface = options.surface ?? options.host;
   const firePulse = { value: 0 };
   let crewWorking = false;
 
   function frame() {
-    paint();
     const time = performance.now() / 1000;
     const glow = reducedMotion ? 0.72 : flicker(time);
+    // 모닥불에 가까이 선 크루가 많을수록 불빛이 조금 밝아진다.
     fireGlow.alpha = 0.1 + glow * 0.16 + firePulse.value + (crewWorking ? 0.03 : 0);
-    fireCore.alpha = 0.06 + glow * 0.08;
     if (lanternLight) lanternLight.alpha = 0.08 + glow * 0.06;
-    if (tentLight) tentLight.alpha = 0.06 + glow * 0.05;
-    if (background)
-      background.position.set(bgFit.x + parallax.x, bgFit.y + parallax.y);
     if (!reducedMotion) placeParticles();
     if (cursorLight) cursorLight.position.set(cursorAt.x, cursorAt.y);
     app.render();
@@ -665,43 +480,27 @@ export async function createCampStage(
 
   function apply(actor: StageActor) {
     let view = views.get(actor.memberId);
-    if (!view) {
-      view = buildActor(actor.memberId) ?? undefined;
-      if (!view) return;
-      view.root.position.set(
-        (actor.x / 100) * size.width,
-        (actor.y / 100) * size.height,
-      );
-    }
+    if (!view) view = buildActor(actor) ?? undefined;
+    if (!view) return;
     view.root.visible = true;
     view.quickX((actor.x / 100) * size.width);
     view.quickY((actor.y / 100) * size.height);
-    view.root.zIndex = sortZ(actor.y, actor.memberId);
-    view.root.scale.set(depthScale(actor.y));
+    // 앉은 크루는 통나무 위에 걸터앉아 다리가 통나무 앞으로 나온다.
+    view.root.zIndex = sortZ(actor.y + (actor.posture === "sit" ? 0.2 : 0), actor.memberId);
 
-    if (actor.posture === "walk") {
-      if (!view.walking) {
-        view.walking = true;
-        view.bobTimeline?.play();
-      }
-    } else if (view.walking) {
-      view.walking = false;
-      view.bobTimeline?.pause();
-      view.pose.bob = 0;
-      view.pose.tilt = 0;
-    }
+    if (actor.posture === "walk") animate(view, "walk");
+    else if (actor.posture === "sit") animate(view, "sit");
+    else if (actor.working || actor.posture === "work") animate(view, "work");
+    else if (actor.posture === "watch") animate(view, "watch");
+    else if (actor.posture === "handoff") animate(view, "handoff");
+    else animate(view, "stand");
 
-    if (actor.posture === "sit") {
-      if (!view.sitting) sitDown(view, true);
-    } else if (view.sitting) sitDown(view, false);
-
-    turnTo(view, actor.facing);
+    // 아트 1픽셀이 화면에서 unit픽셀이 되도록 매 프레임 맞춘다(방향은 좌우 반전).
+    const facing = actor.facing === "left" ? -1 : 1;
+    view.sprite.scale.set(unit * facing, unit);
 
     const working = actor.working || actor.posture === "work";
-    view.aura.alpha = working
-      ? 0.2 + fireLight(actor.x, actor.y, options.fire) * 0.22
-      : 0;
-    view.shadow.alpha = actor.posture === "sit" ? 0.3 : 0.42;
+    view.aura.alpha = working ? 0.2 + fireLight(actor.x, actor.y, options.fire) * 0.22 : 0;
   }
 
   function resize() {
@@ -709,15 +508,16 @@ export async function createCampStage(
     size.width = measured.width;
     size.height = measured.height;
     app.renderer.resize(size.width, size.height);
-    placeBackground();
-    placeObjects();
+    sizeSprites();
     placeLights();
-    for (const view of views.values()) sizeActor(view);
     placeParticles();
     frame();
   }
 
   // ── 포인터 ──────────────────────────────────────────────────────────────
+  const parallax = { x: 0, y: 0 };
+  const pointerSurface = options.surface ?? options.host;
+
   const moveCursor = (event: PointerEvent) => {
     if (reducedMotion) return;
     const box = options.host.getBoundingClientRect();
@@ -731,6 +531,9 @@ export async function createCampStage(
       duration: 0.8,
       ease: "power2.out",
       overwrite: "auto",
+      onUpdate: () => {
+        ground.position.x = size.width / 2 - (mapCenter.col + 0.5) * tileSize * unit + parallax.x;
+      },
     });
     if (!cursorLight) return;
     gsap.to(cursorAt, {
@@ -758,8 +561,7 @@ export async function createCampStage(
     }
   };
 
-  placeBackground();
-  placeObjects();
+  sizeSprites();
   placeLights();
   spawnParticles();
   pointerSurface.addEventListener("pointermove", moveCursor);
@@ -785,21 +587,19 @@ export async function createCampStage(
     resize,
     poke(id) {
       if (id !== "campfire") return;
-      gsap.fromTo(
-        firePulse,
-        { value: 0.45 },
-        { value: 0, duration: 1, ease: "power2.out", overwrite: "auto" },
-      );
+      gsap.fromTo(firePulse, { value: 0.45 }, { value: 0, duration: 1, ease: "power2.out", overwrite: "auto" });
+      if (campfire && !reducedMotion) {
+        campfire.gotoAndPlay(0);
+        campfire.animationSpeed = 0.22;
+        window.setTimeout(() => {
+          if (campfire) campfire.animationSpeed = 0.06;
+        }, 1200);
+      }
       for (const ember of embers.slice(0, 6)) {
         gsap.fromTo(
           ember.state,
           { alpha: 1, rise: 0 },
-          {
-            alpha: 0,
-            rise: random(60, 120),
-            duration: random(0.7, 1.2),
-            overwrite: "auto",
-          },
+          { alpha: 0, rise: random(60, 120), duration: random(0.7, 1.2), overwrite: "auto" },
         );
       }
     },
@@ -808,15 +608,10 @@ export async function createCampStage(
       pointerSurface.removeEventListener("pointerleave", leaveCursor);
       document.removeEventListener("visibilitychange", onVisibility);
       gsap.ticker.remove(frame);
-      for (const view of views.values()) {
-        view.sitTween?.kill();
-        view.faceTween?.kill();
-        gsap.killTweensOf(view.root);
-        gsap.killTweensOf(view.pose);
-      }
       for (const tween of allTweens) tween.kill();
       allTweens.length = 0;
       gsap.killTweensOf(cursorAt);
+      gsap.killTweensOf(parallax);
       for (const ember of embers) gsap.killTweensOf(ember.state);
       for (const firefly of fireflies) gsap.killTweensOf(firefly.state);
       views.clear();

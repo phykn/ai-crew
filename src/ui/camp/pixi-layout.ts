@@ -1,10 +1,11 @@
-// 캠프 픽셀아트 스테이지의 좌표 계산. 화면 크기·스프라이트 비율·자세만으로 자리와
-// 깊이, 앞뒤 정렬 순서, 불빛의 밝기를 정하는 순수 함수들이다. WebGL 없이도
-// 검증할 수 있게 PixiJS 렌더러(`camp-pixi.ts`)와 분리해 둔다.
+// 좌표와 크기 계산. 화면 크기에서 "아트 1픽셀이 화면 몇 픽셀인가"(unit)를 한 번
+// 정하고, 바닥 타일·오브젝트·캐릭터가 모두 그 값을 곱해 그려진다. 그래서 어떤
+// 창 크기에서도 모든 그림의 픽셀 밀도가 같다.
+
+import { crewHeight as crewArtHeight } from "./art/crew";
 
 export type StageSize = { width: number; height: number };
 export type StagePoint = { x: number; y: number };
-type TextureSize = { width: number; height: number };
 
 export const crewMinHeight = 64;
 export const crewMaxHeight = 128;
@@ -21,21 +22,6 @@ export function stagePoint(size: StageSize, point: StagePoint): StagePoint {
   };
 }
 
-/** 배경 그림을 비율 그대로 채운다(cover). 넘치는 쪽은 가운데를 기준으로 잘린다. */
-export function coverFit(texture: TextureSize, size: StageSize) {
-  if (!texture.width || !texture.height || !size.width || !size.height)
-    return { scale: 1, x: 0, y: 0 };
-  const scale = Math.max(
-    size.width / texture.width,
-    size.height / texture.height,
-  );
-  return {
-    scale,
-    x: (size.width - texture.width * scale) / 2,
-    y: (size.height - texture.height * scale) / 2,
-  };
-}
-
 /**
  * 캐릭터 키: 캠프 높이에 비례하되 너무 작거나 커지지 않게 묶는다. CSS 캠프의
  * `.character` 높이도 이 값(`--crew-h`)을 쓰므로 이름표와 그림의 키가 같다.
@@ -44,19 +30,12 @@ export function crewHeight(size: StageSize) {
   return clamp(size.height * 0.12, crewMinHeight, crewMaxHeight);
 }
 
-/** 스프라이트 원본 크기에서 캐릭터 키에 맞는 배율. */
-export function crewScale(texture: TextureSize, size: StageSize) {
-  if (!texture.height) return 1;
-  return crewHeight(size) / texture.height;
-}
-
 /**
- * 평지 캠프에서는 원근이 거의 없다. 뒤쪽 사람과 앞쪽 사람의 키 차이만 아주 조금
- * 두어 발밑 정렬이 자연스럽게 보이게 한다. CSS 캠프와 PixiJS 캔버스가 같은
- * 배율을 쓰도록 이 함수 하나에서 값을 낸다.
+ * 아트 1픽셀에 곱할 화면 배율. 캐릭터 원본 키(36px)가 crewHeight에 오도록 맞추고,
+ * 바닥 타일(16px)·오브젝트·그림자도 전부 이 배율 하나를 쓴다.
  */
-export function depthScale(y: number) {
-  return 0.94 + (clamp(y - 14, 0, 76) / 76) * 0.1;
+export function artUnit(size: StageSize) {
+  return crewHeight(size) / crewArtHeight;
 }
 
 /** 모닥불에서 멀어질수록 약해지는 따뜻한 빛. 0~1. */
@@ -78,13 +57,6 @@ export function sortZ(y: number, id: string) {
   return base + tie;
 }
 
-/** 앉는 자세로 옮겨가는 동안의 몸 내림(비율)과 가로·세로 압축. */
-export function seatPose(progress: number) {
-  const t = clamp(progress, 0, 1);
-  const ease = t * t * (3 - 2 * t);
-  return { sink: 6 * ease, squashY: 1 - 0.07 * ease, squashX: 1 + 0.06 * ease };
-}
-
 /** 불빛의 플리커. 여러 주기를 겹쳐 규칙적으로 보이지 않게 한다. */
 export function flicker(time: number) {
   const a = Math.sin(time * 7.3) * 0.5 + 0.5;
@@ -103,9 +75,7 @@ export function webglAvailable(
   try {
     const canvas = createCanvas();
     if (!canvas) return false;
-    return Boolean(
-      canvas.getContext("webgl2") || canvas.getContext("webgl"),
-    );
+    return Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"));
   } catch {
     return false;
   }

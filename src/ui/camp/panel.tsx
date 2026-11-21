@@ -2,6 +2,7 @@
 // characters standing in the camp.
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { renderToCanvas } from "pixlrt/core";
 import { roles, type Action, type Snapshot } from "../../shared/actions";
 import {
   campFire,
@@ -13,24 +14,53 @@ import {
 } from "./behavior";
 import { CampAtmosphere } from "./atmosphere";
 import { createCampStage, type CampStage } from "./pixi";
-import { crewHeight, depthScale } from "./pixi-layout";
+import { artUnit, crewHeight } from "./pixi-layout";
 import { CrewSettings } from "../panels/crew-settings";
-import { Icon, SkillChips, sprites } from "../common/ui";
-import camp from "../../../demo/assets/camp.webp";
-import campBench from "../../../demo/assets/obj_bench.webp";
-import campCampfire from "../../../demo/assets/obj_campfire.webp";
-import campCrates from "../../../demo/assets/obj_crates.webp";
-import campTent from "../../../demo/assets/obj_tent.webp";
-import campWagon from "../../../demo/assets/obj_wagon.webp";
+import { Icon, SkillChips } from "../common/ui";
+import {
+  artDataUrl,
+  campGround,
+  crewFrame,
+  objectArt,
+  objectSize,
+  type CrewPose,
+  type ObjectKind,
+} from "./art/scene";
+import { mapCenter, tileSize } from "./art/ground";
 
-/** 캠프에 놓는 개별 오브젝트 그림. CSS 폴백과 PixiJS 캔버스가 같은 파일을 쓴다. */
-const objectArt = {
-  campfire: campCampfire,
-  bench: campBench,
-  tent: campTent,
-  wagon: campWagon,
-  crates: campCrates,
-};
+// CSS 폴백은 같은 pixlrt 그림을 SVG로 쓴다. 같은 자세는 한 번만 만들어 둔다.
+const poseUrls = new Map<string, string>();
+function poseUrl(role: number, pose: CrewPose) {
+  const key = role + ":" + pose;
+  let url = poseUrls.get(key);
+  if (!url) {
+    url = artDataUrl(crewFrame(role, pose));
+    poseUrls.set(key, url);
+  }
+  return url;
+}
+
+const objectUrls = new Map<ObjectKind, string>();
+function objectUrl(kind: ObjectKind) {
+  let url = objectUrls.get(kind);
+  if (!url) {
+    url = artDataUrl(objectArt(kind));
+    objectUrls.set(kind, url);
+  }
+  return url;
+}
+
+/** CSS 폴백에서 지금 보여 줄 프레임. 걷기·호흡·일하기를 천천히 돌린다. */
+function cssPose(actor: CampActor, time: number): CrewPose {
+  if (actor.posture === "sit") return "sit";
+  if (actor.working || actor.posture === "work")
+    return time % 1100 < 550 ? "work1" : "work2";
+  if (actor.posture === "walk") {
+    const frames: CrewPose[] = ["walk1", "walk2", "walk3", "walk4"];
+    return frames[Math.floor(time / 130) % frames.length];
+  }
+  return time % 4200 < 2100 ? "idle1" : "idle2";
+}
 
 type CampPanelProps = {
   data: Snapshot | null;
@@ -117,6 +147,7 @@ export function CampPanel({
   const runtime = useRef<CampActor[]>([]);
   // PixiJS 캔버스가 그리는 캠프. WebGL을 못 쓰면 "css"로 떨어져 CSS 캠프를 그린다.
   const stageHost = useRef<HTMLDivElement>(null);
+  const groundRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<CampStage | null>(null);
   const [stageMode, setStageMode] = useState<"pending" | "canvas" | "css">(
     "pending",
@@ -165,14 +196,15 @@ export function CampPanel({
     [memberKey],
   );
 
-  // 캔버스에 올릴 크루 스프라이트. 고용된 크루만 캠프를 걷는다.
-  const crewSprites = (data?.members ?? [])
+  // 캔버스에 올릴 크루. 고용된 크루만 캠프를 걷는다.
+  const crewRoles = (data?.members ?? [])
     .filter((member) => member.hired)
     .map((member) => ({
       id: member.id,
-      url: sprites[roles.find(({ id }) => id === member.roleId)?.sprite ?? 0],
+      role: roles.find(({ id }) => id === member.roleId)?.sprite ?? 0,
     }));
-  const spriteKey = crewSprites.map(({ id, url }) => id + ":" + url).join("|");
+  const spriteKey = crewRoles.map(({ id, role }) => id + ":" + role).join("|");
+  const roleOf = new Map(crewRoles.map(({ id, role }) => [id, role]));
 
   useEffect(() => {
     const now = Date.now();
@@ -223,13 +255,25 @@ export function CampPanel({
         );
         element.dataset.facing = actor.facing;
         element.dataset.posture = actor.posture;
-        element.style.setProperty("--scale", depthScale(actor.y).toFixed(3));
+        element.style.setProperty("--scale", "1");
         element.style.setProperty("--depth", depthOf(actor.y));
         element.style.setProperty("--fire-glow", fireGlow(actor.x, actor.y));
         element.classList.toggle("is-sitting", actor.posture === "sit");
         element.classList.toggle("is-walking", actor.posture === "walk");
         element.classList.toggle("is-watching", actor.posture === "watch");
         element.classList.toggle("is-handing", actor.posture === "handoff");
+        // CSS 폴백: 같은 pixlrt 그림의 다른 프레임으로 갈아 끼운다.
+        const image = element.querySelector<HTMLImageElement>(".character-body img");
+        if (image && !stageRef.current) {
+          const role = roleOf.get(actor.memberId);
+          if (role !== undefined) {
+            const pose = cssPose(actor, performance.now());
+            if (image.dataset.pose !== pose) {
+              image.dataset.pose = pose;
+              image.src = poseUrl(role, pose);
+            }
+          }
+        }
         const bubble = element.querySelector<HTMLElement>(".character-bubble");
         if (bubble) {
           if (bubble.textContent !== (actor.bubble ?? ""))
@@ -255,6 +299,32 @@ export function CampPanel({
       );
     };
 
+    // WebGL이 없어 CSS로 그릴 때: 같은 바닥 타일맵을 캔버스에 한 장 그린다.
+    function drawGround(unit: number) {
+      const canvas = groundRef.current;
+      const area = scene.current;
+      if (!canvas || !area) return;
+      const box = area.getBoundingClientRect();
+      if (!box.width || !box.height) return;
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.round(box.width * ratio));
+      canvas.height = Math.max(1, Math.round(box.height * ratio));
+      const context = canvas.getContext("2d");
+      if (!context) return;
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      context.imageSmoothingEnabled = false;
+      const ground = campGround();
+      const source = document.createElement("canvas");
+      renderToCanvas(ground as never, source);
+      context.drawImage(
+        source,
+        box.width / 2 - (mapCenter.col + 0.5) * tileSize * unit,
+        box.height / 2 - (mapCenter.row + 0.5) * tileSize * unit,
+        ground.width * unit,
+        ground.height * unit,
+      );
+    }
+
     // 캐릭터 키를 캠프 높이에 맞춰 한 곳에서 정한다. 이름표(DOM)와 그림(캔버스)이
     // 같은 `--crew-h`를 쓰므로 어느 화면 크기에서도 머리 위에 붙어 있다.
     const measure = () => {
@@ -262,10 +332,13 @@ export function CampPanel({
       if (!area) return;
       const box = area.getBoundingClientRect();
       if (!box.width || !box.height) return;
+      const unit = artUnit({ width: box.width, height: box.height });
       area.style.setProperty(
         "--crew-h",
         crewHeight({ width: box.width, height: box.height }).toFixed(2) + "px",
       );
+      area.style.setProperty("--unit", unit.toFixed(3));
+      if (!stageRef.current) drawGround(unit);
       stageRef.current?.resize();
     };
     measure();
@@ -397,6 +470,9 @@ export function CampPanel({
   useEffect(() => {
     const host = stageHost.current;
     if (!host) return;
+    // 아직 크루 명단을 받기 전에는 스테이지를 만들지 않는다. 빈 캠프로 한 번,
+    // 명단을 받은 뒤 한 번 만드는 일을 없앤다.
+    if (!crewRoles.length) return;
     let alive = true;
     const reduced = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -404,18 +480,21 @@ export function CampPanel({
     void createCampStage({
       host,
       surface: scene.current,
-      background: camp,
-      crew: crewSprites,
+      crew: crewRoles,
       fire: campFire,
-      objects: campObjects.map(({ id, kind, x, y, h }) => ({
+      objects: campObjects.map(({ id, kind, x, y, w, h }) => ({
         id,
         kind,
         x,
         y,
+        w,
         h,
-        sprite: objectArt[kind],
       })),
       reducedMotion: reduced,
+    }).catch((problem: unknown) => {
+      console.error("camp stage failed", problem);
+      setStageMode("css");
+      return null;
     }).then((stage) => {
       if (!alive) {
         stage?.destroy();
@@ -448,11 +527,7 @@ export function CampPanel({
       aria-label="캠프"
       ref={scene}
     >
-      <div
-        className="camp-bg"
-        aria-hidden="true"
-        style={{ backgroundImage: `url(${camp})` }}
-      />
+      <canvas className="camp-bg" aria-hidden="true" ref={groundRef} />
       {stageMode !== "canvas" && <CampAtmosphere />}
       <div className="camp-glow" aria-hidden="true" />
       <div className="camp-canvas-host" aria-hidden="true" ref={stageHost} />
@@ -769,7 +844,8 @@ export function CampPanel({
               {
                 left: object.x + "%",
                 top: object.y + "%",
-                height: object.h + "%",
+                width: `calc(var(--unit, 3) * ${object.w}px)`,
+                height: `calc(var(--unit, 3) * ${object.h}px)`,
                 zIndex: Math.round(object.y * 100),
               } as CSSProperties
             }
@@ -789,7 +865,7 @@ export function CampPanel({
           >
             <img
               className="camp-object-art"
-              src={objectArt[object.kind]}
+              src={objectUrl(object.kind)}
               alt=""
               draggable={false}
             />
@@ -840,7 +916,7 @@ export function CampPanel({
                   top: top + "%",
                   zIndex: Math.round(top * 100) + 1,
                   "--depth": depthOf(top),
-                  "--scale": depthScale(top).toFixed(3),
+                  "--scale": "1",
                   "--fire-glow": fireGlow(left, top),
                   "--delay": `${(member.id.length % 5) * 0.6}s`,
                 } as CSSProperties
@@ -854,7 +930,10 @@ export function CampPanel({
               </span>
               <span className="character-bubble" aria-hidden="true" />
               <span className="character-body">
-                <img src={sprites[role.sprite]} alt="" />
+                <img
+                  src={poseUrl(role.sprite, posture === "sit" ? "sit" : "idle1")}
+                  alt=""
+                />
               </span>
             </div>
           );

@@ -65,6 +65,7 @@ button:disabled {
 #land {
   position: absolute;
   inset: 0;
+  /* 목업의 캠프 바닥: 앱은 pixlrt 타일맵을 그리므로 여기서는 같은 색의 평지로 둔다. */
   background:
     linear-gradient(
       180deg,
@@ -73,7 +74,7 @@ button:disabled {
       #12160b30 86%,
       #11140f61
     ),
-    url(assets/camp.webp) center / cover;
+    radial-gradient(80% 60% at 50% 46%, #b6a97a 0 18%, #96bd6e 19% 100%);
 }
 .fireglow {
   position: absolute;

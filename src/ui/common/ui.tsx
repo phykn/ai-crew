@@ -11,27 +11,13 @@ import {
   type WorkCheck,
 } from "../../shared/actions";
 import { skillStateLabels, skillStateOrder } from "../../shared/skill-status";
-import sprite0 from "../../../demo/assets/crew-0.webp";
-import sprite1 from "../../../demo/assets/crew-1.webp";
-import sprite2 from "../../../demo/assets/crew-2.webp";
-import sprite3 from "../../../demo/assets/crew-3.webp";
-import sprite4 from "../../../demo/assets/crew-4.webp";
-import sprite5 from "../../../demo/assets/crew-5.webp";
-import sprite6 from "../../../demo/assets/crew-6.webp";
-import sprite7 from "../../../demo/assets/crew-7.webp";
-import sprite8 from "../../../demo/assets/crew-8.webp";
-// `roles[].sprite`는 이 목록의 위치다. 역할과 그림이 1:1로 맞는다.
-export const sprites = [
-  sprite0,
-  sprite1,
-  sprite2,
-  sprite3,
-  sprite4,
-  sprite5,
-  sprite6,
-  sprite7,
-  sprite8,
-];
+import { crewPortrait } from "../camp/art/scene";
+
+// `roles[].sprite`는 이 목록의 위치다. 캠프의 크루 그림에서 머리만 잘라 낸
+// 같은 픽셀아트를 data URL로 쓴다.
+export const sprites = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((role) =>
+  crewPortrait(role),
+);
 export const phase = {
   recovering: "파일 상태 확인 중",
   clarification: "답변 대기",

@@ -2,10 +2,11 @@
 // 누구를 지켜보는지를 정하는 순수 계산. 화면 코드는 이 계산만 따라 그린다.
 //
 // 좌표는 캠프 상자의 백분율(x: 왼쪽 0~100, y: 위 0~100)이고 y는 캐릭터의 발밑이다.
-// 배경 그림(demo/assets/camp.webp)은 절벽도 물도 없는 평지다. 캠프 마당 전체를 걷고,
+// 바닥은 pixlrt로 깐 평지 타일맵이고, 캠프 마당 전체를 걷고,
 // 천막·마차·모닥불·벤치·보급 상자가 놓인 발밑 자리만 돌아서 지나간다.
 
 import type { JobState, RoleId } from "../../shared/actions";
+import { objectSize } from "./art/scene";
 
 export type Point = { x: number; y: number };
 type Facing = "left" | "right";
@@ -223,22 +224,22 @@ export type CampObject = {
   kind: "campfire" | "bench" | "tent" | "wagon" | "crates";
   x: number;
   y: number;
-  /** 캠프 높이에 대한 그림 높이(%). 너비는 그림의 가로세로 비율을 따른다. */
+  /** 그림의 실제 픽셀 크기. 화면 크기는 아트 배율을 곱해 정한다. */
+  w: number;
   h: number;
   label: string;
 };
 
 export const campObjects: CampObject[] = [
-  { id: "tent", kind: "tent", x: 19, y: 33, h: 20, label: "천막" },
-  { id: "wagon", kind: "wagon", x: 80, y: 34, h: 17, label: "마차" },
-  { id: "campfire", kind: "campfire", x: campFire.x, y: campFire.y, h: 9, label: "모닥불" },
-  { id: "bench-west", kind: "bench", x: 35.5, y: 55.6, h: 6, label: "통나무 벤치" },
-  { id: "bench-east", kind: "bench", x: 64.5, y: 55.6, h: 6, label: "통나무 벤치" },
-  { id: "bench-south", kind: "bench", x: 50, y: 64.4, h: 6, label: "통나무 벤치" },
-  { id: "crates", kind: "crates", x: 13, y: 80, h: 8, label: "보급 상자" },
+  { id: "tent", kind: "tent", x: 19, y: 33, ...objectSize("tent"), label: "천막" },
+  { id: "wagon", kind: "wagon", x: 80, y: 34, ...objectSize("wagon"), label: "마차" },
+  { id: "campfire", kind: "campfire", x: campFire.x, y: campFire.y, ...objectSize("campfire"), label: "모닥불" },
+  { id: "bench-west", kind: "bench", x: 35.5, y: 55.6, ...objectSize("bench"), label: "통나무 벤치" },
+  { id: "bench-east", kind: "bench", x: 64.5, y: 55.6, ...objectSize("bench"), label: "통나무 벤치" },
+  { id: "bench-south", kind: "bench", x: 50, y: 64.4, ...objectSize("bench"), label: "통나무 벤치" },
+  { id: "crates", kind: "crates", x: 13, y: 80, ...objectSize("crates"), label: "보급 상자" },
 ];
 
-// ── 길 찾기 ────────────────────────────────────────────────────────────────
 // ── 길 찾기 ────────────────────────────────────────────────────────────────
 type GraphNode = { id: string; point: Point };
 const graphNodes: GraphNode[] = campSpots.map((spot) => ({

@@ -1,28 +1,19 @@
-// The panel toolbar: camp toggle, view buttons, diagnostics, session list and
+// The panel toolbar: camp toggle, view tabs, diagnostics, session list and
 // notifications. The project folder lives by the composer, where work starts.
 
 import { type Action, type Snapshot } from "../../../shared/actions";
-import { Icon } from "../common/ui";
+import { PixelIcon } from "../common/pixel-icons";
 import { NotificationsMenu } from "./notifications-menu";
 
-type ToolbarProps = {
-  data: Snapshot | null;
-  view: Snapshot["view"]["tab"];
-  showCamp: boolean;
-  unread: number;
-  menu: "projects" | "sessions" | "notifications" | null;
-  setMenu: (menu: "projects" | "sessions" | "notifications" | null) => void;
-  setShowCamp: (camp: boolean) => void;
-  setView: (tab: Snapshot["view"]["tab"]) => void;
-  setLogJob: (jobId: string | null) => void;
-  setMemoryOwner: (ownerId: string | null | undefined) => void;
-  setFocusedApprovalId: (jobId: string | null) => void;
-  navigate: (action: Action) => Promise<void>;
-  run: (action: Action, resetDraft?: boolean) => Promise<boolean>;
-  /** 환경 진단 실행. 결과 배너는 캠프 위 작업 영역에 그린다. */
-  diagnose: () => void;
-  diagnosing: boolean;
-};
+type view = Snapshot["view"]["tab"];
+type menu = "projects" | "sessions" | "notifications" | null;
+
+const tabs: { view: view; name: string; label: string }[] = [
+  { view: "chat", name: "chat", label: "대화" },
+  { view: "log", name: "log", label: "로그" },
+  { view: "memory", name: "gem", label: "메모리" },
+  { view: "workflow", name: "flow", label: "워크플로우" },
+];
 
 export function Toolbar({
   data,
@@ -40,82 +31,66 @@ export function Toolbar({
   run,
   diagnose,
   diagnosing,
-}: ToolbarProps) {
+}: {
+  data: Snapshot | null;
+  view: view;
+  showCamp: boolean;
+  unread: number;
+  menu: menu;
+  setMenu: (menu: menu) => void;
+  setShowCamp: (camp: boolean) => void;
+  setView: (tab: view) => void;
+  setLogJob: (jobId: string | null) => void;
+  setMemoryOwner: (ownerId: string | null | undefined) => void;
+  setFocusedApprovalId: (jobId: string | null) => void;
+  navigate: (action: Action) => Promise<void>;
+  run: (action: Action, resetDraft?: boolean) => Promise<boolean>;
+  /** 환경 진단 실행. 결과 배너는 캠프 위 작업 영역에 그린다. */
+  diagnose: () => void;
+  diagnosing: boolean;
+}) {
+  const open = (tab: view) => {
+    setMenu(null);
+    if (tab === "log") setLogJob(null);
+    if (tab === "memory") setMemoryOwner(undefined);
+    setView(tab);
+    setShowCamp(false);
+  };
+
   return (
     <header className="toolbar">
       <button
         type="button"
-        className="camp-toggle icon-button"
+        className="camp-toggle tool-button"
         aria-label={showCamp ? "작업 보기" : "캠프 보기"}
+        title={showCamp ? "작업 보기" : "캠프 보기"}
+        aria-pressed={showCamp}
         onClick={() => {
           setMenu(null);
           setShowCamp(!showCamp);
         }}
       >
-        <Icon name="fire" />
+        <PixelIcon name="fire" />
       </button>
-      <nav aria-label="작업 보기">
+      <nav className="tabs" aria-label="작업 보기">
+        {tabs.map((tab) => (
+          <button
+            key={tab.view}
+            type="button"
+            className="tab"
+            aria-label={tab.label}
+            title={tab.label}
+            aria-current={!showCamp && view === tab.view}
+            onClick={() => open(tab.view)}
+          >
+            <PixelIcon name={tab.name as "chat"} />
+          </button>
+        ))}
+      </nav>
+      <div className="tools">
         <button
           type="button"
-          className="icon-button"
-          aria-label="대화"
-          title="대화"
-          aria-current={view === "chat"}
-          onClick={() => {
-            setMenu(null);
-            setView("chat");
-            setShowCamp(false);
-          }}
-        >
-          <Icon name="chat" />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="로그"
-          title="로그"
-          aria-current={view === "log"}
-          onClick={() => {
-            setMenu(null);
-            setLogJob(null);
-            setView("log");
-            setShowCamp(false);
-          }}
-        >
-          <Icon name="list" />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="메모리"
-          title="메모리"
-          aria-current={view === "memory"}
-          onClick={() => {
-            setMenu(null);
-            setMemoryOwner(undefined);
-            setView("memory");
-            setShowCamp(false);
-          }}
-        >
-          <Icon name="book" />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="워크플로우"
-          title="워크플로우"
-          aria-current={view === "workflow"}
-          onClick={() => {
-            setMenu(null);
-            setView("workflow");
-            setShowCamp(false);
-          }}
-        >
-          <Icon name="flow" />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
+          className="tool-button"
           aria-label="환경 진단"
           title="환경 진단 — Git · Codex · 모델 · MCP"
           aria-busy={diagnosing}
@@ -125,34 +100,32 @@ export function Toolbar({
             diagnose();
           }}
         >
-          <Icon name="pulse" />
+          <PixelIcon name="pulse" />
         </button>
         <button
           type="button"
-          className="icon-button"
-          aria-label={
-            "알림" + (unread ? " " + unread + "건 읽지 않음" : "")
-          }
+          className="tool-button"
+          aria-label={"알림" + (unread ? " " + unread + "건 읽지 않음" : "")}
           title="알림"
           aria-expanded={menu === "notifications"}
           onClick={() =>
             setMenu(menu === "notifications" ? null : "notifications")
           }
         >
-          <Icon name="bell" />
+          <PixelIcon name="bell" />
           {unread > 0 && <span className="badge">{unread}</span>}
         </button>
         <button
           type="button"
-          className="icon-button"
+          className="tool-button"
           aria-label="세션 목록"
           title="세션 목록"
           aria-expanded={menu === "sessions"}
           onClick={() => setMenu(menu === "sessions" ? null : "sessions")}
         >
-          <Icon name="menu" />
+          <PixelIcon name="menu" />
         </button>
-      </nav>
+      </div>
       {menu === "sessions" && (
         <div className="menu sessions" aria-label="세션 목록">
           {data?.current && (

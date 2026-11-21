@@ -148,44 +148,9 @@ export function CrewSettings({
                   </span>
                   <button
                     type="button"
-                    className="settings-toggle"
-                    aria-expanded={open}
-                    onClick={() => setOpenSkill(open ? null : skill.id)}
-                  >
-                    내용
-                    <Chevron />
-                  </button>
-                </header>
-                {status?.reason && <p className="settings-note">{status.reason}</p>}
-                {status?.tool && status.state !== "unavailable" && (
-                  <p className="settings-note">{status.tool}</p>
-                )}
-                {open && <pre>{skill.markdown}</pre>}
-                <div className="skill-actions">
-                  {status?.state === "in-use" && status.jobId && (
-                    <button type="button" onClick={() => openJob(status.jobId!)}>
-                      실행 로그
-                    </button>
-                  )}
-                  {status?.state === "awaiting" && status.approvalId && (
-                    <button
-                      type="button"
-                      onClick={() => focusApproval(status.approvalId!)}
-                    >
-                      승인 질문
-                    </button>
-                  )}
-                  {status?.state === "unavailable" && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setForm(form === "server" ? null : "server")}
-                    >
-                      MCP 설정
-                    </button>
-                  )}
-                  <button
-                    type="button"
+                    className="row-icon"
+                    aria-label={skill.name + " 스킬 해제"}
+                    title="스킬 해제"
                     disabled={busy}
                     onClick={() =>
                       void save({
@@ -196,9 +161,56 @@ export function CrewSettings({
                       })
                     }
                   >
-                    스킬 해제
+                    ✕
                   </button>
-                </div>
+                  <button
+                    type="button"
+                    className="settings-toggle"
+                    aria-expanded={open}
+                    onClick={() => setOpenSkill(open ? null : skill.id)}
+                  >
+                    <Chevron />
+                  </button>
+                </header>
+                {status?.reason && <p className="settings-note">{status.reason}</p>}
+                {status?.tool && status.state !== "unavailable" && (
+                  <p className="settings-note">{status.tool}</p>
+                )}
+                {open && <pre>{skill.markdown}</pre>}
+                {(status?.state === "in-use" ||
+                  status?.state === "awaiting" ||
+                  status?.state === "unavailable") && (
+                  <div className="skill-actions">
+                    {status?.state === "in-use" && status.jobId && (
+                      <button
+                        type="button"
+                        className="settings-toggle"
+                        onClick={() => openJob(status.jobId!)}
+                      >
+                        실행 로그
+                      </button>
+                    )}
+                    {status?.state === "awaiting" && status.approvalId && (
+                      <button
+                        type="button"
+                        className="settings-toggle"
+                        onClick={() => focusApproval(status.approvalId!)}
+                      >
+                        승인 질문
+                      </button>
+                    )}
+                    {status?.state === "unavailable" && (
+                      <button
+                        type="button"
+                        className="settings-toggle"
+                        disabled={busy}
+                        onClick={() => setForm(form === "server" ? null : "server")}
+                      >
+                        MCP 설정
+                      </button>
+                    )}
+                  </div>
+                )}
               </article>
             );
           })}
@@ -360,19 +372,14 @@ export function CrewSettings({
             <article className="model-connection" key={connection.id}>
               <header>
                 <strong>{connection.name}</strong>
-                <span className="cozy-badge">{connection.provider}</span>
-                {connection.vision && <span className="cozy-badge is-on">비전</span>}
                 <span className={connection.enabled ? "cozy-badge is-on" : "cozy-badge is-off"}>
                   {connection.enabled ? "사용 중" : "사용 안 함"}
                 </span>
-              </header>
-              <p className="settings-note">
-                {[connection.baseUrl, connection.model].filter(Boolean).join(" · ") ||
-                  "환경의 기본 주소를 써요."}
-              </p>
-              <div className="cozy-actions">
                 <button
                   type="button"
+                  className="row-chip"
+                  aria-pressed={connection.vision}
+                  title="그림도 읽는 모델(비전)"
                   disabled={busy}
                   onClick={() =>
                     void save({
@@ -382,10 +389,13 @@ export function CrewSettings({
                     })
                   }
                 >
-                  {connection.vision ? "비전 해제" : "비전으로"}
+                  비전
                 </button>
                 <button
                   type="button"
+                  className="row-icon"
+                  aria-label={connection.name + (connection.enabled ? " 사용 중지" : " 사용")}
+                  title={connection.enabled ? "사용 중지" : "사용"}
                   disabled={busy}
                   onClick={() =>
                     void save({
@@ -395,18 +405,23 @@ export function CrewSettings({
                     })
                   }
                 >
-                  {connection.enabled ? "사용 중지" : "사용"}
+                  {connection.enabled ? "⏸" : "▶"}
                 </button>
                 <button
                   type="button"
+                  className="row-icon is-danger"
+                  aria-label={connection.name + " 제거"}
+                  title="제거"
                   disabled={busy}
-                  onClick={() =>
-                    void save({ type: "model.remove", id: connection.id })
-                  }
+                  onClick={() => void save({ type: "model.remove", id: connection.id })}
                 >
-                  제거
+                  ✕
                 </button>
-              </div>
+              </header>
+              <p className="settings-note">
+                {[connection.baseUrl, connection.model].filter(Boolean).join(" · ") ||
+                  "환경의 기본 주소를 써요."}
+              </p>
             </article>
           ))}
           {!data.modelConnections.length && (

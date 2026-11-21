@@ -13,6 +13,22 @@
   font-display: swap;
   src: url("./ui/fonts/NanumGothic-Bold.woff2") format("woff2");
 }
+/* Galmuri11 (SIL OFL, see ui/fonts/OFL-Galmuri.txt) carries headings, tabs and
+   chips; body text stays on Nanum Gothic for Korean legibility. */
+@font-face {
+  font-family: "Galmuri11";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./ui/fonts/Galmuri11.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Galmuri11";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./ui/fonts/Galmuri11-Bold.woff2") format("woff2");
+}
 
 :root {
   color-scheme: light;
@@ -62,6 +78,7 @@
   --font-detail: 13px;
   --radius-control: 9px;
   --radius-surface: 12px;
+  --font-pixel: "Galmuri11", "Nanum Gothic", monospace;
   --header-height: 58px;
   --workspace-columns: minmax(0, 1.13fr) minmax(380px, 1fr);
   --flow-node-width: 128px;

@@ -30,7 +30,7 @@ test("캠프 좌표는 화면 크기에 맞춰 픽셀로 옮겨지고 배경은 
 });
 
 test("캐릭터 키는 무대 높이를 따르되 정해진 범위를 벗어나지 않고, 이름표와 같은 값을 쓴다", () => {
-  expect(crewHeight({ width: 1200, height: 900 })).toBeCloseTo(99);
+  expect(crewHeight({ width: 1200, height: 900 })).toBeCloseTo(108);
   expect(crewHeight({ width: 400, height: 200 })).toBe(crewMinHeight);
   expect(crewHeight({ width: 4000, height: 3000 })).toBe(crewMaxHeight);
 
@@ -41,10 +41,12 @@ test("캐릭터 키는 무대 높이를 따르되 정해진 범위를 벗어나�
   expect(small * 400).toBeCloseTo(crewHeight({ width: 1200, height: 900 }));
 });
 
-test("뒤에 선 사람은 작게, 앞에 선 사람은 크게 그려지고 앞사람이 위에 그려진다", () => {
+test("평지에서는 앞뒤 키 차이가 거의 없고 앞사람이 위에 그려진다", () => {
   expect(depthScale(40)).toBeLessThan(depthScale(70));
-  expect(depthScale(46)).toBeCloseTo(0.78);
-  expect(depthScale(90)).toBeCloseTo(1.06);
+  expect(depthScale(12)).toBeCloseTo(0.94);
+  expect(depthScale(90)).toBeCloseTo(1.04);
+  // 평지 탑다운이라 뒤쪽과 앞쪽의 키 차이는 10% 안쪽이다.
+  expect(depthScale(90) - depthScale(12)).toBeLessThan(0.11);
 
   expect(sortZ(50, "a")).toBeLessThan(sortZ(70, "a"));
   // 같은 높이에서는 이름으로 순서가 고정되어 프레임마다 뒤집히지 않는다.
@@ -53,8 +55,8 @@ test("뒤에 선 사람은 작게, 앞에 선 사람은 크게 그려지고 앞�
 });
 
 test("모닥불에서 멀어지면 빛이 약해지고, 흔들림은 늘 같은 범위 안에 있다", () => {
-  expect(fireLight(59.7, 61.8, { x: 59.7, y: 61.8 })).toBeCloseTo(1);
-  expect(fireLight(90, 61.8, { x: 59.7, y: 61.8 })).toBeLessThan(0.4);
+  expect(fireLight(50, 51, { x: 50, y: 51 })).toBeCloseTo(1);
+  expect(fireLight(90, 61.8, { x: 50, y: 51 })).toBeLessThan(0.4);
   for (const time of [0, 0.3, 1.7, 4.2, 9.9]) {
     expect(flicker(time)).toBeGreaterThan(0.5);
     expect(flicker(time)).toBeLessThan(1.05);

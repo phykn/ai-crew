@@ -17,6 +17,20 @@ import { crewHeight, depthScale } from "./camp-pixi-layout";
 import { CrewSettings } from "./crew-settings";
 import { Icon, SkillChips, sprites } from "./renderer-ui";
 import camp from "../../demo/assets/camp.webp";
+import campBench from "../../demo/assets/obj_bench.webp";
+import campCampfire from "../../demo/assets/obj_campfire.webp";
+import campCrates from "../../demo/assets/obj_crates.webp";
+import campTent from "../../demo/assets/obj_tent.webp";
+import campWagon from "../../demo/assets/obj_wagon.webp";
+
+/** 캠프에 놓는 개별 오브젝트 그림. CSS 폴백과 PixiJS 캔버스가 같은 파일을 쓴다. */
+const objectArt = {
+  campfire: campCampfire,
+  bench: campBench,
+  tent: campTent,
+  wagon: campWagon,
+  crates: campCrates,
+};
 
 type CampPanelProps = {
   data: Snapshot | null;
@@ -53,12 +67,14 @@ const fireGlow = (x: number, y: number) =>
 
 const objectNotes: Record<string, string> = {
   campfire: "🔥 모닥불 · 장작이 타고 있어요",
-  workbench: "🛠 작업대 · 크루가 여기서 일해요",
-  lantern: "🏮 오두막 등불 · 해가 지면 더 밝아져요",
+  bench: "🪵 통나무 벤치 · 걸터앉아 쉬는 자리",
+  tent: "⛺ 천막 · 크루가 여기서 잠깐 쉬어요",
+  wagon: "🛻 마차 · 보급과 장비를 실어 왔어요",
+  crates: "📦 보급 상자 · 등불이 켜져 있어요",
 };
 
 function bubbleFor(id: string, label: string) {
-  return objectNotes[id] ?? "🪵 " + label + " · 걸터앉아 쉬는 자리";
+  return objectNotes[id] ?? label;
 }
 
 export function CampPanel({
@@ -200,10 +216,10 @@ export function CampPanel({
         if (!element) continue;
         element.style.left = actor.x.toFixed(2) + "%";
         // 앉으면 발이 통나무 아래로 살짝 내려가 걸터앉은 높이가 된다.
-        const sink = actor.posture === "sit" ? 1.6 : 0;
+        const sink = 0;
         element.style.top = (actor.y + sink).toFixed(2) + "%";
         element.style.zIndex = String(
-          Math.round(actor.y * 10) + (actor.posture === "sit" ? 3 : 2),
+          Math.round(actor.y * 100) + (actor.posture === "sit" ? 2 : 1),
         );
         element.dataset.facing = actor.facing;
         element.dataset.posture = actor.posture;
@@ -221,13 +237,15 @@ export function CampPanel({
           bubble.classList.toggle("show", Boolean(actor.bubble));
         }
       }
-      for (const seat of campObjects) {
-        if (seat.kind !== "seat") continue;
-        const element = objectRefs.current.get(seat.id);
+      for (const object of campObjects) {
+        if (object.kind !== "bench") continue;
+        const element = objectRefs.current.get(object.id);
         if (!element) continue;
         element.classList.toggle(
           "is-taken",
-          runtime.current.some((actor) => actor.spotId === seat.id),
+          runtime.current.some((actor) =>
+            actor.spotId?.startsWith(object.id + "-seat"),
+          ),
         );
       }
       // 캔버스가 그리는 캐릭터도 같은 좌표를 쓴다.
@@ -389,7 +407,14 @@ export function CampPanel({
       background: camp,
       crew: crewSprites,
       fire: campFire,
-      objects: campObjects.map(({ id, kind, x, y }) => ({ id, kind, x, y })),
+      objects: campObjects.map(({ id, kind, x, y, h }) => ({
+        id,
+        kind,
+        x,
+        y,
+        h,
+        sprite: objectArt[kind],
+      })),
       reducedMotion: reduced,
     }).then((stage) => {
       if (!alive) {
@@ -734,8 +759,7 @@ export function CampPanel({
               "camp-object " +
               object.kind +
               (poked === object.id ? " is-poked" : "") +
-              (object.kind === "workbench" && anyWorking ? " is-active" : "") +
-              (object.kind === "lantern" && anyWorking ? " is-lit" : "")
+              (object.kind === "campfire" && anyWorking ? " is-active" : "")
             }
             ref={(element) => {
               if (element) objectRefs.current.set(object.id, element);
@@ -745,9 +769,8 @@ export function CampPanel({
               {
                 left: object.x + "%",
                 top: object.y + "%",
-                width: object.w + "%",
                 height: object.h + "%",
-                zIndex: Math.round(object.y * 10),
+                zIndex: Math.round(object.y * 100),
               } as CSSProperties
             }
             aria-label={object.label}
@@ -764,8 +787,14 @@ export function CampPanel({
               );
             }}
           >
+            <img
+              className="camp-object-art"
+              src={objectArt[object.kind]}
+              alt=""
+              draggable={false}
+            />
             <span className="camp-object-sign" aria-hidden="true">
-              {poked === object.id ? bubbleFor(object.id, object.label) : object.label}
+              {poked === object.id ? bubbleFor(object.kind, object.label) : object.label}
             </span>
             {object.kind === "campfire" && (
               <span className="camp-object-glow" aria-hidden="true" />
@@ -809,7 +838,7 @@ export function CampPanel({
                 {
                   left: left + "%",
                   top: top + "%",
-                  zIndex: Math.round(top * 10) + 2,
+                  zIndex: Math.round(top * 100) + 1,
                   "--depth": depthOf(top),
                   "--scale": depthScale(top).toFixed(3),
                   "--fire-glow": fireGlow(left, top),

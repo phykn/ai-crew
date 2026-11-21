@@ -15,7 +15,7 @@
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font:
     15px/1.55 "Nanum Gothic",
     "NanumGothic",
@@ -23,25 +23,33 @@
     "Malgun Gothic",
     "Noto Sans KR",
     sans-serif;
-  /* 스타듀밸리풍 코지 우드 & 양피지 팔레트 */
-  --bg: #211812;
-  --panel: var(--bg);
-  --card: #2d2219;
-  --card-2: #35281d;
-  --line: #4a3627;
-  --line-control: #6d4d34;
-  --text: #f6e8cf;
-  --dim: #c4ac8c;
-  --warm: #e8b45c;
-  --on-warm: #2a1b10;
-  --selected: #4a3522;
-  --surface-control: #3a2b1e;
-  --honey: #e0a952;
-  --parchment: #f3e3c3;
-  --parchment-ink: #3f2a18;
-  --sage: #9dbb7d;
-  --wood-dark: #18100b;
-  --wood-edge: #5a402c;
+  /* 크림·오프화이트 바탕에 세이지·허니 포인트를 쓰는 플랫 파스텔 팔레트 */
+  --bg: #faf6ee;
+  --panel: #fbf7ef;
+  --card: #ffffff;
+  --card-2: #fdfaf3;
+  --line: #e6dccb;
+  --line-control: #d8cab2;
+  --line-strong: #bda98b;
+  --surface-hover: #f3ece0;
+  --text: #2f2923;
+  --dim: #7b6e5f;
+  --warm: #e8b86d;
+  --on-warm: #43301a;
+  --selected: #e6f2ea;
+  --surface-control: #fdfaf3;
+  --honey: #e8b86d;
+  --honey-ink: #8a611f;
+  --parchment: #fdfaf3;
+  --parchment-ink: #2f2923;
+  --sage: #7ab893;
+  --sage-soft: #e6f2ea;
+  --sage-line: #a9d3bb;
+  --sage-ink: #245c40;
+  --butter: #fef1d6;
+  --butter-line: #f0dcb6;
+  --wood-dark: #e6dccb;
+  --wood-edge: #d8cab2;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;

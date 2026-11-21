@@ -6,8 +6,8 @@ export type StageSize = { width: number; height: number };
 export type StagePoint = { x: number; y: number };
 type TextureSize = { width: number; height: number };
 
-export const crewMinHeight = 58;
-export const crewMaxHeight = 104;
+export const crewMinHeight = 64;
+export const crewMaxHeight = 128;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -41,7 +41,7 @@ export function coverFit(texture: TextureSize, size: StageSize) {
  * `.character` 높이도 이 값(`--crew-h`)을 쓰므로 이름표와 그림의 키가 같다.
  */
 export function crewHeight(size: StageSize) {
-  return clamp(size.height * 0.11, crewMinHeight, crewMaxHeight);
+  return clamp(size.height * 0.12, crewMinHeight, crewMaxHeight);
 }
 
 /** 스프라이트 원본 크기에서 캐릭터 키에 맞는 배율. */
@@ -51,11 +51,12 @@ export function crewScale(texture: TextureSize, size: StageSize) {
 }
 
 /**
- * 뒤쪽(위) 사람은 작게, 앞쪽(아래) 사람은 크게 그려 깊이를 준다. CSS 캠프와
- * PixiJS 캔버스가 같은 배율을 쓰도록 이 함수 하나에서 값을 낸다.
+ * 평지 캠프에서는 원근이 거의 없다. 뒤쪽 사람과 앞쪽 사람의 키 차이만 아주 조금
+ * 두어 발밑 정렬이 자연스럽게 보이게 한다. CSS 캠프와 PixiJS 캔버스가 같은
+ * 배율을 쓰도록 이 함수 하나에서 값을 낸다.
  */
 export function depthScale(y: number) {
-  return 0.78 + (clamp(y - 46, 0, 44) / 44) * 0.28;
+  return 0.94 + (clamp(y - 14, 0, 76) / 76) * 0.1;
 }
 
 /** 모닥불에서 멀어질수록 약해지는 따뜻한 빛. 0~1. */

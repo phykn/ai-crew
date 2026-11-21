@@ -2,7 +2,8 @@
 // 누구를 지켜보는지를 정하는 순수 계산. 화면 코드는 이 계산만 따라 그린다.
 //
 // 좌표는 캠프 상자의 백분율(x: 왼쪽 0~100, y: 위 0~100)이고 y는 캐릭터의 발밑이다.
-// 배경 그림(demo/assets/camp.webp)의 오두막·모닥불·개울·다리를 피해서 마당과 다리만 걷는다.
+// 배경 그림(demo/assets/camp.webp)은 절벽도 물도 없는 평지다. 캠프 마당 전체를 걷고,
+// 천막·마차·모닥불·벤치·보급 상자가 놓인 발밑 자리만 돌아서 지나간다.
 
 import type { JobState, RoleId } from "../shared/actions";
 
@@ -22,184 +23,33 @@ type CampSpot = Point & {
 };
 
 /** 모닥불 화덕의 중심. 좌석 방향과 오라 계산에 함께 쓴다. */
-export const campFire: Point = { x: 59.7, y: 61.8 };
+export const campFire: Point = { x: 50, y: 50 };
 
 // ── 걸을 수 있는 곳 ────────────────────────────────────────────────────────
-// 마당: 오두막 앞 흙길과 풀밭. 왼쪽 아래 개울과 오른쪽 개울을 따라 경계를 그었다.
+// 배경에 하늘도 절벽도 물도 없으므로 캠프 마당 전체가 걸을 수 있는 땅이다.
 const yard: Point[] = [
-  { x: 6, y: 56 },
-  { x: 14, y: 55 },
-  { x: 24, y: 56 },
-  { x: 31, y: 57.5 },
-  { x: 36, y: 57 },
-  { x: 39, y: 53.5 },
-  { x: 43, y: 52.5 },
-  { x: 48, y: 51.8 },
-  { x: 51, y: 52.2 },
-  { x: 54, y: 53.5 },
-  { x: 58, y: 54.5 },
-  { x: 63, y: 55.6 },
-  { x: 67, y: 57.4 },
-  { x: 72, y: 57.2 },
-  { x: 76, y: 57.6 },
-  { x: 79, y: 60 },
-  { x: 82, y: 63 },
-  { x: 84, y: 68 },
-  { x: 84, y: 74 },
-  { x: 80, y: 79 },
-  { x: 72, y: 81 },
-  { x: 64, y: 80 },
-  { x: 58, y: 79 },
-  { x: 55, y: 77 },
-  { x: 50, y: 75 },
-  { x: 44, y: 75.5 },
-  { x: 38, y: 76.5 },
-  { x: 34, y: 79 },
-  { x: 30, y: 82 },
-  { x: 26, y: 85 },
-  { x: 20, y: 82 },
-  { x: 16, y: 78 },
-  { x: 12, y: 72 },
-  { x: 8, y: 66 },
-  { x: 6, y: 60 },
+  { x: 6, y: 12 },
+  { x: 94, y: 12 },
+  { x: 94, y: 90 },
+  { x: 6, y: 90 },
 ];
 
-// 다리 위 널판. 마당과 이어져 있고 아래쪽 개울을 건너는 자리다.
-const bridge: Point[] = [
-  { x: 36, y: 76 },
-  { x: 54, y: 76 },
-  { x: 58, y: 98 },
-  { x: 38, y: 98 },
-];
-
-type WalkZone = { id: "yard" | "bridge"; points: Point[] };
-const walkZones: WalkZone[] = [
-  { id: "yard", points: yard },
-  { id: "bridge", points: bridge },
-];
+type WalkZone = { id: "yard"; points: Point[] };
+const walkZones: WalkZone[] = [{ id: "yard", points: yard }];
 
 type CampObstacle =
   | { id: string; kind: "polygon"; points: Point[] }
   | { id: string; kind: "ellipse"; center: Point; rx: number; ry: number };
 
-/** 물·건물·화덕처럼 절대 밟고 지나갈 수 없는 곳. */
+/** 천막·마차·모닥불·벤치처럼 밟고 지나갈 수 없는 자리. 그림의 발밑 면적만 막는다. */
 const obstacles: CampObstacle[] = [
-  // 오두막 본체. 문 앞 계단은 밖으로 빼 둔다.
-  {
-    id: "cabin",
-    kind: "polygon",
-    points: [
-      { x: 0, y: 0 },
-      { x: 37, y: 0 },
-      { x: 37, y: 52 },
-      { x: 33.5, y: 56 },
-      { x: 30, y: 56 },
-      { x: 30, y: 51 },
-      { x: 0, y: 51 },
-    ],
-  },
-  // 장작더미
-  {
-    id: "woodpile",
-    kind: "polygon",
-    points: [
-      { x: 0, y: 39 },
-      { x: 11, y: 39 },
-      { x: 11, y: 52.5 },
-      { x: 0, y: 52.5 },
-    ],
-  },
-  // 오두막 앞 작업대
-  {
-    id: "workbench",
-    kind: "polygon",
-    points: [
-      { x: 36.5, y: 42.8 },
-      { x: 49.5, y: 42.8 },
-      { x: 49.5, y: 49.2 },
-      { x: 36.5, y: 49.2 },
-    ],
-  },
-  // 모루
-  {
-    id: "anvil",
-    kind: "polygon",
-    points: [
-      { x: 46.8, y: 48.2 },
-      { x: 51.2, y: 48.2 },
-      { x: 51.2, y: 51.6 },
-      { x: 46.8, y: 51.6 },
-    ],
-  },
-  // 물통
-  {
-    id: "barrel",
-    kind: "polygon",
-    points: [
-      { x: 51.4, y: 44.8 },
-      { x: 54.6, y: 44.8 },
-      { x: 54.6, y: 49.2 },
-      { x: 51.4, y: 49.2 },
-    ],
-  },
-  // 오른쪽 울타리
-  {
-    id: "fence",
-    kind: "polygon",
-    points: [
-      { x: 55, y: 43.5 },
-      { x: 64, y: 43.5 },
-      { x: 64, y: 47.5 },
-      { x: 55, y: 47.5 },
-    ],
-  },
-  // 모닥불 화덕(돌 테두리까지)
-  { id: "campfire", kind: "ellipse", center: campFire, rx: 4.4, ry: 4.4 },
-  // 오른쪽 개울
-  {
-    id: "stream-right",
-    kind: "polygon",
-    points: [
-      { x: 79, y: 42 },
-      { x: 88, y: 42 },
-      { x: 88, y: 57 },
-      { x: 83, y: 60 },
-      { x: 79, y: 58.5 },
-    ],
-  },
-  // 아래쪽 개울(다리 아래)
-  {
-    id: "stream-bottom",
-    kind: "polygon",
-    points: [
-      { x: 58, y: 88 },
-      { x: 86, y: 88 },
-      { x: 86, y: 100 },
-      { x: 58, y: 100 },
-    ],
-  },
-  // 오른쪽 앞 큰 소나무
-  {
-    id: "pine-right",
-    kind: "polygon",
-    points: [
-      { x: 85, y: 55 },
-      { x: 100, y: 55 },
-      { x: 100, y: 100 },
-      { x: 85, y: 100 },
-    ],
-  },
-  // 왼쪽 위 숲
-  {
-    id: "forest-left",
-    kind: "polygon",
-    points: [
-      { x: 0, y: 0 },
-      { x: 6, y: 0 },
-      { x: 6, y: 56 },
-      { x: 0, y: 56 },
-    ],
-  },
+  { id: "tent", kind: "ellipse", center: { x: 19, y: 33 }, rx: 14.5, ry: 2.8 },
+  { id: "wagon", kind: "ellipse", center: { x: 80, y: 34 }, rx: 13, ry: 2.8 },
+  { id: "campfire", kind: "ellipse", center: campFire, rx: 5, ry: 2.8 },
+  { id: "bench-west", kind: "ellipse", center: { x: 35.5, y: 52.6 }, rx: 5.2, ry: 1 },
+  { id: "bench-east", kind: "ellipse", center: { x: 64.5, y: 52.6 }, rx: 5.2, ry: 1 },
+  { id: "bench-south", kind: "ellipse", center: { x: 50, y: 61.4 }, rx: 5.6, ry: 1.2 },
+  { id: "crates", kind: "ellipse", center: { x: 13, y: 80 }, rx: 4.2, ry: 2.4 },
 ];
 
 function pointInPolygon(point: Point, polygon: Point[]) {
@@ -250,205 +100,145 @@ export function facingBetween(from: Point, to: Point): Facing {
 }
 
 // ── 자리 ──────────────────────────────────────────────────────────────────
+// 모닥불을 가운데 두고 통나무 벤치 세 개가 둘러싼다. 한 벤치에 두 명씩 앉는다.
 export const seats: CampSpot[] = [
   {
-    id: "seat-stump-north",
+    id: "bench-west-seat",
     kind: "seat",
-    x: 52,
-    y: 57.4,
+    x: 35.5,
+    y: 55.5,
     facing: "right",
-    label: "통나무 의자",
+    label: "통나무 벤치",
   },
   {
-    id: "seat-stump-west",
+    id: "bench-east-seat",
     kind: "seat",
-    x: 46.8,
-    y: 62,
-    facing: "right",
-    label: "통나무 의자",
-  },
-  {
-    id: "seat-stump-southwest",
-    kind: "seat",
-    x: 49.3,
-    y: 66.6,
-    facing: "right",
-    label: "통나무 의자",
-  },
-  {
-    id: "seat-stump-east",
-    kind: "seat",
-    x: 76,
-    y: 58.6,
+    x: 64.5,
+    y: 55.5,
     facing: "left",
-    label: "통나무 의자",
+    label: "통나무 벤치",
   },
   {
-    id: "seat-stump-south",
+    id: "bench-south-seat",
     kind: "seat",
-    x: 59.2,
-    y: 70,
+    x: 50,
+    y: 64.3,
     facing: "right",
-    label: "통나무 의자",
-  },
-  {
-    id: "seat-log-bench",
-    kind: "seat",
-    x: 77.4,
-    y: 66,
-    facing: "left",
-    label: "통나무 걸상",
+    label: "통나무 벤치",
   },
 ];
 
 export const workSpots: CampSpot[] = [
   {
-    id: "work-bench",
-    kind: "work",
-    x: 41.5,
-    y: 53.8,
-    facing: "right",
-    label: "작업대",
-    roles: ["development", "docs", "vision"],
-  },
-  {
-    id: "work-anvil",
-    kind: "work",
-    x: 49.2,
-    y: 53.4,
-    facing: "left",
-    label: "모루",
-    roles: ["build", "development"],
-  },
-  {
-    id: "work-porch",
-    kind: "work",
-    x: 34,
-    y: 58.4,
-    facing: "right",
-    label: "오두막 앞",
-    roles: ["assistant", "hr", "test"],
-  },
-  {
     id: "work-fire",
     kind: "work",
-    x: 64.6,
-    y: 63.4,
+    x: 55.5,
+    y: 45.8,
     facing: "left",
     label: "모닥불가",
     roles: ["test", "build", "hr", "assistant"],
   },
   {
-    id: "work-bridge",
+    id: "work-tent",
     kind: "work",
-    x: 45,
-    y: 88,
+    x: 25,
+    y: 37.6,
     facing: "left",
-    label: "다리 위",
-    roles: ["vision", "test"],
+    label: "천막 앞",
+    roles: ["docs", "vision", "assistant"],
   },
   {
-    id: "work-garden",
+    id: "work-wagon",
     kind: "work",
-    x: 70,
-    y: 70.6,
-    facing: "left",
-    label: "텃밭",
-    roles: ["style", "docs"],
-  },
-  {
-    id: "work-woodpile",
-    kind: "work",
-    x: 12.6,
-    y: 55.2,
-    facing: "left",
-    label: "장작더미 앞",
-    roles: ["build", "hr"],
-  },
-  {
-    id: "work-table-end",
-    kind: "work",
-    x: 47.4,
-    y: 55.2,
+    x: 71,
+    y: 39,
     facing: "right",
-    label: "작업대 끝",
-    roles: ["docs", "review"],
+    label: "마차 앞",
+    roles: ["development", "build"],
+  },
+  {
+    id: "work-crates",
+    kind: "work",
+    x: 19.5,
+    y: 82,
+    facing: "left",
+    label: "보급 상자 앞",
+    roles: ["hr", "style"],
+  },
+  {
+    id: "work-path",
+    kind: "work",
+    x: 50,
+    y: 39,
+    facing: "right",
+    label: "길 위",
+    roles: ["development", "docs", "review"],
+  },
+  {
+    id: "work-west",
+    kind: "work",
+    x: 27,
+    y: 50,
+    facing: "right",
+    label: "마당 서쪽",
+    roles: ["style", "test"],
+  },
+  {
+    id: "work-east",
+    kind: "work",
+    x: 73,
+    y: 50,
+    facing: "left",
+    label: "마당 동쪽",
+    roles: ["vision", "review"],
   },
 ];
 
 export const strollSpots: CampSpot[] = [
-  { id: "walk-left", kind: "stroll", x: 30, y: 62, facing: "right", label: "마당" },
-  { id: "walk-left-low", kind: "stroll", x: 37, y: 68, facing: "right", label: "마당" },
-  { id: "walk-mid", kind: "stroll", x: 44, y: 68, facing: "right", label: "마당" },
-  { id: "walk-mid-low", kind: "stroll", x: 52, y: 72, facing: "left", label: "마당" },
-  { id: "walk-front", kind: "stroll", x: 58, y: 74.5, facing: "left", label: "마당" },
-  { id: "walk-right-low", kind: "stroll", x: 66, y: 68, facing: "left", label: "마당" },
-  { id: "walk-right", kind: "stroll", x: 72, y: 66, facing: "left", label: "마당" },
-  { id: "walk-garden", kind: "stroll", x: 76.5, y: 72, facing: "left", label: "텃밭" },
-  { id: "walk-north", kind: "stroll", x: 55.6, y: 56.2, facing: "right", label: "모닥불 위" },
-  { id: "walk-north-east", kind: "stroll", x: 65.4, y: 56.9, facing: "left", label: "모닥불 위" },
-  { id: "walk-south", kind: "stroll", x: 60, y: 68.4, facing: "left", label: "모닥불 아래" },
-  { id: "walk-south-east", kind: "stroll", x: 65.4, y: 67.4, facing: "left", label: "모닥불 아래" },
-  { id: "walk-bench", kind: "stroll", x: 46, y: 58.6, facing: "right", label: "오두막 앞" },
-  { id: "walk-left-edge", kind: "stroll", x: 22, y: 66, facing: "right", label: "풀밭" },
-  { id: "walk-lower-left", kind: "stroll", x: 30, y: 74, facing: "left", label: "풀밭" },
-  { id: "walk-bridge-head", kind: "stroll", x: 40, y: 79, facing: "left", label: "다리 어귀" },
-  { id: "walk-bridge-mid", kind: "stroll", x: 47, y: 88, facing: "left", label: "다리 위" },
+  { id: "walk-north-west", kind: "stroll", x: 30, y: 22, facing: "right", label: "풀밭" },
+  { id: "walk-north", kind: "stroll", x: 50, y: 17, facing: "right", label: "풀밭" },
+  { id: "walk-north-east", kind: "stroll", x: 65, y: 24, facing: "left", label: "풀밭" },
+  { id: "walk-east-north", kind: "stroll", x: 88, y: 42, facing: "left", label: "풀밭" },
+  { id: "walk-east", kind: "stroll", x: 87, y: 62, facing: "left", label: "풀밭" },
+  { id: "walk-east-south", kind: "stroll", x: 82, y: 79, facing: "left", label: "풀밭" },
+  { id: "walk-south-east", kind: "stroll", x: 68, y: 86, facing: "left", label: "풀밭" },
+  { id: "walk-south", kind: "stroll", x: 52, y: 85, facing: "left", label: "풀밭" },
+  { id: "walk-south-west", kind: "stroll", x: 38, y: 86, facing: "right", label: "풀밭" },
+  { id: "walk-west-south", kind: "stroll", x: 23, y: 72, facing: "right", label: "풀밭" },
+  { id: "walk-west", kind: "stroll", x: 11, y: 58, facing: "right", label: "풀밭" },
+  { id: "walk-west-north", kind: "stroll", x: 10, y: 42, facing: "right", label: "풀밭" },
+  { id: "walk-mid-north", kind: "stroll", x: 36, y: 40, facing: "right", label: "마당" },
+  { id: "walk-mid-east", kind: "stroll", x: 66, y: 42, facing: "left", label: "마당" },
+  { id: "walk-mid-south", kind: "stroll", x: 60, y: 73, facing: "left", label: "마당" },
+  { id: "walk-mid-west", kind: "stroll", x: 33, y: 68, facing: "right", label: "마당" },
+  { id: "walk-fire-north", kind: "stroll", x: 43, y: 45, facing: "right", label: "모닥불 위" },
+  { id: "walk-fire-south", kind: "stroll", x: 57, y: 70, facing: "left", label: "모닥불 아래" },
 ];
 
 export const campSpots: CampSpot[] = [...seats, ...workSpots, ...strollSpots];
 
-/** 캠프 그림 위에 얹는 상호작용 오브젝트. 좌표는 중심점이고 y는 발밑 기준이다. */
-type CampObject = {
+/** 캠프 그림 위에 얹는 개별 오브젝트. 좌표는 바닥에 닿는 발밑 중심이다. */
+export type CampObject = {
   id: string;
-  kind: "seat" | "campfire" | "workbench" | "lantern";
+  kind: "campfire" | "bench" | "tent" | "wagon" | "crates";
   x: number;
   y: number;
-  /** 상자 크기(백분율) */
-  w: number;
+  /** 캠프 높이에 대한 그림 높이(%). 너비는 그림의 가로세로 비율을 따른다. */
   h: number;
   label: string;
 };
 
 export const campObjects: CampObject[] = [
-  ...seats.map((seat) => ({
-    id: seat.id,
-    kind: "seat" as const,
-    x: seat.x,
-    y: seat.y - 2.1,
-    w: 6.8,
-    h: 5.4,
-    label: seat.label,
-  })),
-  {
-    id: "campfire",
-    kind: "campfire",
-    x: campFire.x,
-    y: campFire.y - 1.4,
-    w: 11,
-    h: 9.4,
-    label: "모닥불",
-  },
-  {
-    id: "workbench",
-    kind: "workbench",
-    x: 43,
-    y: 46.2,
-    w: 13.6,
-    h: 7.6,
-    label: "작업대",
-  },
-  {
-    id: "lantern",
-    kind: "lantern",
-    x: 40.6,
-    y: 41.4,
-    w: 4.2,
-    h: 6,
-    label: "오두막 등불",
-  },
+  { id: "tent", kind: "tent", x: 19, y: 33, h: 20, label: "천막" },
+  { id: "wagon", kind: "wagon", x: 80, y: 34, h: 17, label: "마차" },
+  { id: "campfire", kind: "campfire", x: campFire.x, y: campFire.y, h: 9, label: "모닥불" },
+  { id: "bench-west", kind: "bench", x: 35.5, y: 55.6, h: 6, label: "통나무 벤치" },
+  { id: "bench-east", kind: "bench", x: 64.5, y: 55.6, h: 6, label: "통나무 벤치" },
+  { id: "bench-south", kind: "bench", x: 50, y: 64.4, h: 6, label: "통나무 벤치" },
+  { id: "crates", kind: "crates", x: 13, y: 80, h: 8, label: "보급 상자" },
 ];
 
+// ── 길 찾기 ────────────────────────────────────────────────────────────────
 // ── 길 찾기 ────────────────────────────────────────────────────────────────
 type GraphNode = { id: string; point: Point };
 const graphNodes: GraphNode[] = campSpots.map((spot) => ({
@@ -456,7 +246,7 @@ const graphNodes: GraphNode[] = campSpots.map((spot) => ({
   point: { x: spot.x, y: spot.y },
 }));
 const graphLinks = new Map<string, { id: string; cost: number }[]>();
-const MAX_LINK = 21;
+const MAX_LINK = 34;
 
 function buildGraph() {
   if (graphLinks.size) return;
@@ -710,6 +500,7 @@ function placeAt(actor: CampActor, spot: CampSpot): CampActor {
 export function initialActors(seeds: CampActorSeed[], now = 0): CampActor[] {
   const used = new Set<string>();
   const actors: CampActor[] = [];
+  let idle = 0;
   for (const [index, seed] of seeds.entries()) {
     const base = { ...emptyActor(seed, now), nextDecisionAt: now + 1400 + index * 900 };
     let spot: CampSpot | null = null;
@@ -726,16 +517,22 @@ export function initialActors(seeds: CampActorSeed[], now = 0): CampActor[] {
       continue;
     }
     if (seed.roleId === "assistant") {
-      spot = workSpots.find((work) => work.id === "work-porch") ?? null;
+      spot = workSpots.find((work) => work.id === "work-fire") ?? null;
     }
+    // 쉬는 크루는 통나무와 마당을 번갈아 받아 한 자리에 몰리지 않는다.
     if (!spot || used.has(spot.id)) {
-      spot = seatFor({ x: 50, y: 60 }, used);
+      spot =
+        (idle % 2 === 0
+          ? seats.find((seat) => !used.has(seat.id))
+          : strollSpots.find((walk) => !used.has(walk.id))) ??
+        strollSpots.find((walk) => !used.has(walk.id)) ??
+        seats.find((seat) => !used.has(seat.id)) ??
+        null;
     }
-    if (!spot) {
-      spot = strollSpots.find((candidate) => !used.has(candidate.id)) ?? strollSpots[0];
-    }
+    if (!spot) spot = strollSpots[0];
     used.add(spot.id);
     actors.push(placeAt(base, spot));
+    idle += 1;
   }
   return actors;
 }

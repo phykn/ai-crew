@@ -38,12 +38,16 @@ type StageActor = {
 
 type CrewSprite = { id: string; url: string };
 
-/** 캠프 그림 위에 얹는 만질 수 있는 오브젝트(통나무 의자·작업대·등불·모닥불). */
+/** 캠프 그림 위에 얹는 개별 오브젝트(모닥불·벤치·천막·마차·보급 상자). */
 type StageObject = {
   id: string;
-  kind: "seat" | "workbench" | "campfire" | "lantern";
+  kind: "campfire" | "bench" | "tent" | "wagon" | "crates";
   x: number;
   y: number;
+  /** 캠프 높이에 대한 그림 높이(%). 너비는 그림의 가로세로 비율을 따른다. */
+  h: number;
+  /** 투명 WebP 스프라이트 주소. */
+  sprite: string;
 };
 
 type CampStageOptions = {
@@ -255,6 +259,32 @@ export async function createCampStage(
     crewTextures.set(options.crew[index].id, texture);
   }
 
+  // ── 오브젝트 스프라이트 ─────────────────────────────────────────────────
+  // 천막·마차·모닥불·벤치·보급 상자는 투명 WebP 한 장씩을 그대로 얹는다.
+  // 캐릭터와 같은 sortableChildren 안에 두어 발밑 y로 앞뒤가 갈린다.
+  const objectTextures = new Map<string, PixiTexture>();
+  const objectUrls = [
+    ...new Set((options.objects ?? []).map((object) => object.sprite)),
+  ];
+  const objectImages = await Promise.all(objectUrls.map((url) => loadImage(url)));
+  for (const [index, image] of objectImages.entries()) {
+    if (!image) continue;
+    const texture = PIXI.Texture.from(image);
+    texture.source.scaleMode = "nearest";
+    objectTextures.set(objectUrls[index], texture);
+  }
+
+  const objectViews: { object: StageObject; sprite: PixiSprite }[] = [];
+  for (const object of options.objects ?? []) {
+    const texture = objectTextures.get(object.sprite);
+    if (!texture) continue;
+    const sprite = new PIXI.Sprite(texture);
+    sprite.anchor.set(0.5, 1);
+    sprite.zIndex = sortZ(object.y, object.id);
+    world.addChild(sprite);
+    objectViews.push({ object, sprite });
+  }
+
   // ── 조명 ────────────────────────────────────────────────────────────────
   const fireGlow =
     glowTexture ? new PIXI.Sprite(glowTexture) : new PIXI.Sprite();
@@ -271,24 +301,9 @@ export async function createCampStage(
   fireCore.zIndex = sortZ(options.fire.y, "campfire-core");
   world.addChild(fireCore);
 
-  // 통나무 의자·작업대 위의 은은한 빛. 캐릭터와 같은 Y 정렬 층에 둔다.
-  const objectGlows = (options.objects ?? [])
-    .filter((object) => object.kind === "seat" || object.kind === "workbench")
-    .map((object) => {
-      const sprite = glowTexture
-        ? new PIXI.Sprite(glowTexture)
-        : new PIXI.Sprite();
-      sprite.anchor.set(0.5, 0.5);
-      sprite.blendMode = "add";
-      sprite.tint = object.kind === "workbench" ? 0xffb45c : 0xffc989;
-      sprite.alpha = 0.05;
-      sprite.zIndex = sortZ(object.y, "object-" + object.id);
-      world.addChild(sprite);
-      return { object, sprite };
-    });
-
+  // 보급 상자 위 등불과 천막 입구의 따뜻한 빛.
   const lanternObject = (options.objects ?? []).find(
-    (object) => object.kind === "lantern",
+    (object) => object.kind === "crates",
   );
   const lanternLight =
     lanternObject && glowTexture ? new PIXI.Sprite(glowTexture) : null;
@@ -298,6 +313,19 @@ export async function createCampStage(
     lanternLight.tint = 0xffb668;
     lanternLight.zIndex = sortZ(lanternObject.y, "lantern-light");
     world.addChild(lanternLight);
+  }
+
+  const tentObject = (options.objects ?? []).find(
+    (object) => object.kind === "tent",
+  );
+  const tentLight =
+    tentObject && glowTexture ? new PIXI.Sprite(glowTexture) : null;
+  if (tentLight && tentObject) {
+    tentLight.anchor.set(0.5, 0.5);
+    tentLight.blendMode = "add";
+    tentLight.tint = 0xffcf92;
+    tentLight.zIndex = sortZ(tentObject.y, "tent-light");
+    world.addChild(tentLight);
   }
 
   const cursorLight = glowTexture ? new PIXI.Sprite(glowTexture) : null;
@@ -331,26 +359,49 @@ export async function createCampStage(
     background.position.set(bgFit.x + parallax.x, bgFit.y + parallax.y);
   }
 
+  function placeObjects() {
+    // 그림 높이만 캠프 높이에 비례시키고, 너비는 원본 비율을 따라 늘어나지 않는다.
+    for (const { object, sprite } of objectViews) {
+      const point = stagePoint(size, object);
+      const height = (object.h / 100) * size.height;
+      sprite.position.set(point.x, point.y);
+      sprite.height = height;
+      sprite.width = height * (sprite.texture.width / sprite.texture.height);
+    }
+  }
+
+  /** 모닥불 그림의 불꽃 한가운데(스테이지 픽셀). 불티와 빛이 여기서 피어오른다. */
+  function fireCentre() {
+    const base = stagePoint(size, options.fire);
+    return { x: base.x, y: base.y - size.height * 0.06 };
+  }
+
   function placeLights() {
     const fire = stagePoint(size, options.fire);
-    fireGlow.position.set(fire.x, fire.y);
+    const heart = fireCentre();
+    fireGlow.position.set(fire.x, fire.y - size.height * 0.02);
     fireGlow.width = size.width * 0.34;
     fireGlow.height = size.height * 0.34;
-    fireCore.position.set(fire.x, fire.y);
+    fireCore.position.set(heart.x, heart.y);
     fireCore.width = size.width * 0.085;
     fireCore.height = size.width * 0.085;
-    for (const { object, sprite } of objectGlows) {
-      const point = stagePoint(size, object);
-      sprite.position.set(point.x, point.y);
-      const width = size.width * (object.kind === "workbench" ? 0.16 : 0.1);
-      sprite.width = width;
-      sprite.height = width * 0.62;
-    }
     if (lanternLight && lanternObject) {
       const lantern = stagePoint(size, lanternObject);
-      lanternLight.position.set(lantern.x, lantern.y);
-      lanternLight.width = size.width * 0.2;
-      lanternLight.height = size.width * 0.2;
+      lanternLight.position.set(
+        lantern.x,
+        lantern.y - size.height * (lanternObject.h / 100) * 0.72,
+      );
+      lanternLight.width = size.width * 0.16;
+      lanternLight.height = size.width * 0.16;
+    }
+    if (tentLight && tentObject) {
+      const tent = stagePoint(size, tentObject);
+      tentLight.position.set(
+        tent.x - size.width * 0.01,
+        tent.y - size.height * (tentObject.h / 100) * 0.28,
+      );
+      tentLight.width = size.width * 0.2;
+      tentLight.height = size.width * 0.16;
     }
     if (cursorLight) {
       cursorLight.width = size.width * 0.34;
@@ -561,7 +612,7 @@ export async function createCampStage(
   }
 
   function placeParticles() {
-    const fire = stagePoint(size, options.fire);
+    const fire = fireCentre();
     for (const ember of embers) {
       ember.sprite.x = fire.x + ember.state.drift;
       ember.sprite.y = fire.y - ember.state.rise;
@@ -581,7 +632,7 @@ export async function createCampStage(
   // ── 프레임 ──────────────────────────────────────────────────────────────
   function paint() {
     // 통나무에 걸터앉으면 발끝을 축으로 몸을 내리고 눌러 앉힌다.
-    const sink = crewHeight(size) * 0.26 + size.height * 0.016;
+    const sink = crewHeight(size) * 0.02;
     for (const view of views.values()) {
       if (!view.root.visible) continue;
       view.breath.y = view.pose.sink * sink + view.pose.bob;
@@ -601,12 +652,10 @@ export async function createCampStage(
     paint();
     const time = performance.now() / 1000;
     const glow = reducedMotion ? 0.72 : flicker(time);
-    fireGlow.alpha = 0.1 + glow * 0.16 + firePulse.value;
+    fireGlow.alpha = 0.1 + glow * 0.16 + firePulse.value + (crewWorking ? 0.03 : 0);
     fireCore.alpha = 0.06 + glow * 0.08;
-    if (lanternLight) lanternLight.alpha = 0.1 + glow * 0.08;
-    for (const { object, sprite } of objectGlows) {
-      if (object.kind === "workbench") sprite.alpha = crewWorking ? 0.22 : 0.05;
-    }
+    if (lanternLight) lanternLight.alpha = 0.08 + glow * 0.06;
+    if (tentLight) tentLight.alpha = 0.06 + glow * 0.05;
     if (background)
       background.position.set(bgFit.x + parallax.x, bgFit.y + parallax.y);
     if (!reducedMotion) placeParticles();
@@ -661,6 +710,7 @@ export async function createCampStage(
     size.height = measured.height;
     app.renderer.resize(size.width, size.height);
     placeBackground();
+    placeObjects();
     placeLights();
     for (const view of views.values()) sizeActor(view);
     placeParticles();
@@ -709,6 +759,7 @@ export async function createCampStage(
   };
 
   placeBackground();
+  placeObjects();
   placeLights();
   spawnParticles();
   pointerSurface.addEventListener("pointermove", moveCursor);

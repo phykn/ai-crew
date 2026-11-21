@@ -4,8 +4,8 @@
 
 import { useEffect, useRef } from "react";
 
-// 불티가 피어오르는 자리: 새 배경의 모닥불 위치(가로 66%, 세로 60%).
-const FIRE = { x: 0.66, y: 0.6 };
+// 불티가 피어오르는 자리: 새 배경의 모닥불 불꽃 높이(가로 50%, 세로 46%).
+const FIRE = { x: 0.5, y: 0.46 };
 
 type Ember = {
   x: number;
@@ -46,7 +46,7 @@ function makeEmber(width: number, height: number): Ember {
 function makeFirefly(width: number, height: number): Firefly {
   return {
     x: random(width * 0.06, width * 0.94),
-    y: random(height * 0.16, height * 0.62),
+    y: random(height * 0.12, height * 0.7),
     phase: random(0, Math.PI * 2),
     drift: random(0.12, 0.34),
     reach: random(8, 26),

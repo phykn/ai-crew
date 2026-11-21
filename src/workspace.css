@@ -2614,3 +2614,240 @@ textarea::-webkit-scrollbar {
   left: 6px;
   width: min(320px, calc(100vw - 32px));
 }
+
+/* ── 입력창: 떠 있는 카드 + 아래 컨트롤 바 ───────────────────────────── */
+/* Claude·Codex 데스크톱 앱처럼 입력 영역은 카드 하나로 두고, 카드 아래쪽에
+   얇은 구분선 뒤로 폴더·승인 모드(왼쪽)와 보내기(오른쪽)를 나눠 놓는다. */
+.composer {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px 8px;
+  border: 2px solid #6d4d34;
+  border-radius: 18px;
+  background: linear-gradient(#3a2a1d, #2c2016 62%, #271b12);
+}
+.compose-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.compose-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 7px;
+  border-top: 1px solid #4a3627;
+}
+.compose-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.compose-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+/* 왼쪽 그룹: 폴더 팻말과 승인 모드는 같은 나무 알약 모양을 쓴다. */
+.compose-tools .project-toggle,
+.approval-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px 10px;
+  border: 1px solid #5a402c;
+  border-radius: 999px;
+  background: linear-gradient(#3b2b1d, #2f2216);
+  box-shadow: inset 0 1px 0 #ffe4af1f;
+  color: #ecd8b6;
+  font-size: var(--font-detail);
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.08s ease;
+}
+.compose-tools .project-toggle {
+  flex: 0 1 auto;
+  max-width: 220px;
+}
+.compose-tools .project-toggle:hover,
+.approval-pill:hover {
+  border-color: #a97b3c;
+  color: #ffeecb;
+}
+.compose-tools .project-toggle:active,
+.approval-pill:active {
+  transform: translateY(1px);
+}
+.compose-tools .project-toggle svg,
+.approval-pill svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #e0b273;
+}
+.approval-pill {
+  position: relative;
+  flex: none;
+  max-width: 130px;
+  padding-left: 8px;
+  cursor: pointer;
+}
+.approval-pill:focus-within {
+  border-color: #d9a95c;
+  box-shadow: 0 0 0 2px #e8b45c33;
+}
+.approval-pill svg {
+  color: #b9d39a;
+}
+.approval-pill .approval-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 실제 <select>는 알약 위에 투명하게 덮어 두어, 생김새는 알약이 맡고
+   값 선택·키보드 조작·스크린리더 안내는 원래 select가 맡는다. */
+.approval-pill select.approval-mode {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+}
+/* 오른쪽 그룹: 보내기가 시선을 받는 주 버튼 하나, 응답 중에는 멈춤이 옆에 선다. */
+.compose-actions .send {
+  width: 42px;
+  height: 38px;
+  border-radius: 13px;
+  box-shadow:
+    inset 0 1px 0 #fff3ce99,
+    0 3px 0 #140e08,
+    0 0 0 3px #e8b45c1f;
+}
+.compose-actions .send svg {
+  width: 18px;
+  height: 18px;
+}
+.compose-actions .stop {
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+}
+/* 키 안내: 실제로 동작하는 단축키만 적는다. */
+.compose-hint {
+  margin: 0;
+  padding-left: 4px;
+  color: #9d856c;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+/* 대기열: 입력창 위에 기다리는 메시지를 번호가 붙은 칩으로 보여 준다. */
+.queue-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 1px 6px;
+  border-bottom: 1px dashed #5a402c;
+}
+.queue-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 5px;
+  border: 1px solid #8a5f2c;
+  border-radius: 999px;
+  background: linear-gradient(#4a3524, #3a2a1c);
+  box-shadow: inset 0 1px 0 #ffe4af33;
+  color: #ffe3ae;
+  font-size: 11px;
+  font-weight: 800;
+}
+.queue-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.queue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 3px 5px 3px 6px;
+  border: 1px solid #6d4d34;
+  border-radius: 999px;
+  background: #33261b;
+  color: #eddcc0;
+  font-size: var(--font-detail);
+}
+.queue-order {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #6d4d34;
+  color: #ffeccb;
+  font-size: 10px;
+  font-weight: 800;
+}
+.queue-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.queue-cancel {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #b79a78;
+  cursor: pointer;
+}
+.queue-cancel:hover:not(:disabled) {
+  background: #5a3324;
+  color: #ffd7c2;
+}
+.queue-cancel svg {
+  width: 12px;
+  height: 12px;
+}
+/* 좁은 폭: 글자 라벨은 숨기고 아이콘만 남긴다. 아이콘만으로도 무엇인지 알 수 있게
+   각 버튼의 aria-label·title은 그대로 둔다. */
+@media (max-width: 760px) {
+  .approval-pill {
+    padding: 4px 8px;
+  }
+  .approval-pill .approval-text {
+    display: none;
+  }
+  .compose-hint {
+    display: none;
+  }
+  .compose-actions .send {
+    width: 38px;
+    height: 36px;
+  }
+}

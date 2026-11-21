@@ -2,6 +2,7 @@
 // up to the current version.
 
 import { DatabaseSync } from "node:sqlite";
+import { seedDefaultSkills } from "./skills";
 
 /**
  * Creates the SQLite schema or migrates an older database, then clears work that a
@@ -12,7 +13,7 @@ export function initStoreSchema(db: DatabaseSync) {
     const migration = db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 38)
+    if (migration.user_version > 39)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       db.exec(`
@@ -561,6 +562,15 @@ export function initStoreSchema(db: DatabaseSync) {
       if (!columns.has("interrupt_reason"))
         db.exec("ALTER TABLE messages ADD COLUMN interrupt_reason TEXT;");
       db.exec("PRAGMA user_version = 38; COMMIT;");
+    }
+    if (migration.user_version < 39) {
+      // 역할 기본 스킬. 새 프로젝트는 만들 때 심으므로 여기서는 이미 있는 프로젝트만 채운다.
+      db.exec("BEGIN;");
+      const projects = db.prepare("SELECT id FROM projects").all() as {
+        id: string;
+      }[];
+      for (const { id } of projects) seedDefaultSkills(db, id);
+      db.exec("PRAGMA user_version = 39; COMMIT;");
     }
     db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",

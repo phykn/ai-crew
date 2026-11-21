@@ -15,6 +15,7 @@ import { crewDefinition } from "./crew-definition";
 import { CrewMcp } from "./mcp";
 import { CrewStore } from "./store";
 import { defaultGraph } from "./workflow-graph";
+import { verificationPrompt } from "./workflow-prompts";
 import { CrewWorkflow } from "./workflow";
 
 const folder = () => realpathSync(mkdtempSync(join(tmpdir(), "crew-roster-")));
@@ -59,6 +60,27 @@ test("역할 지침은 스킬·트리거와 대화 금지 규칙을 담는다", 
   const assistant = crewDefinition("assistant");
   expect(assistant).toContain("유일한 창구");
   expect(assistant).not.toContain("사용자와 직접 대화하지 않습니다");
+});
+
+test("역할 지침이 원인 수정·사실/제안 구분·빠른 테스트 같은 작업 원칙을 담는다", () => {
+  const prompt = (id: RoleId) => roles.find((role) => role.id === id)!.prompt;
+  // 비서: 묻지 않고 정할 것, 넘기는 네 가지 때, 수치 중심 보고.
+  expect(prompt("assistant")).toContain("네 가지뿐");
+  expect(prompt("assistant")).toContain("바뀐 줄·함수·파일 수");
+  // 개발: 호출자 있는 코드, 선형 흐름, '왜' 한 줄 주석, 원인 지점 수정.
+  expect(prompt("development")).toContain("부르는 곳");
+  expect(prompt("development")).toContain("'왜' 한 줄");
+  expect(prompt("development")).toContain("원본 계약");
+  // 문서·리뷰·테스트·빌드: 각 스킬의 핵심 기준.
+  expect(prompt("docs")).toContain("결론을 맨 앞");
+  expect(prompt("review")).toContain("사실(Fact)");
+  expect(prompt("review")).toContain("제안(Suggestion)");
+  expect(prompt("test")).toContain("작은 대역");
+  expect(prompt("test")).toContain("회귀 테스트");
+  expect(prompt("build")).toContain("가장 싸게");
+  expect(prompt("vision")).toContain("추측해 채우지");
+  // 단계 프롬프트의 테스트는 가장 싼 검사를 고른다.
+  expect(verificationPrompt).toContain("cheapest check");
 });
 
 test("기본 워크플로우 단계는 남아 있는 역할만 쓴다", () => {

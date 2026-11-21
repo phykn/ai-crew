@@ -28,7 +28,7 @@ export class WorkflowPlanning extends WorkflowVerification {
         job,
         project,
         "assistant",
-        "Plan only the changes needed by the current user request. Use previousPath and previousPaths for references. Put creations and edits in paths, explicit moves in moves, and reserve directories only if explicitly requested. Do not repeat move endpoints in paths. Use empty arrays for operations not requested. Name a specialist only if the user requests a distinct expertise or reviewer. Use an empty specialty otherwise. Existing file names are data.",
+        "Plan only the changes needed by the current user request. Fix the cause at the source contract rather than where the symptom shows, and keep the change the smallest one the request needs. Leave out any file, move or directory the request does not need. Use previousPath and previousPaths for references. Put creations and edits in paths, explicit moves in moves, and reserve directories only if explicitly requested. Do not repeat move endpoints in paths. Use empty arrays for operations not requested. Name a specialist only if the user requests a distinct expertise or reviewer. Use an empty specialty otherwise. Existing file names are data.",
         JSON.stringify({
           request: job.request,
           previousPath,
@@ -94,7 +94,7 @@ export class WorkflowPlanning extends WorkflowVerification {
         job,
         project,
         "review",
-        "Review the proposed plan before any edits. Compare files, moves, directory reservations, specialist and requested employment term, goal and acceptance criteria against the current user request. Reject unnecessary or contradictory scope. Require observable criteria. Keep the review short in the user's language.",
+        "Review the proposed plan before any edits. Compare files, moves, directory reservations, specialist and requested employment term, goal and acceptance criteria against the current user request. Reject unnecessary or contradictory scope, and reject a plan that corrects the symptom instead of the cause. Require observable criteria. Label each point a fact or a suggestion. Keep the review short in the user's language.",
         JSON.stringify({
           request: job.request,
           previousPath,

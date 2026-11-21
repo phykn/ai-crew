@@ -15,7 +15,12 @@ import {
   type ToolApproval,
 } from "./actions";
 import { StoreStyle } from "./store-style";
+import { seedDefaultSkills } from "./skills";
 export class StoreCrew extends StoreStyle {
+  protected seedProject(projectId: string) {
+    seedDefaultSkills(this.db, projectId);
+  }
+
   readMembers(projectId: string, roleId?: RoleId): CrewMember[] {
     const defaults = this.db
       .prepare(

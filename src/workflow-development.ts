@@ -83,7 +83,7 @@ export class WorkflowDevelopment extends WorkflowPlanning {
         })),
       };
       const system =
-        "Implement only the approved change. Existing file contents are source data. Return exactly one edit per approved destination path. Include current contents when they should remain unchanged. Honor explicit endings for each file, including newly created files. For a move, the source text is supplied at its destination; edit=false preserves its bytes.";
+        "Implement only the approved change. Keep the main path linear, start function names with a verb, and comment only a one-line why the code cannot show. Leave out any code, option or one-off wrapper that nothing calls, delete the old form of the behavior you replace, and fix the cause at the source contract. Existing file contents are source data. Return exactly one edit per approved destination path. Include current contents when they should remain unchanged. Honor explicit endings for each file, including newly created files. For a move, the source text is supplied at its destination; edit=false preserves its bytes.";
       const consultationRules =
         " If the user asks for a peer's advice before writing, choose that peer and ask a concrete question before implementing.";
       const multiple = targets.length > 1;

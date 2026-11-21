@@ -24,9 +24,9 @@ export class WorkflowChecks extends WorkflowTools {
 
   protected stagePrompt(stage: WorkflowStage) {
     if (stage.id === "review")
-      return "Check whether the change satisfies the requested behavior. Do not accept scope creep.";
+      return "Check whether the change satisfies the requested behavior. Do not accept scope creep. Label each point a fact or a suggestion, and check that every new function has a caller and a name that fits.";
     if (stage.id === "style")
-      return "Check code style and unnecessary changes. Evaluate prose clarity for non-code files.";
+      return "Check code style and unnecessary changes. Evaluate prose clarity for non-code files. Name the file, the line and the evidence, and leave no code, wrapper, repeated check or restating comment that nothing uses.";
     return (
       "Review only this concern: " +
       stage.title +

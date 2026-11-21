@@ -76,10 +76,14 @@ export class StoreBase {
           .prepare("INSERT INTO projects (id, root, name) VALUES (?, ?, ?)")
           .run(id, root, basename(root) || root);
         this.insertSession(id);
+        this.seedProject(id);
       }
       this.openProject(id);
     });
   }
+
+  /** 새 프로젝트에 딸린 초기 데이터를 심는 자리. 도메인을 아는 저장소가 채운다. */
+  protected seedProject(_projectId: string) {}
 
   openProject(id: string) {
     this.getProject(id);

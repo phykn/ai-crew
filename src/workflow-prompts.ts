@@ -116,7 +116,7 @@ export const multiVerificationSchema = z.strictObject({
     .max(8),
 });
 export const verificationPrompt =
-  'Choose an independent executable check from the current user request, without seeing the produced file. When the plan conflicts with the current request, use the current request. For exact text, give the plain expected text and put the final line break requirement in ending. For a file containing Hello and one line break use {"expected":"Hello","exact":true,"ending":"one-line-break"}. Choose javascript only when syntax alone satisfies the criterion, or unavailable when the behavior cannot be checked.';
+  'Choose an independent executable check from the current user request, without seeing the produced file. Pick the cheapest check that would fail if the work were wrong. When the plan conflicts with the current request, use the current request. For exact text, give the plain expected text and put the final line break requirement in ending. For a file containing Hello and one line break use {"expected":"Hello","exact":true,"ending":"one-line-break"}. Choose javascript only when syntax alone satisfies the criterion, or unavailable when the behavior cannot be checked.';
 export const editSchema = z.strictObject({
   content: z
     .string()

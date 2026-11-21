@@ -12,6 +12,7 @@ import {
   sortZ,
   stagePoint,
   webglAvailable,
+  worldRect,
   type StagePoint,
   type StageSize,
 } from "./pixi-layout";
@@ -316,10 +317,8 @@ export async function createCampStage(
 
     sprite.scale.set(unit, unit);
     root.addChild(aura, sprite);
-    root.position.set(
-      (actor.x / 100) * size.width,
-      (actor.y / 100) * size.height,
-    );
+    const point = stagePoint(size, { x: actor.x, y: actor.y });
+    root.position.set(point.x, point.y);
     world.addChild(root);
 
     const view: ActorView = {
@@ -353,9 +352,10 @@ export async function createCampStage(
 
   function sizeSprites() {
     unit = artUnit(size);
-    background.position.set(0, 0);
-    background.width = size.width;
-    background.height = size.height;
+    const world = worldRect(size);
+    background.position.set(world.x, world.y);
+    background.width = world.width;
+    background.height = world.height;
     for (const { object, sprite, shadow } of objectViews) {
       const point = stagePoint(size, object);
       sprite.position.set(point.x, point.y);
@@ -454,8 +454,12 @@ export async function createCampStage(
       ember.sprite.alpha = ember.state.alpha;
     }
     for (const firefly of fireflies) {
-      firefly.sprite.x = ((firefly.home.x + firefly.state.dx * 0.6) / 100) * size.width;
-      firefly.sprite.y = ((firefly.home.y + firefly.state.dy * 0.6) / 100) * size.height;
+      const home = stagePoint(size, {
+        x: firefly.home.x + firefly.state.dx * 0.6,
+        y: firefly.home.y + firefly.state.dy * 0.6,
+      });
+      firefly.sprite.x = home.x;
+      firefly.sprite.y = home.y;
       firefly.sprite.width = 2 * unit * 0.9;
       firefly.sprite.height = 2 * unit * 0.9;
       firefly.sprite.alpha = firefly.state.alpha;
@@ -481,8 +485,9 @@ export async function createCampStage(
     if (!view) view = buildActor(actor) ?? undefined;
     if (!view) return;
     view.root.visible = true;
-    view.quickX((actor.x / 100) * size.width);
-    view.quickY((actor.y / 100) * size.height);
+    const point = stagePoint(size, { x: actor.x, y: actor.y });
+    view.quickX(point.x);
+    view.quickY(point.y);
     // A seated crew member sits on the log with the legs forward, so it sorts in front.
     view.root.zIndex = sortZ(actor.y + (actor.posture === "sit" ? 0.9 : 0), actor.memberId);
 

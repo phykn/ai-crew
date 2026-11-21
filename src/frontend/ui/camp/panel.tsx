@@ -13,7 +13,7 @@ import {
 } from "./behavior";
 import { CampAtmosphere } from "./atmosphere";
 import { createCampStage, type CampStage } from "./pixi";
-import { artUnit, crewHeight } from "./pixi-layout";
+import { artUnit, crewHeight, worldRect } from "./pixi-layout";
 import { CrewSettings } from "../panels/crew-settings";
 import { Icon, SkillChips } from "../common/ui";
 import {
@@ -345,12 +345,14 @@ export function CampPanel({
       if (!area) return;
       const box = area.getBoundingClientRect();
       if (!box.width || !box.height) return;
-      const unit = artUnit({ width: box.width, height: box.height });
-      area.style.setProperty(
-        "--crew-h",
-        crewHeight({ width: box.width, height: box.height }).toFixed(2) + "px",
-      );
-      area.style.setProperty("--unit", unit.toFixed(3));
+      const size = { width: box.width, height: box.height };
+      const world = worldRect(size);
+      area.style.setProperty("--crew-h", crewHeight(size).toFixed(2) + "px");
+      area.style.setProperty("--unit", artUnit(size).toFixed(3));
+      area.style.setProperty("--world-x", world.x.toFixed(2) + "px");
+      area.style.setProperty("--world-y", world.y.toFixed(2) + "px");
+      area.style.setProperty("--world-w", world.width.toFixed(2) + "px");
+      area.style.setProperty("--world-h", world.height.toFixed(2) + "px");
       stageRef.current?.resize();
     };
     measure();
@@ -539,14 +541,6 @@ export function CampPanel({
       aria-label="캠프"
       ref={scene}
     >
-      <img
-        className="camp-bg"
-        src={campBackground.url}
-        width={campBackground.width}
-        height={campBackground.height}
-        alt=""
-        draggable={false}
-      />
       {stageMode !== "canvas" && <CampAtmosphere />}
       <div className="camp-glow" aria-hidden="true" />
       <div className="camp-canvas-host" aria-hidden="true" ref={stageHost} />
@@ -833,6 +827,14 @@ export function CampPanel({
         )}
       </div>
       <div className="camp-stage">
+      <img
+        className="camp-bg"
+        src={campBackground.url}
+        width={campBackground.width}
+        height={campBackground.height}
+        alt=""
+        draggable={false}
+      />
       <div className="camp-objects" role="group" aria-label="캠프 오브젝트">
         {campObjects.map((object) => (
           <button

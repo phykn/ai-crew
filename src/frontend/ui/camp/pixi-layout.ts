@@ -15,11 +15,33 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+/**
+ * Where the clearing sits on the stage. The painting keeps its own aspect and
+ * covers the camp box, so a narrow panel crops the outer forest instead of
+ * squashing the art.
+ */
+export function worldRect(size: StageSize) {
+  const scale = Math.max(
+    size.width / campBackground.width,
+    size.height / campBackground.height,
+  );
+  const width = campBackground.width * scale;
+  const height = campBackground.height * scale;
+  return {
+    scale,
+    width,
+    height,
+    x: (size.width - width) / 2,
+    y: (size.height - height) / 2,
+  };
+}
+
 /** Camp percent coordinates to stage pixels. */
 export function stagePoint(size: StageSize, point: StagePoint): StagePoint {
+  const world = worldRect(size);
   return {
-    x: (point.x / 100) * size.width,
-    y: (point.y / 100) * size.height,
+    x: world.x + (point.x / 100) * world.width,
+    y: world.y + (point.y / 100) * world.height,
   };
 }
 
@@ -30,7 +52,7 @@ export function stagePoint(size: StageSize, point: StagePoint): StagePoint {
  */
 export function crewHeight(size: StageSize) {
   return clamp(
-    size.height * (crewArt.height / campBackground.height),
+    crewArt.height * worldRect(size).scale,
     crewMinHeight,
     crewMaxHeight,
   );
@@ -38,7 +60,7 @@ export function crewHeight(size: StageSize) {
 
 /** Screen pixels per background pixel; bench and fire sprites use it. */
 export function artUnit(size: StageSize) {
-  return size.height / campBackground.height;
+  return worldRect(size).scale;
 }
 
 /** Warm light that fades with the distance from the fire. 0 to 1. */

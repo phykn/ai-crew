@@ -330,9 +330,15 @@ summary:focus-visible {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* The clearing keeps its own aspect and covers the camp box: on a narrow panel
+   the outer forest is cropped instead of the art being squashed. Every camp
+   coordinate is a percentage of this world box. */
 .camp-stage {
   position: absolute;
-  inset: 0;
+  left: var(--world-x, 0px);
+  top: var(--world-y, 0px);
+  width: var(--world-w, 100%);
+  height: var(--world-h, 100%);
   z-index: 3;
   pointer-events: none;
 }
@@ -4170,8 +4176,9 @@ textarea::-webkit-scrollbar {
   --px-frame-light: #fffdf5;
   --px-frame-shade: #d3b98e;
   --px-lip: #7a4e2d;
-  --px-wood: #e0c49a;
-  --px-wood-dark: #b98d5a;
+  --px-wood: #9c6436;
+  --px-wood-light: #b67c46;
+  --px-wood-dark: #6d4323;
   --px-wood-tab: #d9c19b;
   --px-honey: #e8b86d;
   --px-honey-light: #ffe0a3;
@@ -4217,7 +4224,7 @@ textarea::-webkit-scrollbar {
   border-bottom: 2px solid var(--px-ink);
   background: var(--px-wood);
   box-shadow:
-    inset 0 2px 0 var(--px-bevel-light),
+    inset 0 2px 0 var(--px-wood-light),
     inset 0 -2px 0 var(--px-wood-dark);
 }
 .toolbar .tabs {
@@ -5342,9 +5349,9 @@ textarea::-webkit-scrollbar {
   pointer-events: none;
   border: 3px solid #2b1a0f;
   box-shadow:
-    inset 0 0 0 3px #b98d5a,
-    inset 0 0 0 5px #8a5a34,
-    inset 0 0 0 7px #5f3d24,
+    inset 0 0 0 3px #b67c46,
+    inset 0 0 0 5px #9c6436,
+    inset 0 0 0 7px #6d4323,
     inset 0 0 18px #2b1a0f66;
 }
 .camp-tools {

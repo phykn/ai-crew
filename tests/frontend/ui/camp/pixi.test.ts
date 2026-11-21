@@ -10,20 +10,29 @@ import {
   sortZ,
   stagePoint,
   webglAvailable,
+  worldRect,
 } from "../../../../src/frontend/ui/camp/pixi-layout";
 import { campBackground, crewArt } from "../../../../src/frontend/ui/camp/art/scene";
 
 test("캠프 좌표는 화면 크기에 맞춰 픽셀로 옮겨진다", () => {
-  expect(stagePoint({ width: 800, height: 600 }, { x: 50, y: 25 })).toEqual({
+  const size = { width: 800, height: 600 };
+  const world = worldRect(size);
+  // The clearing covers the box, so a wide box crops the top and bottom.
+  expect(world.width).toBeCloseTo(800);
+  expect(world.y).toBeLessThan(0);
+  expect(stagePoint(size, { x: 50, y: 50 })).toEqual({
     x: 400,
-    y: 150,
+    y: 300,
   });
+  expect(stagePoint(size, { x: 50, y: 25 }).y).toBeCloseTo(
+    world.y + world.height * 0.25,
+  );
 });
 
 test("캐릭터 키는 무대 높이를 따르되 정해진 범위를 벗어나지 않는다", () => {
-  // The painted clearing is 1003 tall and its crew are 108 tall.
+  // The crew keep their painted size against the clearing at any window size.
   expect(crewHeight({ width: 1200, height: 900 })).toBeCloseTo(
-    (900 * crewArt.height) / campBackground.height,
+    crewArt.height * worldRect({ width: 1200, height: 900 }).scale,
   );
   expect(crewHeight({ width: 400, height: 200 })).toBe(crewMinHeight);
   expect(crewHeight({ width: 4000, height: 3000 })).toBe(crewMaxHeight);
@@ -32,11 +41,15 @@ test("캐릭터 키는 무대 높이를 따르되 정해진 범위를 벗어나�
 test("배경·소품·캐릭터가 모두 배경 픽셀 배율 하나를 쓴다", () => {
   const size = { width: 1200, height: 900 };
   const unit = artUnit(size);
-  // One background pixel becomes this many screen pixels, tall or small window.
-  expect(unit).toBeCloseTo(900 / campBackground.height);
-  expect(campBackground.height * unit).toBeCloseTo(size.height);
+  // One background pixel becomes this many screen pixels, at any window size.
+  expect(unit).toBeCloseTo(worldRect(size).scale);
+  // The clearing covers the box in both directions.
+  expect(worldRect(size).width).toBeGreaterThanOrEqual(size.width - 0.001);
+  expect(worldRect(size).height).toBeGreaterThanOrEqual(size.height - 0.001);
   // The bench and the fire keep their painted size on the ground.
-  expect(artUnit({ width: 600, height: 400 })).toBeCloseTo(400 / campBackground.height);
+  expect(artUnit({ width: 600, height: 400 })).toBeCloseTo(
+    worldRect({ width: 600, height: 400 }).scale,
+  );
 });
 
 test("앞사람이 위에 그려지고, 같은 높이에서는 이름으로 순서가 고정된다", () => {

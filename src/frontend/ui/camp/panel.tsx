@@ -300,7 +300,7 @@ export function CampPanel({
         element.classList.toggle("is-walking", actor.posture === "walk");
         element.classList.toggle("is-watching", actor.posture === "watch");
         element.classList.toggle("is-handing", actor.posture === "handoff");
-        // CSS 폴백: 같은 pixlrt 그림의 다른 프레임으로 갈아 끼운다.
+        // CSS fallback: swap the strip column to the pose the actor is in.
         const image = element.querySelector<HTMLImageElement>(".character-body img");
         if (image && !stageRef.current) {
           const role = roleOf.get(actor.memberId);

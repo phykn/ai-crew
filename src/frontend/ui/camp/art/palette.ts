@@ -154,33 +154,55 @@ export const palette = {
   swatchRose: "#f6aa8a",
   swatchSage: "#a8cd93",
   swatchLilac: "#d8b0d4",
+
+  // ── night cloth and hoods ──────────────────────────────────────────────
+  nightDeep: "#24223a",
+  night: "#35324f",
+  nightLight: "#4c486e",
+  nightLit: "#6d6892",
+  plumDeep: "#432944",
+  plum: "#5d3a5c",
+  plumLight: "#7e527a",
+
+  // ── magic light: violet and sea crystals ───────────────────────────────
+  violetDeep: "#4a2e6b",
+  violet: "#6f3fa3",
+  violetLight: "#9a66cc",
+  violetLit: "#c9a4ef",
+  seaDeep: "#256069",
+  sea: "#3c8f97",
+  seaLight: "#6fc3c4",
+  seaLit: "#b6ece4",
+  brew: "#8fbf58",
+  brewLight: "#c6e88a",
 } as const;
 
 export type Ink = keyof typeof palette;
 
-/** Each crew member's livery. Cloth carries the role colour from the roster so
- * the name tag and the body agree; hair, hat and tools stay inside one palette. */
+/** Each crew member's livery: the robe, the hood or hat and the one tool they
+ * carry. Two or three flat tones per part keep nine small figures apart. */
 export type Livery = {
   cloth: string;
   clothShade: string;
   clothLight: string;
   trim: string;
   trimShade: string;
-  hair: string;
-  hairMid: string;
-  hairLight: string;
-  hairStyle: "bob" | "short" | "pony" | "long" | "messy" | "wave" | "bun";
+  hood: "cloth" | "cat" | "witch" | "brim" | "bare";
+  hoodColor?: string;
+  hoodShade?: string;
+  hoodLight?: string;
+  prop: "staff" | "scroll" | "book" | "brush" | "hammer" | "quill" | "lens" | "telescope" | "lantern";
+  /** Faces in a deep hood read a shade darker, with bright eyes. */
+  face?: "bright" | "shadow";
   skin: string;
   skinShade: string;
   skinDeep: string;
-  hat?: "cap" | "beret";
-  hatColor?: string;
-  hatShade?: string;
-  glasses?: boolean;
-  beard?: boolean;
-  scarf?: string;
   apron?: string;
   apronShade?: string;
+  scarf?: string;
+  flower?: string;
+  boots?: string;
+  beard?: boolean;
 };
 
 const skin = palette.skin;
@@ -188,139 +210,152 @@ const skinShade = palette.skinShade;
 const skinDeep = palette.skinDeep;
 
 export const liveries: Record<number, Livery> = {
+  // The assistant: a cat hood and a rune staff.
   0: {
-    cloth: palette.clothSage,
-    clothShade: palette.clothSageShade,
-    clothLight: palette.clothSageLight,
-    trim: palette.clothLinen,
-    trimShade: palette.clothLinenShade,
-    hair: palette.hairMid,
-    hairMid: palette.hairLight,
-    hairLight: palette.hairGlint,
-    hairStyle: "bun",
+    cloth: palette.night,
+    clothShade: palette.nightDeep,
+    clothLight: palette.nightLight,
+    trim: palette.clothApricotLight,
+    trimShade: palette.clothApricotShade,
+    hood: "cat",
+    hoodColor: palette.night,
+    hoodShade: palette.nightDeep,
+    hoodLight: palette.nightLit,
+    prop: "staff",
     skin,
     skinShade,
     skinDeep,
   },
+  // Development: a blue hood and a floating scroll.
   1: {
     cloth: palette.clothDenim,
     clothShade: palette.clothDenimShade,
     clothLight: palette.clothDenimLight,
     trim: palette.clothLinen,
     trimShade: palette.clothLinenShade,
-    hair: palette.hairDark,
-    hairMid: palette.hairMid,
-    hairLight: palette.hairLight,
-    hairStyle: "messy",
+    hood: "cloth",
+    hoodColor: palette.clothDenim,
+    hoodShade: palette.clothDenimShade,
+    hoodLight: palette.clothDenimLight,
+    prop: "scroll",
     skin,
     skinShade,
     skinDeep,
   },
+  // Review: a red hood and a magic book.
   2: {
-    cloth: palette.clothOlive,
-    clothShade: palette.clothOliveShade,
-    clothLight: palette.clothOliveLight,
+    cloth: palette.clothCrimson,
+    clothShade: palette.clothCrimsonShade,
+    clothLight: palette.clothCrimsonLight,
     trim: palette.clothLinen,
     trimShade: palette.clothLinenShade,
-    hair: palette.ashDeep,
-    hairMid: palette.ash,
-    hairLight: palette.ashLight,
-    hairStyle: "short",
-    hat: "beret",
-    hatColor: palette.leafDeep,
-    hatShade: palette.leafDeepest,
-    glasses: true,
+    hood: "cloth",
+    hoodColor: palette.clothCrimson,
+    hoodShade: palette.clothCrimsonShade,
+    hoodLight: palette.clothCrimsonLight,
+    prop: "book",
+    face: "shadow",
     skin,
     skinShade,
     skinDeep,
   },
+  // Style: a teal hood and a magic brush.
   3: {
-    cloth: palette.clothApricot,
-    clothShade: palette.clothApricotShade,
-    clothLight: palette.clothApricotLight,
-    trim: palette.clothLinen,
-    trimShade: palette.clothLinenShade,
-    hair: palette.auburn,
-    hairMid: palette.auburnLight,
-    hairLight: palette.hairGlint,
-    hairStyle: "pony",
-    scarf: palette.clothTeal,
+    cloth: palette.clothTeal,
+    clothShade: palette.clothTealShade,
+    clothLight: palette.clothTealLight,
+    trim: palette.trim,
+    trimShade: palette.trimShade,
+    hood: "cloth",
+    hoodColor: palette.clothTealShade,
+    hoodShade: palette.clothTealShade,
+    hoodLight: palette.clothTealLight,
+    prop: "brush",
     skin,
     skinShade,
     skinDeep,
   },
+  // HR: a wide-brim hat with a flower, and the roster journal.
   4: {
     cloth: palette.clothTan,
     clothShade: palette.clothTanShade,
     clothLight: palette.clothTanLight,
     trim: palette.clothLinen,
     trimShade: palette.clothLinenShade,
-    hair: palette.hairMid,
-    hairMid: palette.hairLight,
-    hairLight: palette.hairGlint,
-    hairStyle: "wave",
+    hood: "brim",
+    hoodColor: palette.clothOlive,
+    hoodShade: palette.clothOliveShade,
+    hoodLight: palette.clothOliveLight,
+    prop: "book",
+    flower: palette.swatchRose,
     skin,
     skinShade,
     skinDeep,
   },
+  // Build: a cream hood, a leather apron and a rune mallet.
   5: {
     cloth: palette.clothLinen,
     clothShade: palette.clothLinenShade,
-    clothLight: palette.trimLight,
-    trim: palette.clothLinen,
-    trimShade: palette.clothLinenShade,
-    hair: palette.hairDark,
-    hairMid: palette.hairMid,
-    hairLight: palette.hairLight,
-    hairStyle: "short",
-    beard: true,
+    clothLight: palette.clothLinenLight,
+    trim: palette.clothLeather,
+    trimShade: palette.clothLeatherShade,
+    hood: "cloth",
+    hoodColor: palette.canvasShade,
+    hoodShade: palette.canvasDeep,
+    hoodLight: palette.canvas,
     apron: palette.clothLeather,
     apronShade: palette.clothLeatherShade,
+    prop: "hammer",
     skin,
     skinShade,
     skinDeep,
   },
+  // Docs: a violet witch hat and a quill.
   6: {
+    cloth: palette.plum,
+    clothShade: palette.plumDeep,
+    clothLight: palette.plumLight,
+    trim: palette.trim,
+    trimShade: palette.trimShade,
+    hood: "witch",
+    hoodColor: palette.violet,
+    hoodShade: palette.violetDeep,
+    hoodLight: palette.violetLight,
+    prop: "quill",
+    skin,
+    skinShade,
+    skinDeep,
+  },
+  // Test: a brown hood, a rucksack strap and a crystal magnifier.
+  7: {
+    cloth: palette.clothLeather,
+    clothShade: palette.clothLeatherShade,
+    clothLight: palette.clothLeatherLight,
+    trim: palette.clothLinen,
+    trimShade: palette.clothLinenShade,
+    hood: "cloth",
+    hoodColor: palette.clothLeather,
+    hoodShade: palette.clothLeatherShade,
+    hoodLight: palette.clothLeatherLight,
+    scarf: palette.clothSage,
+    prop: "lens",
+    skin,
+    skinShade,
+    skinDeep,
+  },
+  // Vision: a traveller's brim hat and a telescope.
+  8: {
     cloth: palette.clothForest,
     clothShade: palette.clothForestShade,
     clothLight: palette.clothForestLight,
-    trim: palette.trim,
-    trimShade: palette.trimShade,
-    hair: palette.hairDeep,
-    hairMid: palette.hairDark,
-    hairLight: palette.hairMid,
-    hairStyle: "messy",
-    skin,
-    skinShade,
-    skinDeep,
-  },
-  7: {
-    cloth: palette.clothCrimson,
-    clothShade: palette.clothCrimsonShade,
-    clothLight: palette.clothCrimsonLight,
-    trim: palette.clothLinen,
-    trimShade: palette.clothLinenShade,
-    hair: palette.hairMid,
-    hairMid: palette.hairLight,
-    hairLight: palette.hairGlint,
-    hairStyle: "pony",
-    hat: "cap",
-    hatColor: palette.clothCrimson,
-    hatShade: palette.clothCrimsonShade,
-    skin,
-    skinShade,
-    skinDeep,
-  },
-  8: {
-    cloth: palette.clothCloak,
-    clothShade: palette.clothCloakShade,
-    clothLight: palette.clothCloakLight,
-    trim: palette.clothLeather,
-    trimShade: palette.clothLeatherShade,
-    hair: palette.blonde,
-    hairMid: palette.blondeLight,
-    hairLight: palette.canvasLit,
-    hairStyle: "short",
+    trim: palette.clothTan,
+    trimShade: palette.clothTanShade,
+    hood: "brim",
+    hoodColor: palette.clothTan,
+    hoodShade: palette.clothTanShade,
+    hoodLight: palette.clothTanLight,
+    prop: "telescope",
+    beard: true,
     skin,
     skinShade,
     skinDeep,

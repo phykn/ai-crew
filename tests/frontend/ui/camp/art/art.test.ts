@@ -34,9 +34,11 @@ test("아홉 크루의 그림은 한 팔레트의 색만 쓴다", () => {
         liveries[role].cloth,
         liveries[role].clothShade,
         liveries[role].trim,
-        liveries[role].hair,
-        liveries[role].hairLight,
-      ].map((hex) => hex.toLowerCase());
+        liveries[role].hoodColor,
+        liveries[role].hoodLight,
+      ]
+        .filter((hex): hex is string => Boolean(hex))
+        .map((hex) => hex.toLowerCase());
       if (!paletteColors.has(color) && !own.includes(color)) outside.add(color);
     }
   }

@@ -44,24 +44,48 @@ type CampObstacle =
 
 /** 천막·마차·모닥불·벤치처럼 밟고 지나갈 수 없는 자리. 그림의 발밑 면적만 막는다. */
 const obstacles: CampObstacle[] = [
-  { id: "tent", kind: "ellipse", center: { x: 19, y: 33 }, rx: 14.5, ry: 2.8 },
-  { id: "wagon", kind: "ellipse", center: { x: 80, y: 34 }, rx: 13, ry: 2.8 },
-  { id: "campfire", kind: "ellipse", center: campFire, rx: 5, ry: 2.8 },
-  { id: "bench-west", kind: "ellipse", center: { x: 35.5, y: 52.6 }, rx: 5.2, ry: 1 },
-  { id: "bench-east", kind: "ellipse", center: { x: 64.5, y: 52.6 }, rx: 5.2, ry: 1 },
-  { id: "bench-south", kind: "ellipse", center: { x: 50, y: 61.4 }, rx: 5.6, ry: 1.2 },
-  { id: "crates", kind: "ellipse", center: { x: 13, y: 80 }, rx: 4.2, ry: 2.4 },
-  { id: "signpost", kind: "ellipse", center: { x: 44, y: 28.4 }, rx: 1.8, ry: 1 },
-  { id: "workbench", kind: "ellipse", center: { x: 57.2, y: 35.4 }, rx: 3, ry: 1.3 },
-  { id: "firewood", kind: "ellipse", center: { x: 26.5, y: 42.6 }, rx: 2.6, ry: 1.1 },
-  { id: "maptable", kind: "ellipse", center: { x: 17.5, y: 50.6 }, rx: 3, ry: 1.2 },
-  { id: "lantern-west", kind: "ellipse", center: { x: 42.6, y: 38.8 }, rx: 0.9, ry: 0.6 },
-  { id: "lantern-east", kind: "ellipse", center: { x: 58.6, y: 62.4 }, rx: 0.9, ry: 0.6 },
-  { id: "bush-north", kind: "ellipse", center: { x: 88, y: 22.6 }, rx: 2.6, ry: 1.5 },
-  { id: "bush-west", kind: "ellipse", center: { x: 11.5, y: 68.6 }, rx: 2.6, ry: 1.5 },
-  { id: "bush-south", kind: "ellipse", center: { x: 78, y: 89 }, rx: 2.6, ry: 1.5 },
-  { id: "rock-east", kind: "ellipse", center: { x: 72.5, y: 62.4 }, rx: 2.4, ry: 1.3 },
-  { id: "rock-south", kind: "ellipse", center: { x: 24, y: 62.8 }, rx: 2.4, ry: 1.3 },
+  { id: "tent", kind: "ellipse", center: { x: 20, y: 31.5 }, rx: 13.4, ry: 2.6 },
+  { id: "wagon", kind: "ellipse", center: { x: 78, y: 31 }, rx: 13.4, ry: 2.6 },
+  { id: "campfire", kind: "ellipse", center: campFire, rx: 4.6, ry: 2.6 },
+  { id: "bench-west", kind: "ellipse", center: { x: 37, y: 53.6 }, rx: 5.4, ry: 1 },
+  { id: "bench-east", kind: "ellipse", center: { x: 63, y: 53.6 }, rx: 5.4, ry: 1 },
+  { id: "bench-south", kind: "ellipse", center: { x: 50, y: 61.6 }, rx: 5.6, ry: 1.2 },
+  { id: "crates", kind: "ellipse", center: { x: 88, y: 33.6 }, rx: 4, ry: 2 },
+  { id: "notice", kind: "ellipse", center: { x: 62, y: 33.4 }, rx: 2.8, ry: 1.2 },
+  { id: "signpost", kind: "ellipse", center: { x: 47, y: 26.4 }, rx: 1.6, ry: 0.9 },
+  { id: "alchemy", kind: "ellipse", center: { x: 12, y: 47.5 }, rx: 3.4, ry: 1.4 },
+  { id: "easel", kind: "ellipse", center: { x: 44, y: 62.5 }, rx: 2.4, ry: 1.2 },
+  { id: "telescope", kind: "ellipse", center: { x: 59, y: 55.6 }, rx: 2.4, ry: 1.2 },
+  { id: "firewood", kind: "ellipse", center: { x: 64, y: 66.4 }, rx: 2.8, ry: 1.2 },
+  { id: "cauldron", kind: "ellipse", center: { x: 14, y: 64.4 }, rx: 2.4, ry: 1.2 },
+  { id: "banner", kind: "ellipse", center: { x: 8.5, y: 33.4 }, rx: 1, ry: 0.7 },
+  { id: "barrel", kind: "ellipse", center: { x: 30.5, y: 32.4 }, rx: 1.4, ry: 0.8 },
+  { id: "crystal-west", kind: "ellipse", center: { x: 6.5, y: 40.4 }, rx: 1.6, ry: 0.9 },
+  { id: "crystal-south", kind: "ellipse", center: { x: 8, y: 62.4 }, rx: 1.6, ry: 0.9 },
+  { id: "crystal-east", kind: "ellipse", center: { x: 70, y: 48.4 }, rx: 1.6, ry: 0.9 },
+  { id: "bush-west", kind: "ellipse", center: { x: 5, y: 74.4 }, rx: 2.4, ry: 1.4 },
+  { id: "bush-east", kind: "ellipse", center: { x: 92, y: 70.4 }, rx: 2.4, ry: 1.4 },
+  { id: "rock-south", kind: "ellipse", center: { x: 30, y: 72.4 }, rx: 2.2, ry: 1.2 },
+  { id: "rock-south-low", kind: "ellipse", center: { x: 46, y: 79.4 }, rx: 2.2, ry: 1.2 },
+  { id: "bush-south-east", kind: "ellipse", center: { x: 72, y: 80.4 }, rx: 2.4, ry: 1.4 },
+  { id: "barrel-tent", kind: "ellipse", center: { x: 25.4, y: 36.4 }, rx: 1.4, ry: 0.8 },
+  { id: "rock-east", kind: "ellipse", center: { x: 80, y: 62.4 }, rx: 2.2, ry: 1.2 },
+  { id: "pine-north-west", kind: "ellipse", center: { x: 9, y: 14.4 }, rx: 2.8, ry: 1.4 },
+  { id: "oak-north", kind: "ellipse", center: { x: 44, y: 12.4 }, rx: 3.4, ry: 1.5 },
+  { id: "pine-north-east", kind: "ellipse", center: { x: 94, y: 14.4 }, rx: 2.8, ry: 1.4 },
+  { id: "oak-south-west", kind: "ellipse", center: { x: 7, y: 89.4 }, rx: 3.4, ry: 1.5 },
+  { id: "pine-south", kind: "ellipse", center: { x: 38, y: 91.4 }, rx: 2.8, ry: 1.4 },
+  { id: "oak-south-east", kind: "ellipse", center: { x: 93, y: 87.4 }, rx: 3.4, ry: 1.5 },
+  { id: "pine-west-north", kind: "ellipse", center: { x: 3.4, y: 24.4 }, rx: 2.8, ry: 1.4 },
+  { id: "oak-north-west", kind: "ellipse", center: { x: 15, y: 9.4 }, rx: 3.4, ry: 1.5 },
+  { id: "pine-north-mid", kind: "ellipse", center: { x: 60, y: 8.6 }, rx: 2.8, ry: 1.4 },
+  { id: "oak-north-east", kind: "ellipse", center: { x: 87, y: 8.4 }, rx: 3.4, ry: 1.5 },
+  { id: "pine-east-north", kind: "ellipse", center: { x: 96.6, y: 40.4 }, rx: 2.8, ry: 1.4 },
+  { id: "oak-east-south", kind: "ellipse", center: { x: 97, y: 80.4 }, rx: 3.4, ry: 1.5 },
+  { id: "pine-south-west", kind: "ellipse", center: { x: 17, y: 93.4 }, rx: 2.8, ry: 1.4 },
+  { id: "oak-south-mid", kind: "ellipse", center: { x: 60, y: 94.4 }, rx: 3.4, ry: 1.5 },
+  { id: "pine-south-east", kind: "ellipse", center: { x: 84, y: 93.4 }, rx: 2.8, ry: 1.4 },
+  { id: "bush-west-low", kind: "ellipse", center: { x: 12, y: 84.4 }, rx: 2.4, ry: 1.4 },
 ];
 
 function pointInPolygon(point: Point, polygon: Point[]) {
@@ -112,21 +136,21 @@ export function facingBetween(from: Point, to: Point): Facing {
 }
 
 // ── 자리 ──────────────────────────────────────────────────────────────────
-// 모닥불을 가운데 두고 통나무 벤치 세 개가 둘러싼다. 한 벤치에 두 명씩 앉는다.
+// 모닥불을 가운데 두고 통나무 벤치 세 개가 둘러싼다.
 export const seats: CampSpot[] = [
   {
     id: "bench-west-seat",
     kind: "seat",
-    x: 35.5,
-    y: 55.5,
+    x: 37,
+    y: 55.4,
     facing: "right",
     label: "통나무 벤치",
   },
   {
     id: "bench-east-seat",
     kind: "seat",
-    x: 64.5,
-    y: 55.5,
+    x: 63,
+    y: 55.4,
     facing: "left",
     label: "통나무 벤치",
   },
@@ -134,7 +158,7 @@ export const seats: CampSpot[] = [
     id: "bench-south-seat",
     kind: "seat",
     x: 50,
-    y: 64.3,
+    y: 63.4,
     facing: "right",
     label: "통나무 벤치",
   },
@@ -153,8 +177,8 @@ export const workSpots: CampSpot[] = [
   {
     id: "work-tent",
     kind: "work",
-    x: 25,
-    y: 37.6,
+    x: 27,
+    y: 36.4,
     facing: "left",
     label: "천막 앞",
     roles: ["docs", "vision", "assistant"],
@@ -162,46 +186,55 @@ export const workSpots: CampSpot[] = [
   {
     id: "work-wagon",
     kind: "work",
-    x: 71,
-    y: 39,
+    x: 68,
+    y: 36.6,
     facing: "right",
     label: "마차 앞",
     roles: ["development", "build"],
   },
   {
-    id: "work-crates",
+    id: "work-alchemy",
     kind: "work",
-    x: 19.5,
-    y: 82,
+    x: 17.5,
+    y: 51.6,
     facing: "left",
-    label: "보급 상자 앞",
-    roles: ["hr", "style"],
-  },
-  {
-    id: "work-path",
-    kind: "work",
-    x: 50,
-    y: 39,
-    facing: "right",
-    label: "길 위",
-    roles: ["development", "docs", "review"],
-  },
-  {
-    id: "work-west",
-    kind: "work",
-    x: 27,
-    y: 50,
-    facing: "right",
-    label: "마당 서쪽",
+    label: "연금 작업대",
     roles: ["style", "test"],
   },
   {
-    id: "work-east",
+    id: "work-easel",
     kind: "work",
-    x: 73,
-    y: 50,
+    x: 46.4,
+    y: 67.2,
     facing: "left",
-    label: "마당 동쪽",
+    label: "이젤 앞",
+    roles: ["style", "vision"],
+  },
+  {
+    id: "work-notice",
+    kind: "work",
+    x: 57.6,
+    y: 36.6,
+    facing: "right",
+    label: "게시판 앞",
+    roles: ["hr", "docs", "review"],
+  },
+  {
+    id: "work-crates",
+    kind: "work",
+    x: 83.4,
+    y: 38.4,
+    facing: "left",
+    label: "보급 상자 앞",
+    roles: ["build", "hr"],
+  },
+  {
+    id: "work-telescope",
+    kind: "work",
+    x: 55.2,
+    y: 57.6,
+    facing: "right",
+    label: "망원경 옆",
     roles: ["vision", "review"],
   },
 ];
@@ -242,24 +275,48 @@ export type CampObject = {
 };
 
 export const campObjects: CampObject[] = [
-  { id: "tent", kind: "tent", x: 19, y: 33, ...objectSize("tent"), label: "천막" },
-  { id: "wagon", kind: "wagon", x: 80, y: 34, ...objectSize("wagon"), label: "마차" },
+  { id: "tent", kind: "tent", x: 20, y: 31.5, ...objectSize("tent"), label: "천막" },
+  { id: "banner", kind: "banner", x: 8.5, y: 33.4, ...objectSize("banner"), label: "깃발" },
+  { id: "barrel", kind: "barrel", x: 30.5, y: 32.4, ...objectSize("barrel"), label: "나무통" },
+  { id: "crystal-west", kind: "crystal", x: 6.5, y: 40.4, ...objectSize("crystal"), label: "보라 수정 기둥" },
+  { id: "wagon", kind: "wagon", x: 78, y: 31, ...objectSize("wagon"), label: "덮개 마차" },
+  { id: "crates", kind: "crates", x: 88, y: 33.6, ...objectSize("crates"), label: "보급 상자" },
+  { id: "notice", kind: "notice", x: 62, y: 33.4, ...objectSize("notice"), label: "게시판" },
+  { id: "signpost", kind: "signpost", x: 47, y: 26.4, ...objectSize("signpost"), label: "이정표" },
+  { id: "alchemy", kind: "alchemy", x: 12, y: 47.5, ...objectSize("alchemy"), label: "연금 작업대" },
+  { id: "crystal-east", kind: "crystalSea", x: 70, y: 48.4, ...objectSize("crystalSea"), label: "하늘색 수정 기둥" },
   { id: "campfire", kind: "campfire", x: campFire.x, y: campFire.y, ...objectSize("campfire"), label: "모닥불" },
-  { id: "bench-west", kind: "bench", x: 35.5, y: 55.6, ...objectSize("bench"), label: "통나무 벤치" },
-  { id: "bench-east", kind: "bench", x: 64.5, y: 55.6, ...objectSize("bench"), label: "통나무 벤치" },
-  { id: "bench-south", kind: "bench", x: 50, y: 64.4, ...objectSize("bench"), label: "통나무 벤치" },
-  { id: "crates", kind: "crates", x: 13, y: 80, ...objectSize("crates"), label: "보급 상자" },
-  { id: "signpost", kind: "signpost", x: 44, y: 28.4, ...objectSize("signpost"), label: "이정표" },
-  { id: "workbench", kind: "workbench", x: 57.2, y: 35.4, ...objectSize("workbench"), label: "공구 작업대" },
-  { id: "firewood", kind: "firewood", x: 26.5, y: 42.6, ...objectSize("firewood"), label: "장작 더미" },
-  { id: "maptable", kind: "maptable", x: 17.5, y: 50.6, ...objectSize("maptable"), label: "지도 테이블" },
-  { id: "lantern-west", kind: "lanternpost", x: 42.6, y: 38.8, ...objectSize("lanternpost"), label: "랜턴 등" },
-  { id: "lantern-east", kind: "lanternpost", x: 58.6, y: 62.4, ...objectSize("lanternpost"), label: "랜턴 등" },
-  { id: "bush-north", kind: "bush", x: 88, y: 22.6, ...objectSize("bush"), label: "덤불" },
-  { id: "bush-west", kind: "bush", x: 11.5, y: 68.6, ...objectSize("bush"), label: "덤불" },
-  { id: "bush-south", kind: "bush", x: 78, y: 89, ...objectSize("bush"), label: "덤불" },
-  { id: "rock-east", kind: "rock", x: 72.5, y: 62.4, ...objectSize("rock"), label: "이끼 바위" },
-  { id: "rock-south", kind: "rock", x: 24, y: 62.8, ...objectSize("rock"), label: "이끼 바위" },
+  { id: "bench-west", kind: "bench", x: 37, y: 53.6, ...objectSize("bench"), label: "통나무 벤치" },
+  { id: "bench-east", kind: "bench", x: 63, y: 53.6, ...objectSize("bench"), label: "통나무 벤치" },
+  { id: "bench-south", kind: "bench", x: 50, y: 61.6, ...objectSize("bench"), label: "통나무 벤치" },
+  { id: "telescope", kind: "telescope", x: 59, y: 55.6, ...objectSize("telescope"), label: "망원경" },
+  { id: "easel", kind: "easel", x: 44, y: 62.5, ...objectSize("easel"), label: "이젤" },
+  { id: "cauldron", kind: "cauldron", x: 14, y: 64.4, ...objectSize("cauldron"), label: "솥" },
+  { id: "crystal-south", kind: "crystal", x: 8, y: 62.4, ...objectSize("crystal"), label: "보라 수정 기둥" },
+  { id: "firewood", kind: "firewood", x: 64, y: 66.4, ...objectSize("firewood"), label: "장작 더미" },
+  { id: "rock-south", kind: "rock", x: 30, y: 72.4, ...objectSize("rock"), label: "이끼 바위" },
+  { id: "rock-south-low", kind: "rock", x: 46, y: 79.4, ...objectSize("rock"), label: "이끼 바위" },
+  { id: "bush-south-east", kind: "bush", x: 72, y: 80.4, ...objectSize("bush"), label: "덤불" },
+  { id: "barrel-tent", kind: "barrel", x: 25.4, y: 36.4, ...objectSize("barrel"), label: "나무통" },
+  { id: "rock-east", kind: "rock", x: 80, y: 62.4, ...objectSize("rock"), label: "이끼 바위" },
+  { id: "bush-west", kind: "bush", x: 5, y: 74.4, ...objectSize("bush"), label: "덤불" },
+  { id: "bush-east", kind: "bush", x: 92, y: 70.4, ...objectSize("bush"), label: "덤불" },
+  { id: "pine-north-west", kind: "pine", x: 9, y: 14.4, ...objectSize("pine"), label: "소나무" },
+  { id: "oak-north", kind: "oak", x: 44, y: 12.4, ...objectSize("oak"), label: "참나무" },
+  { id: "pine-north-east", kind: "pine", x: 94, y: 14.4, ...objectSize("pine"), label: "소나무" },
+  { id: "oak-south-west", kind: "oak", x: 7, y: 89.4, ...objectSize("oak"), label: "참나무" },
+  { id: "pine-south", kind: "pine", x: 38, y: 91.4, ...objectSize("pine"), label: "소나무" },
+  { id: "oak-south-east", kind: "oak", x: 93, y: 87.4, ...objectSize("oak"), label: "참나무" },
+  { id: "pine-west-north", kind: "pine", x: 3.4, y: 24.4, ...objectSize("pine"), label: "소나무" },
+  { id: "oak-north-west", kind: "oak", x: 15, y: 9.4, ...objectSize("oak"), label: "참나무" },
+  { id: "pine-north-mid", kind: "pine", x: 60, y: 8.6, ...objectSize("pine"), label: "소나무" },
+  { id: "oak-north-east", kind: "oak", x: 87, y: 8.4, ...objectSize("oak"), label: "참나무" },
+  { id: "pine-east-north", kind: "pine", x: 96.6, y: 40.4, ...objectSize("pine"), label: "소나무" },
+  { id: "oak-east-south", kind: "oak", x: 97, y: 80.4, ...objectSize("oak"), label: "참나무" },
+  { id: "pine-south-west", kind: "pine", x: 17, y: 93.4, ...objectSize("pine"), label: "소나무" },
+  { id: "oak-south-mid", kind: "oak", x: 60, y: 94.4, ...objectSize("oak"), label: "참나무" },
+  { id: "pine-south-east", kind: "pine", x: 84, y: 93.4, ...objectSize("pine"), label: "소나무" },
+  { id: "bush-west-low", kind: "bush", x: 12, y: 84.4, ...objectSize("bush"), label: "덤불" },
 ];
 
 // ── 길 찾기 ────────────────────────────────────────────────────────────────
@@ -544,18 +601,19 @@ export function initialActors(seeds: CampActorSeed[], now = 0): CampActor[] {
     }
     // 쉬는 크루는 통나무와 마당을 번갈아 받아 한 자리에 몰리지 않는다.
     if (!spot || used.has(spot.id)) {
+      const freeStroll = strollSpots.filter((walk) => !used.has(walk.id));
+      const freeSeats = seats.filter((seat) => !used.has(seat.id));
+      const wander = freeStroll.length
+        ? freeStroll[(idle * 5) % freeStroll.length]
+        : null;
       spot =
-        (idle % 2 === 0
-          ? seats.find((seat) => !used.has(seat.id))
-          : strollSpots.find((walk) => !used.has(walk.id))) ??
-        strollSpots.find((walk) => !used.has(walk.id)) ??
-        seats.find((seat) => !used.has(seat.id)) ??
+        (idle % 2 === 0 ? freeSeats[0] ?? wander : wander ?? freeSeats[0]) ??
         null;
+      idle += 1;
     }
     if (!spot) spot = strollSpots[0];
     used.add(spot.id);
     actors.push(placeAt(base, spot));
-    idle += 1;
   }
   return actors;
 }

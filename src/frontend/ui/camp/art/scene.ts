@@ -7,18 +7,25 @@ import { toDataURL, type Renderable } from "pixlrt/core";
 import { crewHeight, crewWidth, drawCrew, type CrewPose } from "./crew";
 import { buildGround } from "./ground";
 import {
+  drawAlchemy,
+  drawBanner,
+  drawBarrel,
   drawBench,
   drawBush,
   drawCampfire,
+  drawCauldron,
   drawCrates,
+  drawCrystal,
+  drawEasel,
   drawFirewood,
-  drawLanternPost,
-  drawMapTable,
+  drawNotice,
+  drawOak,
+  drawPine,
   drawRock,
   drawSignpost,
+  drawTelescope,
   drawTent,
   drawWagon,
-  drawWorkbench,
 } from "./props";
 import { liveries } from "./palette";
 import { surface, type Rgba } from "./draw";
@@ -27,15 +34,23 @@ export type ObjectKind =
   | "campfire"
   | "bench"
   | "tent"
+  | "banner"
+  | "barrel"
+  | "crystal"
+  | "crystalSea"
   | "wagon"
+  | "notice"
+  | "alchemy"
+  | "easel"
+  | "telescope"
+  | "firewood"
+  | "cauldron"
   | "crates"
   | "signpost"
-  | "workbench"
-  | "firewood"
-  | "maptable"
-  | "lanternpost"
   | "bush"
-  | "rock";
+  | "rock"
+  | "pine"
+  | "oak";
 
 export const crewPoses = [
   "idle1",
@@ -101,24 +116,40 @@ function objectFrame(kind: ObjectKind, frame: number) {
       return drawBench();
     case "tent":
       return drawTent();
+    case "banner":
+      return drawBanner();
+    case "barrel":
+      return drawBarrel();
+    case "crystal":
+      return drawCrystal(false);
+    case "crystalSea":
+      return drawCrystal(true);
     case "wagon":
       return drawWagon();
+    case "notice":
+      return drawNotice();
+    case "alchemy":
+      return drawAlchemy();
+    case "easel":
+      return drawEasel();
+    case "telescope":
+      return drawTelescope();
+    case "firewood":
+      return drawFirewood();
+    case "cauldron":
+      return drawCauldron();
     case "crates":
       return drawCrates();
     case "signpost":
       return drawSignpost();
-    case "workbench":
-      return drawWorkbench();
-    case "firewood":
-      return drawFirewood();
-    case "maptable":
-      return drawMapTable();
-    case "lanternpost":
-      return drawLanternPost();
     case "bush":
       return drawBush();
-    default:
+    case "rock":
       return drawRock();
+    case "pine":
+      return drawPine();
+    default:
+      return drawOak();
   }
 }
 

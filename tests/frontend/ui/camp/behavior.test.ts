@@ -52,10 +52,14 @@ test("평지 마당 전체를 걷고 오브젝트가 놓인 발밑만 피한다"
   // 오브젝트가 놓인 자리는 밟고 지나가지 않는다.
   expect(isWalkable({ x: 50, y: 51 })).toBe(false); // 모닥불
   expect(isWalkable({ x: 20, y: 31.5 })).toBe(false); // 천막
-  expect(isWalkable({ x: 79, y: 32.5 })).toBe(false); // 마차
-  expect(isWalkable({ x: 35.5, y: 52.6 })).toBe(false); // 왼쪽 벤치
-  expect(isWalkable({ x: 50, y: 61.4 })).toBe(false); // 아래 벤치
-  expect(isWalkable({ x: 14.5, y: 79 })).toBe(false); // 보급 상자
+  expect(isWalkable({ x: 79, y: 31 })).toBe(false); // 마차
+  expect(isWalkable({ x: 37, y: 53.6 })).toBe(false); // 왼쪽 벤치
+  expect(isWalkable({ x: 50, y: 61.6 })).toBe(false); // 아래 벤치
+  expect(isWalkable({ x: 88, y: 33.6 })).toBe(false); // 보급 상자
+  expect(isWalkable({ x: 12, y: 47.5 })).toBe(false); // 연금 작업대
+  expect(isWalkable({ x: 62, y: 33.4 })).toBe(false); // 게시판
+  expect(isWalkable({ x: 44, y: 62.5 })).toBe(false); // 이젤
+  expect(isWalkable({ x: 9, y: 14.4 })).toBe(false); // 북서 소나무
 });
 
 test("어떤 자리에서 어떤 자리로 가도 길은 물과 장애물을 지나지 않는다", () => {
@@ -300,31 +304,39 @@ test("쉬는 크루는 한두 명씩만 움직이고 자리에서 자리로 순�
   expect(new Set(seatsUsed).size).toBe(seatsUsed.length);
 });
 
-test("캠프에는 열두 가지 오브젝트와 통나무 벤치 세 개가 발밑 좌표로 놓인다", () => {
+test("캠프에는 스무 가지 오브젝트와 통나무 벤치 세 개가 발밑 좌표로 놓인다", () => {
   expect([...new Set(campObjects.map(({ kind }) => kind))].sort()).toEqual([
+    "alchemy",
+    "banner",
+    "barrel",
     "bench",
     "bush",
     "campfire",
+    "cauldron",
     "crates",
+    "crystal",
+    "crystalSea",
+    "easel",
     "firewood",
-    "lanternpost",
-    "maptable",
+    "notice",
+    "oak",
+    "pine",
     "rock",
     "signpost",
+    "telescope",
     "tent",
     "wagon",
-    "workbench",
   ]);
   const benches = campObjects.filter(({ kind }) => kind === "bench");
   expect(benches).toHaveLength(3);
   for (const object of campObjects) {
     expect(object.h).toBeGreaterThan(0);
-    expect(object.x).toBeGreaterThan(6);
-    expect(object.x).toBeLessThan(94);
-    expect(object.y).toBeGreaterThan(12);
-    expect(object.y).toBeLessThan(90);
+    expect(object.x).toBeGreaterThan(2);
+    expect(object.x).toBeLessThan(98);
+    expect(object.y).toBeGreaterThan(6);
+    expect(object.y).toBeLessThan(97);
   }
-  // 벤치마다 두 명씩 앉을 자리가 있고, 모두 걸을 수 있는 땅이다.
+  // 벤치마다 앉을 자리가 있고, 모두 걸을 수 있는 땅이다.
   expect(seats).toHaveLength(3);
   for (const bench of benches)
     expect(
@@ -333,5 +345,5 @@ test("캠프에는 열두 가지 오브젝트와 통나무 벤치 세 개가 발
   expect(strollSpots.length).toBeGreaterThan(8);
   expect(workSpots.length).toBeGreaterThanOrEqual(6);
   // 꾸밈 오브젝트는 캠프 가장자리를 따라 놓여 동선을 막지 않는다.
-  expect(campObjects.length).toBeGreaterThanOrEqual(16);
+  expect(campObjects.length).toBeGreaterThanOrEqual(20);
 });

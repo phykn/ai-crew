@@ -269,8 +269,10 @@ export async function createCampStage(
   fireGlow.zIndex = 10_000_000;
   world.addChild(fireGlow);
 
+  // Props that carry a warm lamp: the supply crates, the signpost and the wagon.
   const lanterns = (options.objects ?? []).filter(
-    (object) => object.kind === "crates" || object.kind === "lanternpost",
+    (object) =>
+      object.kind === "crates" || object.kind === "signpost" || object.kind === "wagon",
   );
   const lanternLights = lanterns.flatMap((object) => {
     if (!glowTexture) return [];
@@ -380,7 +382,7 @@ export async function createCampStage(
     fireGlow.height = size.height * 0.34;
     for (const { object, light } of lanternLights) {
       const point = stagePoint(size, object);
-      const isPost = object.kind === "lanternpost";
+      const isPost = object.kind === "signpost";
       light.position.set(
         point.x + (isPost ? -size.width * 0.004 : size.width * 0.02),
         point.y - object.h * unit * (isPost ? 0.62 : 0.72),

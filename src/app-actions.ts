@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   actions,
+  planFiles,
   type Action,
   type AppNotification,
   type Artifact,
@@ -15,6 +16,7 @@ import {
   type DiagnosticsReport,
 } from "./diagnostics";
 import type { CrewWorkflow } from "./workflow";
+import type { StyleChange } from "./style-watch";
 
 export type ActionMode = "ui" | "app";
 
@@ -33,6 +35,11 @@ export type ActionDeps = {
   applyModelConnections?: (connections: ModelConnection[]) => void;
   /** 진단 실행기. 테스트와 다른 실행 환경에서 바꿔 끼운다. */
   diagnostics?: (projectId: string) => Promise<DiagnosticsReport>;
+  /**
+   * 파일이 바뀐 시점을 알리는 곳. 반영이 끝난 업무의 파일을 모아 스타일 감시자에게
+   * 넘긴다. 운영체제 워처를 붙이면 이 함수를 부르는 곳이 늘어난다.
+   */
+  fileChange?: (change: StyleChange) => void;
 };
 
 const applied = new Map<string, string>();
@@ -313,7 +320,20 @@ export class ActionRunner {
   }
 
   private async applyJob(jobId: string) {
+    const job = this.deps.store.getJob(jobId);
     await this.deps.store.applyJob(jobId);
+    // 원본 파일이 바뀐 순간이다. 커밋이 아니라 이 시점에 스타일 감시자가 돈다.
+    if (job.plan)
+      this.noteFileChange({
+        projectId: job.projectId,
+        sessionId: job.sessionId,
+        paths: planFiles(job.plan).map(({ path }) => path),
+      });
+  }
+
+  /** 파일이 바뀐 시점을 알린다. 지금은 반영이 끝난 업무가, 나중에는 파일 워처가 부른다. */
+  noteFileChange(change: StyleChange) {
+    this.deps.fileChange?.(change);
   }
 
   private async chat(action: Extract<Action, { type: "chat.send" }>) {

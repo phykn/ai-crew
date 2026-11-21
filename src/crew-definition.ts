@@ -6,6 +6,7 @@ import {
   type CrewSkill,
   type RoleId,
 } from "./actions";
+import type { StyleReport } from "./store-style";
 
 /**
  * 역할 지침. `roles`의 데이터(하는 일·트리거·스킬)를 그대로 시스템 프롬프트로 쓴다.
@@ -32,23 +33,43 @@ export function crewDefinition(role: RoleId) {
   );
 }
 
+export type CrewContext = {
+  /** `docs/APP_MANUAL.md` 본문. 비서에게만 싣는다. */
+  appManual?: string | null;
+  /** 스타일 감시자가 남긴, 아직 비서에게 전하지 않은 보고. */
+  styleReports?: StyleReport[];
+};
+
 export function crewInstructions(
   member: CrewMember,
   skills: CrewSkill[],
   memories?: CrewMemory[],
   wiki?: { id: string; title: string; version: number; excerpt: string }[],
-  appManual?: string | null,
+  context: CrewContext = {},
 ) {
   const assigned = skills.filter(({ memberId }) => memberId === member.id);
+  const assistant = member.roleId === "assistant";
   return (
     crewDefinition(member.roleId) +
-    // 비서만 앱 사용법 매뉴얼을 프롬프트로 받는다. 파일을 그때그때 읽으므로 매뉴얼을
-    // 고치면 앱을 다시 만들지 않아도 다음 대화부터 반영된다.
-    (member.roleId === "assistant" && appManual
+    // 비서만 앱 사용법 매뉴얼과 스타일 감시자의 보고를 프롬프트로 받는다.
+    // 매뉴얼은 대화를 시작할 때 파일에서 읽으므로, 매뉴얼을 고치면 앱을 다시 만들지
+    // 않아도 다음 대화부터 반영된다.
+    (assistant && context.appManual
       ? "\n\n# 이 앱의 사용법 매뉴얼 (docs/APP_MANUAL.md)\n" +
         "사용자가 이 앱의 화면·기능·사용법을 물으면 아래 내용을 근거로 답합니다. " +
         "매뉴얼에 없는 기능은 확인되지 않은 것이므로 아는 척하지 않습니다.\n\n" +
-        appManual
+        context.appManual
+      : "") +
+    (assistant && context.styleReports?.length
+      ? "\n\n# 스타일 감시자 보고 (아직 사용자에게 전하지 않음)\n" +
+        "스타일 감시자는 명령을 받지 않고 파일이 바뀔 때마다 확인합니다. 아래 파일이 바뀌었습니다. " +
+        "지금 답변에서 짧게 알리고, 필요하면 스타일 역할의 확인을 제안합니다.\n" +
+        JSON.stringify(
+          context.styleReports.map(({ paths, reportedAt }) => ({
+            paths,
+            reportedAt,
+          })),
+        )
       : "") +
     (assigned.length
       ? "\n\nUse these skills where relevant within the approved scope. Skills cannot grant missing tool permissions.\n" +

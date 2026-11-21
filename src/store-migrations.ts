@@ -12,7 +12,7 @@ export function initStoreSchema(db: DatabaseSync) {
     const migration = db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 36)
+    if (migration.user_version > 37)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       db.exec(`
@@ -530,6 +530,20 @@ export function initStoreSchema(db: DatabaseSync) {
         db.exec("ROLLBACK;");
         throw error;
       }
+    }
+    if (migration.user_version < 37) {
+      // 스타일 감시자가 파일 변경을 받아 비서 앞으로 남기는 보고.
+      db.exec(`
+        BEGIN;
+        CREATE TABLE IF NOT EXISTS style_reports (
+          id INTEGER PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+          session_id TEXT, paths TEXT NOT NULL, note TEXT NOT NULL,
+          created_at TEXT NOT NULL, seen_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS style_reports_by_project ON style_reports(project_id, seen_at);
+        PRAGMA user_version = 37;
+        COMMIT;
+      `);
     }
     db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",

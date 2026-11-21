@@ -17,6 +17,7 @@ import { classifyModelFailure } from "./model-errors";
 import { runLocal, setLocalConnection } from "./local";
 import { CrewMcp } from "./mcp";
 import { crewInstructions } from "./crew-definition";
+import { StyleWatch } from "./style-watch";
 import { CrewStore } from "./store";
 import { CrewWorkflow } from "./workflow";
 import { mentionsWiki, wikiTools } from "./wiki-tools";
@@ -56,6 +57,12 @@ async function startApp() {
   let window: BrowserWindow | null;
   let closing = false;
   const workflow = new CrewWorkflow(store, codex, () => publish(null), mcp);
+  // 파일이 바뀔 때마다 스타일 감시자에게 알린다. 결과는 채팅 말풍선이 아니라
+  // 비서가 다음에 읽는 보고로 쌓인다.
+  const styleWatch = new StyleWatch((change) => {
+    store.recordStyleReport(change);
+    publish(null);
+  });
 
   function publish(event: ChatEvent | null) {
     if (window && !window.isDestroyed())
@@ -94,6 +101,7 @@ async function startApp() {
       store.listSkills(project.id),
       store.listMemories(project.id, assistant.id),
       wiki,
+      { styleReports: store.takeStyleReports(project.id) },
     );
     const emit = (delta: string) => {
       if (closing || controller.signal.aborted) return;
@@ -244,6 +252,7 @@ async function startApp() {
     mcp,
     applyModelConnections,
     quit: () => app.quit(),
+    fileChange: (change) => styleWatch.noteChange(change),
     pickFolder: async () => {
       const selected = await dialog.showOpenDialog(window!, {
         properties: ["openDirectory"],
@@ -380,6 +389,7 @@ async function startApp() {
       run.controller.abort();
     }
     workflow.close();
+    styleWatch.close();
     codex.close();
     store.close();
   });

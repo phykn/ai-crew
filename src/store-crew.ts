@@ -14,8 +14,8 @@ import {
   type RoleId,
   type ToolApproval,
 } from "./actions";
-import { StoreAudit } from "./store-audit";
-export class StoreCrew extends StoreAudit {
+import { StoreStyle } from "./store-style";
+export class StoreCrew extends StoreStyle {
   readMembers(projectId: string, roleId?: RoleId): CrewMember[] {
     const defaults = this.db
       .prepare(

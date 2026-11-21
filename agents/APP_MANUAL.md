@@ -136,7 +136,7 @@ A decision that touches the user's resources — an approval, a refusal, a model
 
 ## 10. Attaching from another program (local HTTP and SSE)
 
-The code holds a small HTTP server that uses the app's state, actions and events directly (`createCrewHttpServer` in `src/server/chat/http-server.ts`). It opens only on `127.0.0.1` and requires the token made at startup.
+The code holds a small HTTP server that uses the app's state, actions and events directly (`createCrewHttpServer` in `src/backend/server/chat/http-server.ts`). It opens only on `127.0.0.1` and requires the token made at startup.
 
 | Request | What it does |
 |---|---|
@@ -154,7 +154,7 @@ curl -N "http://127.0.0.1:PORT/api/events?token=$TOKEN"
 
 EventSource cannot send a header, so only the stream accepts `?token=`. The same request ID with the same arguments returns the first result again.
 
-> This server is not started automatically when the app opens yet. Only the module and its test (`src/server/chat/http-server.test.ts`) are ready, so attaching it means calling `createCrewHttpServer` from the app's startup code. Do not answer that it "opens automatically when the app starts".
+> This server is not started automatically when the app opens yet. Only the module and its test (`tests/backend/server/chat/http-server.test.ts`) are ready, so attaching it means calling `createCrewHttpServer` from the app's startup code. Do not answer that it "opens automatically when the app starts".
 
 ## 11. Common mistakes and cautions
 

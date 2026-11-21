@@ -23,7 +23,7 @@
           "config": {
             "build": [
               {
-                "entry": "src/main.ts",
+                "entry": "src/backend/main.ts",
                 "config": "vite.main.config.ts"
               },
               {

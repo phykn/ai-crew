@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { DiagnosticsReport } from "../server/diagnostics/run";
+import type { DiagnosticsReport } from "../backend/server/diagnostics/run";
 
 // 비서 하나가 사용자와 대화하고, 나머지 여덟 역할은 비서 뒤에서 일한다.
 // 기본 역할은 지워지지 않는 고정 크루가 아니라 처음 받는 로스터다(해고·재고용 가능).

@@ -1,6 +1,6 @@
 # AI Crew agent instructions
 
-One assistant talks with the user, and the other eight roles work on the assistant's instruction. A role's data — its name, skills, trigger and prompt — has one source in `roles` in `src/shared/actions.ts`, and the default skills assigned to every role when a project is first opened have one source in `defaultSkills` in `src/store/skills.ts`. This document is a summary of both; when they differ, the code wins.
+One assistant talks with the user, and the other eight roles work on the assistant's instruction. A role's data — its name, skills, trigger and prompt — has one source in `roles` in `src/shared/actions.ts`, and the default skills assigned to every role when a project is first opened have one source in `defaultSkills` in `src/backend/store/skills.ts`. This document is a summary of both; when they differ, the code wins.
 
 ## Roles
 

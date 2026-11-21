@@ -3218,9 +3218,9 @@ textarea::-webkit-scrollbar {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   포근한 양피지·우드 작업 패널
-   캠프와 한 세계로 보이도록 작업 화면의 카드·입력·버튼·배지를 크림 양피지와
-   우드 테두리로 통일한다. 그라디언트 없이 단색 면과 2px 솔리드 턱으로 층을 낸다.
+   Warm parchment and wood for the work panels.
+   Cream parchment, wood borders and a 2px solid lip place the panel cards in the
+   same world as the camp art; single flat fills only, no gradients.
    ───────────────────────────────────────────────────────────────────────── */
 :root {
   --cozy-cream: #fdf7e7;
@@ -3239,7 +3239,7 @@ textarea::-webkit-scrollbar {
   --cozy-coral-ink: #a44a34;
 }
 
-/* 컨트롤: 기본 브라우저 모양을 남기지 않는다. */
+/* Controls: never leave the stock browser look on screen. */
 .cozy-scope :is(
   input:not([type="checkbox"]):not([type="radio"]),
   select,
@@ -3304,7 +3304,7 @@ textarea::-webkit-scrollbar {
   color: var(--cozy-ink);
 }
 
-/* 카드와 접기 */
+/* Cards and disclosures */
 .cozy-card {
   border: 1.5px solid var(--cozy-wood);
   border-radius: 10px;
@@ -3427,7 +3427,7 @@ textarea::-webkit-scrollbar {
   overflow-wrap: anywhere;
 }
 
-/* 빈 상태 */
+/* Empty states */
 .empty-state {
   display: grid;
   justify-items: center;
@@ -3466,7 +3466,7 @@ textarea::-webkit-scrollbar {
   height: 18px;
 }
 
-/* 로그 한 줄: 시간 · 완료 표시 · 역할 배지 · 본문 */
+/* One activity row: time, status icon, role pill, body. */
 .log-section-title {
   margin: 2px 2px 0;
   color: var(--cozy-muted);
@@ -3570,7 +3570,7 @@ textarea::-webkit-scrollbar {
   border: 0;
 }
 
-/* 업무 로그 */
+/* Work log */
 .worklog-panel {
   display: flex;
   flex-direction: column;
@@ -3626,7 +3626,7 @@ textarea::-webkit-scrollbar {
   font-weight: 400;
 }
 
-/* 카드가 좁은 패널을 밀어내지 않게 폭을 줄인다. */
+/* Keep a long summary from pushing a narrow panel wider. */
 .cozy-stack,
 .cozy-card,
 .cozy-body,
@@ -3652,7 +3652,7 @@ textarea::-webkit-scrollbar {
   line-height: 1.5;
 }
 
-/* 메모리 */
+/* Memory */
 .memory-panel {
   display: flex;
   flex-direction: column;
@@ -3701,7 +3701,7 @@ textarea::-webkit-scrollbar {
   gap: 6px;
 }
 
-/* 위키 */
+/* Wiki */
 .wiki-panel > * + * {
   margin-top: 10px;
 }
@@ -3787,7 +3787,7 @@ textarea::-webkit-scrollbar {
   box-shadow: none;
 }
 
-/* 크루 설정: 접기 안에 접기를 두지 않고 섹션 카드로 나눈다. */
+/* Crew settings: section cards instead of a disclosure inside a disclosure. */
 .crew-settings {
   display: flex;
   flex-direction: column;
@@ -3983,7 +3983,7 @@ textarea::-webkit-scrollbar {
   color: var(--on-warm);
 }
 
-/* 워크플로우: 양피지 캔버스와 우드 팻말 노드 */
+/* Workflow: parchment canvas and wood signboard nodes. */
 .workflow-panel {
   gap: 8px;
   padding: 10px 12px;
@@ -4102,7 +4102,7 @@ textarea::-webkit-scrollbar {
   color: #9a4a31;
 }
 
-/* 기억·프로젝트 위키 탭 */
+/* Memory and project wiki tabs */
 .knowledge-nav {
   padding: 8px var(--pane-inset);
   border-bottom: 1px solid var(--cozy-wood-soft);
@@ -4122,5 +4122,37 @@ textarea::-webkit-scrollbar {
   border-color: #c79a52;
   background: var(--honey);
   color: var(--on-warm);
+}
+
+/* Camp labels: text only, no pill, border or colour dots. */
+.character-tag {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: #3b2a1b;
+  font-size: 12px;
+  font-weight: 700;
+  text-shadow:
+    0 1px 0 #fdf7e7,
+    1px 0 0 #fdf7e7,
+    -1px 0 0 #fdf7e7,
+    0 -1px 0 #fdf7e7,
+    0 2px 5px #00000040;
+  backdrop-filter: none;
+}
+.character-tag::before,
+.character-tag::after {
+  display: none;
+}
+.character-bubble {
+  padding: 2px 8px 3px;
+  border: 0;
+  border-radius: 8px;
+  background: #fdf7e7e6;
+  box-shadow: 0 1px 4px #0000002b;
+  color: #3b2a1b;
+  font-weight: 700;
 }
 

@@ -925,7 +925,7 @@ export function CampPanel({
               data-posture={posture}
             >
               <span className="character-tag">
-                <b style={{ color: role.color }}>{member.name}</b>
+                <b>{member.name}</b>
                 {status ? " · " + status : ""}
               </span>
               <span className="character-bubble" aria-hidden="true" />

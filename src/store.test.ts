@@ -34,7 +34,7 @@ test("keeps projects, conversation, draft and selected model through restart", (
     store.updateMember(current!.id, member.id, { hired: false });
     const job = store.createJob(id, response, "파일 수정");
     store.saveMemory(id, "개발 담당 확인 코드", "development", {
-      id: "development", name: "모루", jobId: job.id,
+      id: "development", name: "태오", jobId: job.id,
     });
     store.saveMemory(id, "공통 확인 코드", null);
     store.recordModelRun(id, job.id, { roleId: "development", provider: "local" }, 75.48, {
@@ -57,7 +57,7 @@ test("keeps projects, conversation, draft and selected model through restart", (
           id: "assistant",
           roleId: "assistant",
           provider: "codex",
-          name: "여울",
+          name: "하나",
           hired: true,
         },
       ]),
@@ -73,7 +73,7 @@ test("keeps projects, conversation, draft and selected model through restart", (
     expect(store.getAgentContext(job.id, "review")).toBeUndefined();
     expect(store.listMemories(current!.id, "assistant").map(({ body }) => body)).toEqual(["공통 확인 코드"]);
     const [shared, own] = store.listMemories(current!.id, "development");
-    expect(own).toMatchObject({ ownerId: "development", authorName: "모루", sourceJobId: job.id, body: "개발 담당 확인 코드" });
+    expect(own).toMatchObject({ ownerId: "development", authorName: "태오", sourceJobId: job.id, body: "개발 담당 확인 코드" });
     expect(shared.body).toBe("공통 확인 코드");
     expect(store.snapshot().modelRuns).toEqual([
       {

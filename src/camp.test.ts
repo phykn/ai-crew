@@ -11,21 +11,21 @@ test("the camp reads one stored state: who works, on what, and who is highlighte
     {
       id: "assistant",
       roleId: "assistant" as const,
-      name: "여울",
+      name: "하나",
       provider: "local" as const,
       hired: true,
     },
     {
       id: "development",
       roleId: "development" as const,
-      name: "모루",
+      name: "태오",
       provider: "local" as const,
       hired: true,
     },
     {
       id: "test",
       roleId: "test" as const,
-      name: "솔잎",
+      name: "민재",
       provider: "local" as const,
       hired: false,
     },
@@ -108,7 +108,7 @@ test("idle lines follow the time of day and the member", () => {
   const member = {
     id: "review",
     roleId: "review" as const,
-    name: "새벽",
+    name: "현우",
     provider: "local" as const,
     hired: true,
   };

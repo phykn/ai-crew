@@ -26,7 +26,7 @@ const skills: CrewSkill[] = [
 const member = (over: Partial<CrewMember>): CrewMember => ({
   id: "member-dev",
   roleId: "development",
-  name: "모루",
+  name: "태오",
   provider: "local",
   hired: true,
   ...over,
@@ -125,7 +125,7 @@ test("a running skill outranks a pending approval and both outrank an unavailabl
     serverId: "server-1",
     serverName: "fixture",
     memberId: "member-dev",
-    memberName: "모루",
+    memberName: "태오",
     toolName: "write_fixture",
     scope: "{}",
     mode: "manual" as const,

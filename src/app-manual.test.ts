@@ -18,7 +18,7 @@ test("앱 매뉴얼을 읽어 비서 지침에 넣는다", () => {
   const member = {
     id: "assistant",
     roleId: "assistant" as const,
-    name: "여울",
+    name: "하나",
     provider: "local" as const,
     hired: true,
   };

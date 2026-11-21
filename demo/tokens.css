@@ -1,22 +1,31 @@
 :root {
   color-scheme: dark;
   font:
-    15px/1.55 -apple-system,
-    BlinkMacSystemFont,
+    15px/1.55 "Nanum Gothic",
+    "NanumGothic",
     "Apple SD Gothic Neo",
     "Malgun Gothic",
+    "Noto Sans KR",
     sans-serif;
-  --bg: #1c1e1a;
+  /* 스타듀밸리풍 코지 우드 & 양피지 팔레트 */
+  --bg: #211812;
   --panel: var(--bg);
-  --card: #242721;
-  --line: #383c34;
-  --line-control: #50554a;
-  --text: #f0ece2;
-  --dim: #b2b4a8;
-  --warm: #e9c691;
-  --on-warm: #241e16;
-  --selected: #39342b;
-  --surface-control: var(--selected);
+  --card: #2d2219;
+  --card-2: #35281d;
+  --line: #4a3627;
+  --line-control: #6d4d34;
+  --text: #f6e8cf;
+  --dim: #c4ac8c;
+  --warm: #e8b45c;
+  --on-warm: #2a1b10;
+  --selected: #4a3522;
+  --surface-control: #3a2b1e;
+  --honey: #e0a952;
+  --parchment: #f3e3c3;
+  --parchment-ink: #3f2a18;
+  --sage: #9dbb7d;
+  --wood-dark: #18100b;
+  --wood-edge: #5a402c;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -27,8 +36,8 @@
   --control-size: 36px;
   --icon-size: 18px;
   --font-detail: 13px;
-  --radius-control: 7px;
-  --radius-surface: 10px;
+  --radius-control: 9px;
+  --radius-surface: 12px;
   --header-height: 58px;
   --workspace-columns: minmax(0, 1.13fr) minmax(380px, 1fr);
   --flow-node-width: 128px;

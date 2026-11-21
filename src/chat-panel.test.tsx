@@ -99,7 +99,7 @@ test("renders markdown bubbles, the live banner and one decision card", () => {
     expect(html).toContain("bubble-copy");
     // 상단 배너는 진행 업무와 대기 알림을 함께 보여 준다.
     expect(html).toContain('class="chat-status"');
-    expect(html).toContain("여울 · 승인 대기");
+    expect(html).toContain("하나 · 승인 대기");
     expect(html).toContain("chat-status-wait");
     // 업무가 한 건이면 배너 한 줄로 끝내고 업무 목록은 그리지 않는다.
     expect(html).not.toContain('class="current-jobs"');

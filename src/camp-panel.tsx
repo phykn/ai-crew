@@ -1,8 +1,15 @@
 // The camp view: the crew roster (hiring, names, models, skills, settings) and the
 // characters standing in the camp.
 
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { roles, type Action, type Snapshot } from "./actions";
+import {
+  campObjects,
+  initialActors,
+  stepActor,
+  type CampActor,
+  type CampActorSeed,
+} from "./camp-behavior";
 import { CampAtmosphere } from "./camp-atmosphere";
 import { CrewSettings } from "./crew-settings";
 import { Icon, SkillChips, sprites } from "./renderer-ui";
@@ -37,6 +44,24 @@ type CampPanelProps = {
 // 캐릭터마다 다른 깊이를 주어 배경보다 조금 더 크게 따라 움직이게 한다.
 const depthOf = (y: number) => (0.9 + Math.min(Math.max(y, 40), 92) / 130).toFixed(2);
 
+// 멀리(y가 작은) 서면 작게, 앞마당에 서면 크게. 오두막 문·통나무 의자와 비율을 맞춘다.
+const depthScale = (y: number) =>
+  (0.78 + (Math.min(Math.max(y - 46, 0), 44) / 44) * 0.28).toFixed(3);
+
+// 모닥불 가까이 서면 따뜻한 빛을 받는다.
+const fireGlow = (x: number, y: number) =>
+  Math.max(0, 1 - Math.hypot(x - 59.7, y - 61.8) / 15).toFixed(2);
+
+const objectNotes: Record<string, string> = {
+  campfire: "🔥 모닥불 · 장작이 타고 있어요",
+  workbench: "🛠 작업대 · 크루가 여기서 일해요",
+  lantern: "🏮 오두막 등불 · 해가 지면 더 밝아져요",
+};
+
+function bubbleFor(id: string, label: string) {
+  return objectNotes[id] ?? "🪵 " + label + " · 걸터앉아 쉬는 자리";
+}
+
 export function CampPanel({
   data,
   running,
@@ -70,6 +95,162 @@ export function CampPanel({
     ({ id }) => id === settingsMember,
   );
   const hired = data?.members.filter((member) => member.hired).length ?? 0;
+
+  const [poked, setPoked] = useState<string | null>(null);
+  const characterRefs = useRef(new Map<string, HTMLDivElement>());
+  const objectRefs = useRef(new Map<string, HTMLButtonElement>());
+  const runtime = useRef<CampActor[]>([]);
+  const anyWorking = data?.camp.members.some((member) => member.working) ?? false;
+
+  // 캠프에 보이는 크루의 배정 상태만 순수 계산의 씨앗으로 넘긴다.
+  const hiredSeeds = (data?.members ?? [])
+    .filter((member) => member.hired)
+    .map((member): CampActorSeed => {
+      const state = campMembers.get(member.id);
+      const job = state?.jobId
+        ? data?.jobs.find(({ id }) => id === state.jobId)
+        : undefined;
+      return {
+        memberId: member.id,
+        roleId: member.roleId,
+        hired: member.hired,
+        working: Boolean(state?.working),
+        jobId: state?.jobId ?? null,
+        jobState: job?.state ?? null,
+      };
+    });
+  const seedsKey = hiredSeeds
+    .map((seed) =>
+      [seed.memberId, seed.roleId, seed.working, seed.jobId, seed.jobState].join(
+        ":",
+      ),
+    )
+    .join("|");
+  // 처음 그릴 좌표. 사람이 바뀔 때만 다시 잡아, 움직이는 중에 React가 자리를
+  // 되돌리지 않게 한다. 실제 이동은 아래 effect가 DOM에 직접 쓴다.
+  const memberKey = hiredSeeds.map(({ memberId }) => memberId).join("|");
+  const positions = useMemo(
+    () =>
+      initialActors(
+        hiredSeeds.map((seed) => ({
+          ...seed,
+          working: false,
+          jobId: null,
+          jobState: null,
+        })),
+      ),
+    // 배정이 바뀌어도 처음 자리는 유지한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [memberKey],
+  );
+
+  useEffect(() => {
+    const now = Date.now();
+    const base = initialActors(
+      hiredSeeds.map((seed) => ({
+        ...seed,
+        working: false,
+        jobId: null,
+        jobState: null,
+      })),
+      now,
+    );
+    const previous = runtime.current;
+    runtime.current = base.map((actor) => {
+      const seed = hiredSeeds.find((item) => item.memberId === actor.memberId);
+      if (!seed) return actor;
+      const old = previous.find((item) => item.memberId === actor.memberId);
+      if (!old) return { ...actor, ...seed, nextDecisionAt: now + 600 };
+      const changed = old.working !== seed.working || old.jobId !== seed.jobId;
+      return {
+        ...old,
+        ...seed,
+        nextDecisionAt: changed ? now : old.nextDecisionAt,
+        ...(changed
+          ? {
+              route: [],
+              intent: "idle" as const,
+              workSpotId: null,
+              targetMemberId: null,
+              watching: null,
+              bubble: null,
+              posture: old.spotId ? ("sit" as const) : ("stand" as const),
+            }
+          : {}),
+      };
+    });
+
+    const paint = () => {
+      for (const actor of runtime.current) {
+        const element = characterRefs.current.get(actor.memberId);
+        if (!element) continue;
+        element.style.left = actor.x.toFixed(2) + "%";
+        // 앉으면 발이 통나무 아래로 살짝 내려가 걸터앉은 높이가 된다.
+        const sink = actor.posture === "sit" ? 1.6 : 0;
+        element.style.top = (actor.y + sink).toFixed(2) + "%";
+        element.style.zIndex = String(
+          Math.round(actor.y * 10) + (actor.posture === "sit" ? 3 : 2),
+        );
+        element.dataset.facing = actor.facing;
+        element.dataset.posture = actor.posture;
+        element.style.setProperty("--scale", depthScale(actor.y));
+        element.style.setProperty("--depth", depthOf(actor.y));
+        element.style.setProperty("--fire-glow", fireGlow(actor.x, actor.y));
+        element.classList.toggle("is-sitting", actor.posture === "sit");
+        element.classList.toggle("is-walking", actor.posture === "walk");
+        element.classList.toggle("is-watching", actor.posture === "watch");
+        element.classList.toggle("is-handing", actor.posture === "handoff");
+        const bubble = element.querySelector<HTMLElement>(".character-bubble");
+        if (bubble) {
+          if (bubble.textContent !== (actor.bubble ?? ""))
+            bubble.textContent = actor.bubble ?? "";
+          bubble.classList.toggle("show", Boolean(actor.bubble));
+        }
+      }
+      for (const seat of campObjects) {
+        if (seat.kind !== "seat") continue;
+        const element = objectRefs.current.get(seat.id);
+        if (!element) continue;
+        element.classList.toggle(
+          "is-taken",
+          runtime.current.some((actor) => actor.spotId === seat.id),
+        );
+      }
+    };
+
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    // 움직임을 줄이면 걷지 않고, 일하는 크루는 작업 자리에 선 채로 둔다.
+    if (reduced) runtime.current = initialActors(hiredSeeds, now);
+    paint();
+    if (reduced) return;
+    let frame = 0;
+    let last = performance.now();
+    const tick = (time: number) => {
+      const seconds = Math.min(0.06, Math.max(0, (time - last) / 1000));
+      last = time;
+      if (seconds > 0) {
+        const stamp = Date.now();
+        // 한 명씩 차례로 옮겨, 같은 틱에 두 사람이 같은 자리를 고르지 않게 한다.
+        const actors = [...runtime.current];
+        for (let index = 0; index < actors.length; index += 1) {
+          actors[index] = stepActor(actors[index], seconds, {
+            now: stamp,
+            actors,
+            random: Math.random,
+          });
+        }
+        runtime.current = actors;
+      }
+      paint();
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+    // seedsKey가 바뀔 때만 캐릭터 배정을 다시 맞춘다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedsKey]);
 
   // 마우스 위치를 부드럽게 따라가는 값(--px, --py)과 랜턴 빛의 자리(--gx, --gy)를
   // CSS 변수로만 갱신한다. React 상태를 건드리지 않아 캐릭터가 다시 그려지지 않는다.
@@ -454,53 +635,112 @@ export function CampPanel({
           </details>
         )}
       </div>
+      <div className="camp-stage">
+      <div className="camp-objects" role="group" aria-label="캠프 오브젝트">
+        {campObjects.map((object) => (
+          <button
+            key={object.id}
+            type="button"
+            className={
+              "camp-object " +
+              object.kind +
+              (poked === object.id ? " is-poked" : "") +
+              (object.kind === "workbench" && anyWorking ? " is-active" : "") +
+              (object.kind === "lantern" && anyWorking ? " is-lit" : "")
+            }
+            ref={(element) => {
+              if (element) objectRefs.current.set(object.id, element);
+              else objectRefs.current.delete(object.id);
+            }}
+            style={
+              {
+                left: object.x + "%",
+                top: object.y + "%",
+                width: object.w + "%",
+                height: object.h + "%",
+                zIndex: Math.round(object.y * 10),
+              } as CSSProperties
+            }
+            aria-label={object.label}
+            title={object.label}
+            onClick={() => {
+              setPoked(object.id);
+              window.setTimeout(
+                () =>
+                  setPoked((current) =>
+                    current === object.id ? null : current,
+                  ),
+                1500,
+              );
+            }}
+          >
+            <span className="camp-object-sign" aria-hidden="true">
+              {poked === object.id ? bubbleFor(object.id, object.label) : object.label}
+            </span>
+            {object.kind === "campfire" && (
+              <span className="camp-object-glow" aria-hidden="true" />
+            )}
+          </button>
+        ))}
+      </div>
       {data?.current &&
-        data.members.map((member, index) => {
+        data.members.map((member) => {
           const role = roles.find(({ id }) => id === member.roleId)!;
-          const extra = member.id !== role.id;
           const state = campMembers.get(member.id);
+          const actor = positions.find((item) => item.memberId === member.id);
           const status =
             role.id === "assistant" && running
               ? "답변 중"
               : state?.working
                 ? state.status
                 : "";
-          const y = extra ? 88 + (index % 3) * 4 : role.y;
+          const offDuty = !member.hired;
+          const posture = actor?.posture ?? "stand";
+          const classes =
+            "character" +
+            (state?.highlighted ? " highlighted" : "") +
+            (state?.working ? " working" : "") +
+            (offDuty ? " off-duty" : "") +
+            (posture === "sit" ? " is-sitting" : "") +
+            (posture === "walk" ? " is-walking" : "") +
+            (posture === "watch" ? " is-watching" : "") +
+            (posture === "handoff" ? " is-handing" : "");
+          const left = offDuty ? (role.x < 50 ? -12 : 112) : (actor?.x ?? role.x);
+          const top = offDuty ? 86 : (actor?.y ?? role.y);
           return (
             <div
-              className={
-                "character" +
-                (state?.highlighted ? " highlighted" : "") +
-                (state?.working ? " working" : "") +
-                (member.hired ? "" : " off-duty")
-              }
+              className={classes}
               key={member.id}
+              ref={(element) => {
+                if (element) characterRefs.current.set(member.id, element);
+                else characterRefs.current.delete(member.id);
+              }}
               style={
                 {
-                  left:
-                    (member.hired || state?.working
-                      ? extra
-                        ? 18 + ((index * 13) % 65)
-                        : role.x
-                      : role.x < 50
-                        ? -14
-                        : 114) + "%",
-                  top: y + "%",
-                  "--depth": depthOf(y),
-                  "--delay": `${(index % 5) * 0.6}s`,
+                  left: left + "%",
+                  top: top + "%",
+                  zIndex: Math.round(top * 10) + 2,
+                  "--depth": depthOf(top),
+                  "--scale": depthScale(top),
+                  "--fire-glow": fireGlow(left, top),
+                  "--delay": `${(member.id.length % 5) * 0.6}s`,
                 } as CSSProperties
               }
+              data-facing={actor?.facing ?? "right"}
+              data-posture={posture}
             >
               <span className="character-tag">
                 <b style={{ color: role.color }}>{member.name}</b>
                 {status ? " · " + status : ""}
               </span>
+              <span className="character-bubble" aria-hidden="true" />
               <span className="character-body">
                 <img src={sprites[role.sprite]} alt="" />
               </span>
             </div>
           );
         })}
+      </div>
     </section>
   );
 }

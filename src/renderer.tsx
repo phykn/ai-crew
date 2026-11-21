@@ -488,6 +488,8 @@ function Workspace() {
             error={error}
             showCamp={showCamp}
             setShowCamp={setShowCamp}
+            menu={menu}
+            setMenu={setMenu}
             messages={messages}
             following={following}
             composer={composer}

@@ -112,7 +112,7 @@ try {
     roster.getByRole("button", { name: "새 플랜 담당", exact: true }),
   ).toBeVisible();
   const writePermission = roster.getByRole("button", {
-    name: "모루 파일 쓰기 권한",
+    name: "태오 파일 쓰기 권한",
   });
   await writePermission.click();
   await expect(writePermission).toHaveAttribute("aria-pressed", "false");
@@ -145,7 +145,7 @@ try {
   await application.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setSize(440, 620),
   );
-  await expect(page.locator(".toolbar .project-toggle")).toBeVisible();
+  await expect(page.locator(".composer .project-toggle")).toBeVisible();
   await expect(page.getByRole("combobox", { name: "승인 모드" })).toBeVisible();
   const sessionsButton = page.getByRole("button", {
     name: "세션 목록",
@@ -361,8 +361,8 @@ try {
   });
   await new Promise((resolve) => fixtureMcp.listen(0, "127.0.0.1", resolve));
   await page.locator(".roster > summary").click();
-  await page.getByRole("button", { name: "여울 스킬 및 MCP 설정" }).click();
-  const mcpSettings = page.getByRole("region", { name: "여울 설정" });
+  await page.getByRole("button", { name: "하나 스킬 및 MCP 설정" }).click();
+  const mcpSettings = page.getByRole("region", { name: "하나 설정" });
   await mcpSettings.getByText("정의 MD", { exact: true }).click();
   await expect(mcpSettings.getByText("# 비서", { exact: false })).toBeVisible();
   await mcpSettings

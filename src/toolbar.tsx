@@ -1,5 +1,5 @@
-// The panel toolbar: the project switcher, camp toggle, view buttons, session
-// list and notifications.
+// The panel toolbar: camp toggle, view buttons, diagnostics, session list and
+// notifications. The project folder lives by the composer, where work starts.
 
 import { type Action, type Snapshot } from "./actions";
 import { Icon } from "./renderer-ui";
@@ -54,43 +54,6 @@ export function Toolbar({
       >
         <Icon name="fire" />
       </button>
-      <button
-        type="button"
-        className="folder project-toggle"
-        aria-label="프로젝트 폴더"
-        title={data?.current?.root ?? "프로젝트 폴더"}
-        aria-expanded={menu === "projects"}
-        onClick={() => setMenu(menu === "projects" ? null : "projects")}
-      >
-        <Icon name="folder" />{" "}
-        <span>{data?.current?.name || "프로젝트 폴더"}</span>
-      </button>
-      {menu === "projects" && (
-        <div className="menu projects" aria-label="프로젝트 폴더">
-          <button
-            type="button"
-            onClick={() => void navigate({ type: "project.pick" })}
-          >
-            폴더 열기…
-          </button>
-          {data?.projects.map((project) => (
-            <button
-              type="button"
-              title={project.root}
-              key={project.id}
-              aria-current={data.current?.id === project.id}
-              onClick={() =>
-                void navigate({
-                  type: "project.open",
-                  projectId: project.id,
-                })
-              }
-            >
-              {project.name}
-            </button>
-          ))}
-        </div>
-      )}
       <nav aria-label="작업 보기">
         <button
           type="button"

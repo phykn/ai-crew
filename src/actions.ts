@@ -8,7 +8,7 @@ export const roles = [
   {
     id: "assistant",
     title: "비서",
-    name: "여울",
+    name: "하나",
     color: "#efc58d",
     sprite: 0,
     x: 30,
@@ -21,7 +21,7 @@ export const roles = [
   {
     id: "hr",
     title: "인사",
-    name: "온새",
+    name: "지민",
     color: "#f0d38a",
     sprite: 5,
     x: 20,
@@ -34,7 +34,7 @@ export const roles = [
   {
     id: "development",
     title: "개발",
-    name: "모루",
+    name: "태오",
     color: "#b4d59d",
     sprite: 1,
     x: 48,
@@ -47,7 +47,7 @@ export const roles = [
   {
     id: "build",
     title: "빌드",
-    name: "장작",
+    name: "도윤",
     color: "#d9b08c",
     sprite: 6,
     x: 66,
@@ -60,7 +60,7 @@ export const roles = [
   {
     id: "docs",
     title: "문서",
-    name: "먹물",
+    name: "서연",
     color: "#b7cbe6",
     sprite: 7,
     x: 86,
@@ -73,7 +73,7 @@ export const roles = [
   {
     id: "style",
     title: "스타일",
-    name: "단풍",
+    name: "유진",
     color: "#f6aa8a",
     sprite: 4,
     x: 14,
@@ -86,7 +86,7 @@ export const roles = [
   {
     id: "review",
     title: "리뷰",
-    name: "새벽",
+    name: "현우",
     color: "#ddaed8",
     sprite: 2,
     x: 38,
@@ -99,7 +99,7 @@ export const roles = [
   {
     id: "test",
     title: "테스트",
-    name: "솔잎",
+    name: "민재",
     color: "#a9c7f0",
     sprite: 3,
     x: 80,
@@ -112,7 +112,7 @@ export const roles = [
   {
     id: "vision",
     title: "비전",
-    name: "서리",
+    name: "수아",
     color: "#9ed6c8",
     sprite: 8,
     x: 62,

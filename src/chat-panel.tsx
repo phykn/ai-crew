@@ -36,6 +36,9 @@ type ChatPanelProps = {
   error: string;
   showCamp: boolean;
   setShowCamp: (camp: boolean) => void;
+  /** 프로젝트 폴더 팻말이 여는 메뉴. 툴바와 같은 상태를 쓴다. */
+  menu?: "projects" | "sessions" | "notifications" | null;
+  setMenu?: (menu: "projects" | "sessions" | "notifications" | null) => void;
   messages: { current: HTMLDivElement | null };
   following: { current: boolean };
   composer: { current: HTMLTextAreaElement | null };
@@ -217,6 +220,8 @@ export function ChatPanel({
   error,
   showCamp,
   setShowCamp,
+  menu = null,
+  setMenu = () => {},
   messages,
   following,
   composer,
@@ -652,6 +657,45 @@ export function ChatPanel({
             }}
           />
           <div className="compose-tools">
+            <button
+              type="button"
+              className="folder project-toggle"
+              aria-label="프로젝트 폴더"
+              title={data?.current?.root ?? "프로젝트 폴더"}
+              aria-expanded={menu === "projects"}
+              onClick={() =>
+                setMenu(menu === "projects" ? null : "projects")
+              }
+            >
+              <Icon name="folder" />{" "}
+              <span>{data?.current?.name || "프로젝트 폴더"}</span>
+            </button>
+            {menu === "projects" && (
+              <div className="menu projects" aria-label="프로젝트 폴더">
+                <button
+                  type="button"
+                  onClick={() => void navigate({ type: "project.pick" })}
+                >
+                  폴더 열기…
+                </button>
+                {data?.projects.map((project) => (
+                  <button
+                    type="button"
+                    title={project.root}
+                    key={project.id}
+                    aria-current={data.current?.id === project.id}
+                    onClick={() =>
+                      void navigate({
+                        type: "project.open",
+                        projectId: project.id,
+                      })
+                    }
+                  >
+                    {project.name}
+                  </button>
+                ))}
+              </div>
+            )}
             {data?.current && (
               <select
                 className="approval-mode"

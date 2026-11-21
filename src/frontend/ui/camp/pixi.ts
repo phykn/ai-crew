@@ -1,10 +1,9 @@
-// 캠프 픽셀아트 스테이지. 바닥 타일·오브젝트·크루를 모두 pixlrt로 그린 그림에서
-// 만든 텍스처로 한 장의 캔버스에 얹고, 크루의 이동·호흡·걷기·착석·방향 전환은
-// GSAP과 AnimatedSprite로 다듬는다. PixiJS와 GSAP은 이 파일 안에서만 동적 import
-// 하므로 서버 렌더나 WebGL이 없는 환경에서는 캔버스가 만들어지지 않고, 화면은
-// CSS 캠프로 그대로 폴백한다(pixlrt 그림을 SVG로 쓴 같은 그림이다).
+// The camp pixel-art stage. One painted clearing, the crew sprite strips, the log
+// benches and the flicker frames of the fire go onto a single canvas, and GSAP
+// plus AnimatedSprite carry movement, breathing, walking, sitting and turning.
+// PixiJS and GSAP are imported dynamically here only, so without WebGL no canvas
+// is made and the screen falls back to the CSS camp, which uses the same files.
 
-import { renderToCanvas } from "pixlrt/core";
 import {
   artUnit,
   crewHeight,
@@ -17,14 +16,15 @@ import {
   type StageSize,
 } from "./pixi-layout";
 import {
-  campGround,
+  benchArt,
+  campBackground,
   crewAnimations,
-  crewFrame,
-  objectArt,
+  crewArt,
+  crewColumns,
+  fireArt,
   type CrewPose,
   type ObjectKind,
 } from "./art/scene";
-import { mapCenter, tileSize } from "./art/ground";
 
 type PixiModule = typeof import("pixi.js");
 type GsapModule = typeof import("gsap");
@@ -45,7 +45,7 @@ export type StageActor = {
 
 type CampCrew = { id: string; role: number };
 
-/** 캠프에 놓는 오브젝트. 크기는 아트 픽셀 단위다. */
+/** A camp object; its size is in pixels of the background painting. */
 export type StageObject = {
   id: string;
   kind: ObjectKind;
@@ -57,7 +57,7 @@ export type StageObject = {
 
 type CampStageOptions = {
   host: HTMLElement;
-  /** 포인터를 받는 요소. 캔버스 자체는 입력을 받지 않는다. */
+  /** The element that takes pointer input; the canvas itself takes none. */
   surface?: HTMLElement | null;
   crew: CampCrew[];
   fire: StagePoint;
@@ -111,7 +111,7 @@ function measureStage(host: HTMLElement, surface?: HTMLElement | null): StageSiz
   return { width, height };
 }
 
-/** 캠프 스테이지를 만든다. WebGL을 쓸 수 없으면 null을 돌려준다. */
+/** Builds the stage; null when WebGL or the art files are unavailable. */
 export async function createCampStage(
   options: CampStageOptions,
 ): Promise<CampStage | null> {
@@ -129,6 +129,22 @@ export async function createCampStage(
   } catch {
     return null;
   }
+
+  let textures: PixiTexture[];
+  try {
+    textures = await Promise.all(
+      [
+        campBackground.url,
+        fireArt.url,
+        benchArt.url,
+        ...crewArt.sheets,
+      ].map((url) => PIXI.Assets.load<PixiTexture>(url)),
+    );
+  } catch {
+    return null;
+  }
+  const [bgTexture, fireTexture, benchTexture, ...crewTexturesByRole] = textures;
+  for (const texture of textures) texture.source.scaleMode = "nearest";
 
   const size: StageSize = measureStage(options.host, options.surface);
   const app = new PIXI.Application();
@@ -149,7 +165,7 @@ export async function createCampStage(
     try {
       app.destroy(true);
     } catch {
-      // 초기화에 실패한 앱은 이미 비어 있다.
+      // An app that failed to init is already empty.
     }
     return null;
   }
@@ -168,24 +184,26 @@ export async function createCampStage(
 
   let unit = artUnit(size);
 
-  /** 픽셀아트 그림을 그대로 옮긴 텍스처. 확대해도 각이 살아 있게 nearest로 둔다. */
-  function pixelTexture(art: { width: number; height: number }) {
-    const surface = document.createElement("canvas");
-    renderToCanvas(art as never, surface);
-    const texture = PIXI.Texture.from(surface);
-    texture.source.scaleMode = "nearest";
-    return texture;
+  /** Cuts one frame out of a strip; nearest keeps the pixels square when scaled. */
+  function frameTexture(sheet: PixiTexture, column: number, cellWidth: number, cellHeight: number) {
+    return new PIXI.Texture({
+      source: sheet.source,
+      frame: new PIXI.Rectangle(column * cellWidth, 0, cellWidth, cellHeight),
+    });
   }
 
   const poseTextures = new Map<string, PixiTexture[]>();
   function crewTextures(role: number, poses: readonly CrewPose[]) {
     const key = role + ":" + poses.join(",");
-    let textures = poseTextures.get(key);
-    if (!textures) {
-      textures = poses.map((pose) => pixelTexture(crewFrame(role, pose)));
-      poseTextures.set(key, textures);
+    let frames = poseTextures.get(key);
+    if (!frames) {
+      const sheet = crewTexturesByRole[role] ?? crewTexturesByRole[0];
+      frames = poses.map((pose) =>
+        frameTexture(sheet, crewColumns[pose], crewArt.cellWidth, crewArt.cellHeight),
+      );
+      poseTextures.set(key, frames);
     }
-    return textures;
+    return frames;
   }
 
   function radial(stops: [number, string][], pixelSize = 128) {
@@ -202,7 +220,7 @@ export async function createCampStage(
     return PIXI.Texture.from(surface);
   }
 
-  /** 불티·반딧불이 쓰는 2x2 픽셀 점. */
+  /** The 2x2 pixel dot used by embers and fireflies. */
   function pixelDot() {
     const surface = document.createElement("canvas");
     surface.width = 2;
@@ -217,73 +235,55 @@ export async function createCampStage(
   }
 
   const glowTexture = radial(warmLight);
-  const dotTexture = pixelDot();
   const shadowTexture = radial(softShadow, 64);
+  const dotTexture = pixelDot();
 
-  // ── 바닥 타일 ───────────────────────────────────────────────────────────
-  // 캠프 좌표의 (50,50)이 모닥불 타일이므로, 그 타일을 무대 가운데에 둔다.
-  const groundTexture = pixelTexture(campGround());
-  const ground = new PIXI.Sprite(groundTexture);
-  ground.zIndex = -1_000_000;
-  world.addChild(ground);
+  // ── Background ──────────────────────────────────────────────────────────
+  const background = new PIXI.Sprite(bgTexture);
+  background.anchor.set(0, 0);
+  background.zIndex = -1_000_000;
+  world.addChild(background);
 
-  // ── 오브젝트 스프라이트 ─────────────────────────────────────────────────
-  const objectTextures = new Map<string, PixiTexture[]>();
-  function objectFrames(kind: ObjectKind, frames: number) {
-    let textures = objectTextures.get(kind);
-    if (!textures) {
-      textures = Array.from({ length: frames }, (_, index) =>
-        pixelTexture(objectArt(kind, index)),
-      );
-      objectTextures.set(kind, textures);
-    }
-    return textures;
-  }
+  // ── Object sprites ──────────────────────────────────────────────────────
+  const fireFrames = Array.from({ length: fireArt.frames }, (_, index) =>
+    frameTexture(fireTexture, index, fireArt.cellWidth, fireArt.cellHeight),
+  );
 
-  type ObjectView = { object: StageObject; sprite: PixiSprite };
+  type ObjectView = { object: StageObject; sprite: PixiSprite | PixiAnimated; shadow: PixiSprite | null };
   const objectViews: ObjectView[] = [];
   let campfire: PixiAnimated | null = null;
   for (const object of options.objects ?? []) {
-    const textures =
-      object.kind === "campfire" ? objectFrames("campfire", 3) : objectFrames(object.kind, 1);
     const sprite =
       object.kind === "campfire"
-        ? new PIXI.AnimatedSprite(textures)
-        : new PIXI.Sprite(textures[0]);
+        ? new PIXI.AnimatedSprite(fireFrames)
+        : new PIXI.Sprite(benchTexture);
     if (sprite instanceof PIXI.AnimatedSprite) {
-      sprite.animationSpeed = reducedMotion ? 0 : 0.06;
+      sprite.animationSpeed = reducedMotion ? 0 : 0.09;
       sprite.gotoAndPlay(0);
       campfire = sprite;
     }
     sprite.anchor.set(0.5, 1);
     sprite.zIndex = sortZ(object.y, object.id);
     world.addChild(sprite);
-    objectViews.push({ object, sprite });
+    // A soft contact shadow keeps a log bench from floating on the grass.
+    let shadow: PixiSprite | null = null;
+    if (shadowTexture) {
+      shadow = new PIXI.Sprite(shadowTexture);
+      shadow.anchor.set(0.5, 0.5);
+      shadow.alpha = 0.45;
+      shadow.zIndex = sortZ(object.y, object.id) - 1;
+      world.addChild(shadow);
+    }
+    objectViews.push({ object, sprite, shadow });
   }
 
-  // ── 조명 ────────────────────────────────────────────────────────────────
+  // ── Lights ──────────────────────────────────────────────────────────────
   const fireGlow = glowTexture ? new PIXI.Sprite(glowTexture) : new PIXI.Sprite();
   fireGlow.anchor.set(0.5, 0.62);
   fireGlow.blendMode = "add";
   fireGlow.tint = 0xffc078;
   fireGlow.zIndex = 10_000_000;
   world.addChild(fireGlow);
-
-  // Props that carry a warm lamp: the supply crates, the signpost and the wagon.
-  const lanterns = (options.objects ?? []).filter(
-    (object) =>
-      object.kind === "crates" || object.kind === "signpost" || object.kind === "wagon",
-  );
-  const lanternLights = lanterns.flatMap((object) => {
-    if (!glowTexture) return [];
-    const light = new PIXI.Sprite(glowTexture);
-    light.anchor.set(0.5, 0.5);
-    light.blendMode = "add";
-    light.tint = 0xffb668;
-    light.zIndex = 9_999_999;
-    world.addChild(light);
-    return [{ object, light }];
-  });
 
   const cursorLight = glowTexture ? new PIXI.Sprite(glowTexture) : null;
   if (cursorLight) {
@@ -295,7 +295,7 @@ export async function createCampStage(
   }
   const cursorAt = { x: 0, y: 0 };
 
-  // ── 크루 ────────────────────────────────────────────────────────────────
+  // ── Crew ────────────────────────────────────────────────────────────────
   const views = new Map<string, ActorView>();
   const allTweens: { kill: () => void }[] = [];
   const roles = new Map(options.crew.map((crew) => [crew.id, crew.role]));
@@ -307,7 +307,6 @@ export async function createCampStage(
     const sprite = new PIXI.AnimatedSprite(crewTextures(role, crewAnimations.stand));
     sprite.anchor.set(0.5, 1);
     sprite.animationSpeed = reducedMotion ? 0 : 0.03;
-    sprite.play();
 
     const aura = new PIXI.Sprite(glowTexture ?? PIXI.Texture.WHITE);
     aura.anchor.set(0.5, 0.5);
@@ -346,7 +345,7 @@ export async function createCampStage(
       view.sprite.gotoAndStop(0);
     } else {
       view.sprite.animationSpeed =
-        animation === "walk" ? 0.14 : animation === "work" ? 0.05 : 0.03;
+        animation === "walk" ? 0.18 : animation === "work" ? 0.05 : 0.03;
       view.sprite.gotoAndPlay(0);
     }
     view.animation = animation;
@@ -354,21 +353,25 @@ export async function createCampStage(
 
   function sizeSprites() {
     unit = artUnit(size);
-    ground.scale.set(unit);
-    ground.position.set(
-      size.width / 2 - (mapCenter.col + 0.5) * tileSize * unit,
-      size.height / 2 - (mapCenter.row + 0.5) * tileSize * unit,
-    );
-    for (const { object, sprite } of objectViews) {
+    background.position.set(0, 0);
+    background.width = size.width;
+    background.height = size.height;
+    for (const { object, sprite, shadow } of objectViews) {
       const point = stagePoint(size, object);
       sprite.position.set(point.x, point.y);
       sprite.width = object.w * unit;
       sprite.height = object.h * unit;
+      if (shadow) {
+        shadow.position.set(point.x, point.y - 3 * unit);
+        shadow.width = object.w * unit * 0.92;
+        shadow.height = Math.max(6, 13 * unit);
+      }
     }
     for (const view of views.values()) {
+      const scale = crewHeight(size) / crewArt.height;
       view.sprite.scale.set(
-        unit * (view.sprite.scale.x < 0 ? -1 : 1),
-        unit,
+        scale * (view.sprite.scale.x < 0 ? -1 : 1),
+        scale,
       );
       view.aura.width = crewHeight(size) * 0.8;
       view.aura.height = Math.max(14, crewHeight(size) * 0.2);
@@ -377,27 +380,16 @@ export async function createCampStage(
 
   function placeLights() {
     const fire = stagePoint(size, options.fire);
-    fireGlow.position.set(fire.x, fire.y - size.height * 0.02);
-    fireGlow.width = size.width * 0.34;
-    fireGlow.height = size.height * 0.34;
-    for (const { object, light } of lanternLights) {
-      const point = stagePoint(size, object);
-      const isPost = object.kind === "signpost";
-      light.position.set(
-        point.x + (isPost ? -size.width * 0.004 : size.width * 0.02),
-        point.y - object.h * unit * (isPost ? 0.62 : 0.72),
-      );
-      const span = size.width * (isPost ? 0.13 : 0.16);
-      light.width = span;
-      light.height = span;
-    }
+    fireGlow.position.set(fire.x, fire.y - size.height * 0.03);
+    fireGlow.width = size.width * 0.24;
+    fireGlow.height = size.height * 0.24;
     if (cursorLight) {
       cursorLight.width = size.width * 0.34;
       cursorLight.height = size.width * 0.34;
     }
   }
 
-  // ── 불티와 반딧불이 ─────────────────────────────────────────────────────
+  // ── Embers and fireflies ────────────────────────────────────────────────
   type Ember = { sprite: PixiSprite; state: { rise: number; drift: number; alpha: number }; size: number };
   type Firefly = { sprite: PixiSprite; home: StagePoint; state: { dx: number; dy: number; alpha: number } };
   const embers: Ember[] = [];
@@ -470,16 +462,15 @@ export async function createCampStage(
     }
   }
 
-  // ── 프레임 ──────────────────────────────────────────────────────────────
+  // ── Frame loop ──────────────────────────────────────────────────────────
   const firePulse = { value: 0 };
   let crewWorking = false;
 
   function frame() {
     const time = performance.now() / 1000;
     const glow = reducedMotion ? 0.72 : flicker(time);
-    // 모닥불에 가까이 선 크루가 많을수록 불빛이 조금 밝아진다.
-    fireGlow.alpha = 0.1 + glow * 0.16 + firePulse.value + (crewWorking ? 0.03 : 0);
-    for (const { light } of lanternLights) light.alpha = 0.08 + glow * 0.06;
+    // A crew working near the fire brightens it a little.
+    fireGlow.alpha = 0.05 + glow * 0.1 + firePulse.value + (crewWorking ? 0.02 : 0);
     if (!reducedMotion) placeParticles();
     if (cursorLight) cursorLight.position.set(cursorAt.x, cursorAt.y);
     app.render();
@@ -492,7 +483,7 @@ export async function createCampStage(
     view.root.visible = true;
     view.quickX((actor.x / 100) * size.width);
     view.quickY((actor.y / 100) * size.height);
-    // 앉은 크루는 통나무 위에 걸터앉아 다리가 통나무 앞으로 나온다.
+    // A seated crew member sits on the log with the legs forward, so it sorts in front.
     view.root.zIndex = sortZ(actor.y + (actor.posture === "sit" ? 0.9 : 0), actor.memberId);
 
     if (actor.posture === "walk") animate(view, "walk");
@@ -502,9 +493,9 @@ export async function createCampStage(
     else if (actor.posture === "handoff") animate(view, "handoff");
     else animate(view, "stand");
 
-    // 아트 1픽셀이 화면에서 unit픽셀이 되도록 매 프레임 맞춘다(방향은 좌우 반전).
     const facing = actor.facing === "left" ? -1 : 1;
-    view.sprite.scale.set(unit * facing, unit);
+    const scale = crewHeight(size) / crewArt.height;
+    view.sprite.scale.set(scale * facing, scale);
 
     const working = actor.working || actor.posture === "work";
     view.aura.alpha = working ? 0.2 + fireLight(actor.x, actor.y, options.fire) * 0.22 : 0;
@@ -521,27 +512,13 @@ export async function createCampStage(
     frame();
   }
 
-  // ── 포인터 ──────────────────────────────────────────────────────────────
-  const parallax = { x: 0, y: 0 };
+  // ── Pointer ─────────────────────────────────────────────────────────────
   const pointerSurface = options.surface ?? options.host;
 
   const moveCursor = (event: PointerEvent) => {
     if (reducedMotion) return;
     const box = options.host.getBoundingClientRect();
     if (!box.width || !box.height) return;
-    const nx = (event.clientX - box.left) / box.width - 0.5;
-    const ny = (event.clientY - box.top) / box.height - 0.5;
-    const range = Math.min(box.width, box.height) * 0.014;
-    gsap.to(parallax, {
-      x: -nx * range,
-      y: -ny * range * 0.7,
-      duration: 0.8,
-      ease: "power2.out",
-      overwrite: "auto",
-      onUpdate: () => {
-        ground.position.x = size.width / 2 - (mapCenter.col + 0.5) * tileSize * unit + parallax.x;
-      },
-    });
     if (!cursorLight) return;
     gsap.to(cursorAt, {
       x: event.clientX - box.left,
@@ -555,7 +532,6 @@ export async function createCampStage(
     });
   };
   const leaveCursor = () => {
-    gsap.to(parallax, { x: 0, y: 0, duration: 1, ease: "power2.out", overwrite: "auto" });
     if (cursorLight)
       gsap.to(cursorLight, { alpha: 0, duration: 0.6, overwrite: "auto" });
   };
@@ -599,7 +575,7 @@ export async function createCampStage(
         campfire.gotoAndPlay(0);
         campfire.animationSpeed = 0.22;
         window.setTimeout(() => {
-          if (campfire) campfire.animationSpeed = 0.06;
+          if (campfire) campfire.animationSpeed = 0.09;
         }, 1200);
       }
       for (const ember of embers.slice(0, 6)) {
@@ -618,7 +594,6 @@ export async function createCampStage(
       for (const tween of allTweens) tween.kill();
       allTweens.length = 0;
       gsap.killTweensOf(cursorAt);
-      gsap.killTweensOf(parallax);
       for (const ember of embers) gsap.killTweensOf(ember.state);
       for (const firefly of fireflies) gsap.killTweensOf(firefly.state);
       for (const view of views.values()) gsap.killTweensOf(view.root);

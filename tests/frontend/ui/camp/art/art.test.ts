@@ -1,135 +1,105 @@
 import { expect, test } from "vitest";
-import { palette, liveries } from "../../../../../src/frontend/ui/camp/art/palette";
-import { campGround, crewFrame, objectArt, objectSize } from "../../../../../src/frontend/ui/camp/art/scene";
-import { crewHeight, crewWidth } from "../../../../../src/frontend/ui/camp/art/crew";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import {
+  benchArt,
+  campBackground,
+  crewAnimations,
+  crewArt,
+  crewColumns,
+  crewPortraits,
+  fireArt,
+} from "../../../../../src/frontend/ui/camp/art/scene";
 import { campObjects } from "../../../../../src/frontend/ui/camp/behavior";
-import { mapCols, mapRows, tileSize } from "../../../../../src/frontend/ui/camp/art/ground";
 
-const paletteColors = new Set(
-  Object.values(palette).map((hex) => hex.toLowerCase()),
-);
-
-function pixelsOf(art: { width: number; height: number; getPixel: (x: number, y: number) => readonly number[] }) {
-  const colors = new Set<string>();
-  for (let y = 0; y < art.height; y += 1)
-    for (let x = 0; x < art.width; x += 1) {
-      const pixel = art.getPixel(x, y);
-      if (pixel[3] === 0) continue;
-      const hex =
-        "#" +
-        [0, 1, 2]
-          .map((index) => pixel[index].toString(16).padStart(2, "0"))
-          .join("");
-      colors.add(hex);
-    }
-  return colors;
+/** Reads the real pixel size out of a WebP header, lossy or lossless. */
+function webpSize(name: string) {
+  const buffer = readFileSync(
+    fileURLToPath(
+      new URL(
+        `../../../../../src/frontend/ui/camp/art/${name}`,
+        import.meta.url,
+      ),
+    ),
+  );
+  expect(buffer.toString("ascii", 0, 4)).toBe("RIFF");
+  expect(buffer.toString("ascii", 8, 12)).toBe("WEBP");
+  const kind = buffer.toString("ascii", 12, 16);
+  if (kind === "VP8L") {
+    const bits = buffer.readUInt32LE(21);
+    return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+  }
+  if (kind === "VP8X")
+    return {
+      width: 1 + buffer.readUIntLE(24, 3),
+      height: 1 + buffer.readUIntLE(27, 3),
+    };
+  return {
+    width: buffer.readUInt16LE(26) & 0x3fff,
+    height: buffer.readUInt16LE(28) & 0x3fff,
+  };
 }
 
-test("아홉 크루의 그림은 한 팔레트의 색만 쓴다", () => {
-  expect(Object.keys(liveries).map(Number)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
-  const outside = new Set<string>();
-  for (const role of Object.keys(liveries).map(Number)) {
-    for (const color of pixelsOf(crewFrame(role, "idle1"))) {
-      const own = [
-        liveries[role].cloth,
-        liveries[role].clothShade,
-        liveries[role].trim,
-        liveries[role].hoodColor,
-        liveries[role].hoodLight,
-      ]
-        .filter((hex): hex is string => Boolean(hex))
-        .map((hex) => hex.toLowerCase());
-      if (!paletteColors.has(color) && !own.includes(color)) outside.add(color);
-    }
-  }
-  expect([...outside]).toEqual([]);
+test("공터 배경은 캠프 좌표가 붙는 한 장의 그림이다", () => {
+  expect(campBackground.url).toContain("camp-bg.webp");
+  expect(webpSize("camp-bg.webp")).toEqual({
+    width: campBackground.width,
+    height: campBackground.height,
+  });
+  // 백분율 좌표가 배경 픽셀과 같은 비율을 유지한다.
+  expect(campBackground.width / campBackground.height).toBeCloseTo(1.04, 2);
 });
 
-test("크루는 서기·걷기·앉기·일하기가 서로 다른 진짜 프레임이다", () => {
-  const role = 1;
-  const standing = crewFrame(role, "idle1");
-  const breath = crewFrame(role, "idle2");
-  const walk = crewFrame(role, "walk2");
-  const sitting = crewFrame(role, "sit");
-  const working = crewFrame(role, "work1");
-
-  expect(standing.width).toBe(crewWidth);
-  expect(standing.height).toBe(crewHeight);
-
-  const same = (a: typeof standing, b: typeof standing) => {
-    for (let y = 0; y < a.height; y += 1)
-      for (let x = 0; x < a.width; x += 1) {
-        const left = a.getPixel(x, y);
-        const right = b.getPixel(x, y);
-        if (left.join() !== right.join()) return false;
-      }
-    return true;
-  };
-
-  expect(same(standing, breath)).toBe(false);
-  expect(same(standing, walk)).toBe(false);
-  expect(same(standing, sitting)).toBe(false);
-  expect(same(standing, working)).toBe(false);
-
-  // 앉은 자세는 세로로 눌러 만든 것이 아니라 다리를 접은 별도 그림이다.
-  // 눌렀다면 머리 높이가 그대로여야 하는데, 앉으면 머리가 내려와 있다.
-  const headTop = (art: typeof standing) => {
-    for (let y = 0; y < art.height; y += 1)
-      for (let x = 0; x < art.width; x += 1)
-        if (art.getPixel(x, y)[3] > 0) return y;
-    return art.height;
-  };
-  expect(headTop(sitting)).toBeGreaterThanOrEqual(headTop(standing));
-
-  // 일하는 자세는 손에 든 소품 때문에 서 있는 자세와 실루엣이 다르다.
-  let differing = 0;
-  for (let y = 20; y < 30; y += 1)
-    for (let x = 0; x < working.width; x += 1) {
-      const a = working.getPixel(x, y);
-      const b = standing.getPixel(x, y);
-      if (a.join() !== b.join()) differing += 1;
-    }
-  expect(differing).toBeGreaterThan(12);
-});
-
-test("바닥 타일맵은 빈틈없이 깔리고 모닥불 자리는 흙길이다", () => {
-  const ground = campGround();
-  expect(ground.width).toBe(mapCols * tileSize);
-  expect(ground.height).toBe(mapRows * tileSize);
-  for (let y = 0; y < ground.height; y += 7)
-    for (let x = 0; x < ground.width; x += 7)
-      expect(ground.getPixel(x, y)[3]).toBe(255);
-
-  // 가운데(모닥불)는 흙이고, 모서리는 풀이다.
-  const centre = ground.getPixel(Math.floor(ground.width / 2), Math.floor(ground.height / 2));
-  const corner = ground.getPixel(2, 2);
-  expect(centre.join()).not.toBe(corner.join());
-});
-
-test("오브젝트 그림은 모두 같은 팔레트로 그려지고 배치 크기와 맞는다", () => {
-  for (const object of campObjects) {
-    const art = objectArt(object.kind);
-    expect({ w: art.width, h: art.height }).toEqual({
-      w: object.w,
-      h: object.h,
+test("크루 아홉은 같은 칸 크기의 스프라이트 띠를 쓴다", () => {
+  expect(crewArt.sheets).toHaveLength(9);
+  const seen = new Set<string>();
+  crewArt.sheets.forEach((url, role) => {
+    expect(url).toContain(`crew-${role}.webp`);
+    seen.add(url);
+    expect(webpSize(`crew-${role}.webp`)).toEqual({
+      width: crewArt.cellWidth * 5,
+      height: crewArt.cellHeight,
     });
-    expect(objectSize(object.kind)).toEqual({ w: object.w, h: object.h });
-    for (const color of pixelsOf(art)) {
-      if (!paletteColors.has(color)) {
-        // 그림자 픽셀은 팔레트의 그림자 색을 알파만 낮춰 쓴다.
-        expect(color).toBe("#2b1d16");
-      }
-    }
-  }
+  });
+  expect(seen.size).toBe(9);
+  // 서 있는 그림의 키가 곧 칸 높이다. 다른 자세도 이 칸 안에서 발이 바닥에 닿는다.
+  expect(crewArt.height).toBe(crewArt.cellHeight);
 });
 
-test("모닥불은 타오르는 세 프레임을 가진다", () => {
-  const frames = [0, 1, 2].map((index) => objectArt("campfire", index));
-  const signature = (art: (typeof frames)[number]) => {
-    let sum = 0;
-    for (let y = 0; y < art.height; y += 1)
-      for (let x = 0; x < art.width; x += 1) sum += art.getPixel(x, y).join("").length * (x + y);
-    return sum;
-  };
-  expect(new Set(frames.map(signature)).size).toBe(3);
+test("자세마다 다른 칸을 쓰고 애니메이션은 있는 자세만 고른다", () => {
+  const columns = Object.values(crewColumns);
+  expect(columns).toEqual([0, 1, 2, 3, 4]);
+  expect(new Set(columns).size).toBe(columns.length);
+  for (const poses of Object.values(crewAnimations))
+    for (const pose of poses) expect(crewColumns).toHaveProperty(pose);
+  // 걷기는 두 칸을 번갈아 쓴다.
+  expect(crewAnimations.walk).toHaveLength(2);
+});
+
+test("벤치와 모닥불 그림이 오브젝트 크기와 맞는다", () => {
+  expect(webpSize("bench.webp")).toEqual({
+    width: benchArt.width,
+    height: benchArt.height,
+  });
+  expect(webpSize("fire.webp")).toEqual({
+    width: fireArt.cellWidth * fireArt.frames,
+    height: fireArt.cellHeight,
+  });
+  for (const object of campObjects) {
+    const width = object.kind === "bench" ? benchArt.width : fireArt.cellWidth;
+    const height = object.kind === "bench" ? benchArt.height : fireArt.cellHeight;
+    expect({ w: object.w, h: object.h }).toEqual({ w: width, h: height });
+  }
+  // 벤치는 낮고 길며, 모닥불은 세 프레임 이상으로 탄다.
+  expect(benchArt.width / benchArt.height).toBeGreaterThan(2);
+  expect(fireArt.frames).toBeGreaterThanOrEqual(3);
+});
+
+test("초상 아홉 장은 모두 제자리에 있다", () => {
+  expect(crewPortraits).toHaveLength(9);
+  crewPortraits.forEach((url, role) => {
+    expect(url).toContain(`portrait-${role}.webp`);
+    const size = webpSize(`portrait-${role}.webp`);
+    expect(size.width).toBe(size.height);
+  });
 });

@@ -48,12 +48,12 @@ test("the camp draws the crew on walkable ground with seats, signs and bubbles",
     const data = store.snapshot();
     const html = renderCamp(data);
 
-    // 배경 위에 오브젝트 레이어와 캐릭터 레이어가 함께 있다.
+    // 배경 그림 위에 오브젝트 레이어와 캐릭터 레이어가 함께 있다.
+    expect(html).toContain('class="camp-bg"');
+    expect(html).toContain("camp-bg.webp");
     expect(html).toContain('class="camp-stage"');
     expect(html).toContain("camp-object campfire");
-    expect(html).toContain("camp-object tent");
-    expect(html).toContain("camp-object wagon");
-    expect(html).toContain("camp-object crates");
+    expect(html).toContain("fire.webp");
     // 통나무 벤치 3개가 각각 만질 수 있는 오브젝트로 올라간다.
     expect(html.match(/camp-object bench/g)?.length).toBe(3);
     // 오브젝트마다 투명 WebP 그림이 같은 좌표에 얹힌다.

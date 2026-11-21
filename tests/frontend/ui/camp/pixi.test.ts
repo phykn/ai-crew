@@ -11,8 +11,7 @@ import {
   stagePoint,
   webglAvailable,
 } from "../../../../src/frontend/ui/camp/pixi-layout";
-import { crewHeight as crewArtHeight } from "../../../../src/frontend/ui/camp/art/crew";
-import { tileSize } from "../../../../src/frontend/ui/camp/art/ground";
+import { campBackground, crewArt } from "../../../../src/frontend/ui/camp/art/scene";
 
 test("캠프 좌표는 화면 크기에 맞춰 픽셀로 옮겨진다", () => {
   expect(stagePoint({ width: 800, height: 600 }, { x: 50, y: 25 })).toEqual({
@@ -22,29 +21,30 @@ test("캠프 좌표는 화면 크기에 맞춰 픽셀로 옮겨진다", () => {
 });
 
 test("캐릭터 키는 무대 높이를 따르되 정해진 범위를 벗어나지 않는다", () => {
-  expect(crewHeight({ width: 1200, height: 900 })).toBeCloseTo(108);
+  // The painted clearing is 1003 tall and its crew are 108 tall.
+  expect(crewHeight({ width: 1200, height: 900 })).toBeCloseTo(
+    (900 * crewArt.height) / campBackground.height,
+  );
   expect(crewHeight({ width: 400, height: 200 })).toBe(crewMinHeight);
   expect(crewHeight({ width: 4000, height: 3000 })).toBe(crewMaxHeight);
 });
 
-test("바닥·오브젝트·캐릭터가 모두 같은 아트 배율 하나를 쓴다", () => {
+test("배경·소품·캐릭터가 모두 배경 픽셀 배율 하나를 쓴다", () => {
   const size = { width: 1200, height: 900 };
   const unit = artUnit(size);
-  // The crew's art height in pixels becomes the crew height on screen.
-  expect(crewArtHeight * unit).toBeCloseTo(crewHeight(size));
-  // Every floor tile scales by the same single unit.
-  expect(tileSize * unit).toBeCloseTo((tileSize * crewHeight(size)) / crewArtHeight);
-  // 창이 작아져도 세 그림의 배율은 여전히 하나다.
-  const small = { width: 600, height: 400 };
-  expect(crewArtHeight * artUnit(small)).toBeCloseTo(crewHeight(small));
+  // One background pixel becomes this many screen pixels, tall or small window.
+  expect(unit).toBeCloseTo(900 / campBackground.height);
+  expect(campBackground.height * unit).toBeCloseTo(size.height);
+  // The bench and the fire keep their painted size on the ground.
+  expect(artUnit({ width: 600, height: 400 })).toBeCloseTo(400 / campBackground.height);
 });
 
 test("앞사람이 위에 그려지고, 같은 높이에서는 이름으로 순서가 고정된다", () => {
   expect(sortZ(50, "a")).toBeLessThan(sortZ(70, "a"));
   expect(sortZ(50, "a")).toBe(sortZ(50, "a"));
   expect(sortZ(50, "a")).not.toBe(sortZ(50, "b"));
-  // 앉은 크루는 통나무(y 55.6)보다 앞에 그려진다.
-  expect(sortZ(55.5 + 0.2, "crew")).toBeGreaterThan(sortZ(55.6, "bench-west"));
+  // A seated crew member sorts in front of the log it sits on.
+  expect(sortZ(34.6 + 0.2, "crew")).toBeGreaterThan(sortZ(33.5, "bench-east"));
 });
 
 test("모닥불에서 멀어지면 빛이 약해지고, 흔들림은 늘 같은 범위 안에 있다", () => {

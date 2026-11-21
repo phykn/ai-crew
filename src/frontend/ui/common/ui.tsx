@@ -12,13 +12,10 @@ import {
 } from "../../../shared/actions";
 import { CozyDetails } from "./cozy";
 import { skillStateLabels, skillStateOrder } from "../../../shared/skill-status";
-import { crewPortrait } from "../camp/art/scene";
+import { crewPortraits } from "../camp/art/scene";
 
-// `roles[].sprite`는 이 목록의 위치다. 캠프의 크루 그림에서 머리만 잘라 낸
-// 같은 픽셀아트를 data URL로 쓴다.
-export const sprites = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((role) =>
-  crewPortrait(role),
-);
+// `roles[].sprite` indexes this list: the same crew art's head cuts.
+export const sprites = crewPortraits;
 export const phase = {
   recovering: "파일 상태 확인 중",
   clarification: "답변 대기",

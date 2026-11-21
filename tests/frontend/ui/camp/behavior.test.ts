@@ -41,25 +41,25 @@ function seed(
 
 test("평지 마당 전체를 걷고 오브젝트가 놓인 발밑만 피한다", () => {
   for (const spot of campSpots) expect(isWalkable(spot)).toBe(true);
-  // 캠프 상자 밖으로는 나가지 않는다.
+  // Outside the ring of trees there is no floor to stand on.
   expect(isWalkable({ x: 2, y: 50 })).toBe(false);
   expect(isWalkable({ x: 50, y: 95 })).toBe(false);
   expect(isWalkable({ x: 96, y: 40 })).toBe(false);
-  // 하늘도 물도 없으니 평지 풀밭은 어디든 걷는다.
-  expect(isWalkable({ x: 20, y: 88 })).toBe(true);
-  expect(isWalkable({ x: 82, y: 50 })).toBe(true);
-  expect(isWalkable({ x: 10, y: 20 })).toBe(true);
-  // 오브젝트가 놓인 자리는 밟고 지나가지 않는다.
-  expect(isWalkable({ x: 50, y: 51 })).toBe(false); // 모닥불
-  expect(isWalkable({ x: 20, y: 31.5 })).toBe(false); // 천막
-  expect(isWalkable({ x: 79, y: 31 })).toBe(false); // 마차
-  expect(isWalkable({ x: 37, y: 53.6 })).toBe(false); // 왼쪽 벤치
-  expect(isWalkable({ x: 50, y: 61.6 })).toBe(false); // 아래 벤치
-  expect(isWalkable({ x: 88, y: 33.6 })).toBe(false); // 보급 상자
-  expect(isWalkable({ x: 12, y: 47.5 })).toBe(false); // 연금 작업대
-  expect(isWalkable({ x: 62, y: 33.4 })).toBe(false); // 게시판
-  expect(isWalkable({ x: 44, y: 62.5 })).toBe(false); // 이젤
-  expect(isWalkable({ x: 9, y: 14.4 })).toBe(false); // 북서 소나무
+  expect(isWalkable({ x: 50, y: 6 })).toBe(false);
+  // Every open patch of the clearing is walkable ground.
+  expect(isWalkable({ x: 32, y: 50 })).toBe(true);
+  expect(isWalkable({ x: 62, y: 62 })).toBe(true);
+  expect(isWalkable({ x: 45, y: 25 })).toBe(true);
+  // The foot of every painted prop is not.
+  expect(isWalkable({ x: 50.3, y: 49.6 })).toBe(false); // 모닥불
+  expect(isWalkable({ x: 27.9, y: 34.4 })).toBe(false); // 천막
+  expect(isWalkable({ x: 82.2, y: 31.9 })).toBe(false); // 마차
+  expect(isWalkable({ x: 20.2, y: 68.8 })).toBe(false); // 왼쪽 벤치
+  expect(isWalkable({ x: 37.5, y: 75.6 })).toBe(false); // 아래 벤치
+  expect(isWalkable({ x: 66.8, y: 33.5 })).toBe(false); // 오른쪽 벤치
+  expect(isWalkable({ x: 10.1, y: 49.4 })).toBe(false); // 연금 작업대
+  expect(isWalkable({ x: 87.5, y: 45.4 })).toBe(false); // 게시판
+  expect(isWalkable({ x: 66.3, y: 69.8 })).toBe(false); // 이젤
 });
 
 test("어떤 자리에서 어떤 자리로 가도 길은 물과 장애물을 지나지 않는다", () => {
@@ -304,46 +304,32 @@ test("쉬는 크루는 한두 명씩만 움직이고 자리에서 자리로 순�
   expect(new Set(seatsUsed).size).toBe(seatsUsed.length);
 });
 
-test("캠프에는 스무 가지 오브젝트와 통나무 벤치 세 개가 발밑 좌표로 놓인다", () => {
+test("캠프에는 모닥불과 통나무 벤치 세 개가 발밑 좌표로 놓인다", () => {
+  // The clearing painting carries the scenery; only the animated fire and the
+  // benches the crew can sit on stay separate sprites.
   expect([...new Set(campObjects.map(({ kind }) => kind))].sort()).toEqual([
-    "alchemy",
-    "banner",
-    "barrel",
     "bench",
-    "bush",
     "campfire",
-    "cauldron",
-    "crates",
-    "crystal",
-    "crystalSea",
-    "easel",
-    "firewood",
-    "notice",
-    "oak",
-    "pine",
-    "rock",
-    "signpost",
-    "telescope",
-    "tent",
-    "wagon",
   ]);
   const benches = campObjects.filter(({ kind }) => kind === "bench");
   expect(benches).toHaveLength(3);
   for (const object of campObjects) {
+    expect(object.w).toBeGreaterThan(0);
     expect(object.h).toBeGreaterThan(0);
     expect(object.x).toBeGreaterThan(2);
     expect(object.x).toBeLessThan(98);
     expect(object.y).toBeGreaterThan(6);
     expect(object.y).toBeLessThan(97);
+    // A prop's foot is never on walkable ground.
+    expect(isWalkable(object)).toBe(false);
   }
-  // 벤치마다 앉을 자리가 있고, 모두 걸을 수 있는 땅이다.
+  // Every bench has exactly one seat, and every seat can be walked to.
   expect(seats).toHaveLength(3);
   for (const bench of benches)
     expect(
       seats.filter((seat) => seat.id.startsWith(bench.id + "-seat")),
     ).toHaveLength(1);
+  for (const seat of seats) expect(isWalkable(seat)).toBe(true);
   expect(strollSpots.length).toBeGreaterThan(8);
   expect(workSpots.length).toBeGreaterThanOrEqual(6);
-  // 꾸밈 오브젝트는 캠프 가장자리를 따라 놓여 동선을 막지 않는다.
-  expect(campObjects.length).toBeGreaterThanOrEqual(20);
 });

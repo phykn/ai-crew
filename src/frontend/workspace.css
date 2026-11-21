@@ -4296,9 +4296,14 @@ textarea::-webkit-scrollbar {
     inset 2px 2px 0 #fff6d9,
     inset -2px -2px 0 #d8bf8c;
 }
+.toolbar .tool-button {
+  position: relative;
+}
 .toolbar .badge {
   position: absolute;
-  margin: -21px 0 0 19px;
+  top: -5px;
+  right: -5px;
+  margin: 0;
   min-width: 14px;
   height: 14px;
   padding: 0 3px;

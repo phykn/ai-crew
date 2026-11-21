@@ -131,13 +131,6 @@ export class StoreMemory extends StoreRun {
     `).all(jobId) as { id: string; title: string; version: number }[];
   }
 
-  wikiOutline(projectId: string) {
-    return this.db.prepare(`
-      SELECT id, title, version, substr(body, 1, 220) AS excerpt FROM wiki_pages
-      WHERE project_id = ? AND deleted = 0 ORDER BY rowid DESC LIMIT 60
-    `).all(projectId) as { id: string; title: string; version: number; excerpt: string }[];
-  }
-
   readWiki(projectId: string, id: string) {
     const page = this.db.prepare(`
       SELECT id, title, body, version, links FROM wiki_pages WHERE project_id = ? AND id = ? AND deleted = 0

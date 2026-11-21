@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   type ChatEvent,
   type Completion,
+  type Message,
   type ModelDetails,
 } from "./shared/actions";
 import { ActionRunner } from "./server/app-actions";
@@ -23,6 +24,7 @@ import { StyleWatch } from "./workflow/style-watch";
 import { CrewStore } from "./store/store";
 import { CrewWorkflow } from "./workflow/workflow";
 import { wikiTools } from "./server/wiki-tools";
+import { imageNotes, setVisionConnection } from "./server/vision";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -77,6 +79,31 @@ async function startApp() {
       window.webContents.send("crew:update", event);
   }
 
+  /**
+   * 대화에 남은 그림 중 아직 설명이 없는 것을 비전(수아)에게 읽혀, 메시지별 설명을 모은다.
+   * 읽어 둔 설명은 다시 묻지 않는다.
+   */
+  async function readAttachments(
+    sessionId: string,
+    messages: Message[],
+    signal: AbortSignal,
+  ) {
+    const notes = new Map<string, string>();
+    for (const message of messages) {
+      if (!message.images.length) continue;
+      const stored = store.readMessageImages(message.id);
+      if (!stored.length) continue;
+      const lines = await imageNotes(
+        stored,
+        signal,
+        (imageId, note) => store.saveImageNote(imageId, note),
+        (note) => store.log(sessionId, note),
+      );
+      if (lines.length) notes.set(message.id, lines.join("\n\n"));
+    }
+    return notes;
+  }
+
   async function generate(
     sessionId: string,
     id: string,
@@ -90,7 +117,12 @@ async function startApp() {
     // 중단된 앞 응답도 끊긴 지점 표시와 함께 기록에 넣고, 다음 턴 지침에서 이어받게 한다.
     const messages = store.getMessages(sessionId);
     const skip = waiting.requests(sessionId);
-    const history = conversationHistory(messages, { excludeId: id, skip });
+    const attachmentNotes = await readAttachments(sessionId, messages, controller.signal);
+    const history = conversationHistory(messages, {
+      excludeId: id,
+      skip,
+      imageNotes: attachmentNotes,
+    });
     let status: Completion = "complete";
     let failure: string | null = null;
     const started = performance.now();
@@ -244,13 +276,21 @@ async function startApp() {
   }
 
   const applyModelConnections = (
-    connections: { provider: string; baseUrl: string | null; model: string | null; enabled: boolean }[],
+    connections: { provider: string; baseUrl: string | null; model: string | null; enabled: boolean; vision?: boolean }[],
   ) => {
     const local = connections.find(
       ({ provider, enabled }) => provider === "local" && enabled,
     );
     setLocalConnection(
       local ? { baseUrl: local.baseUrl, model: local.model } : null,
+    );
+    // 그림을 읽는 연결은 따로 표시한 것을 쓴다. 없으면 비전은 읽지 못했다고 전한다.
+    const vision = connections.find(
+      ({ provider, enabled, vision, baseUrl }) =>
+        provider === "local" && enabled && vision && !!baseUrl,
+    );
+    setVisionConnection(
+      vision?.baseUrl ? { baseUrl: vision.baseUrl, model: vision.model } : null,
     );
   };
   applyModelConnections(store.listModelConnections());
@@ -300,6 +340,7 @@ async function startApp() {
             action.requestId,
             action.text,
             "queued",
+            action.images,
           );
           if (queuedId) {
             waiting.add(action.sessionId, {
@@ -318,6 +359,7 @@ async function startApp() {
           action.requestId,
           action.text,
           "queued",
+          action.images,
         );
         if (!responseId) return;
         fences.stop(current.id);
@@ -339,6 +381,7 @@ async function startApp() {
           action.requestId,
           action.text,
           "queued",
+          action.images,
         );
         if (!queuedId) return;
         waiting.add(action.sessionId, {
@@ -363,6 +406,8 @@ async function startApp() {
         action.sessionId,
         action.requestId,
         action.text,
+        "running",
+        action.images,
       );
       if (id)
         startResponse(action.sessionId, {
@@ -403,6 +448,17 @@ async function startApp() {
     return outcome.status === "diagnostics"
       ? { ...outcome.snapshot, diagnostics: outcome.report }
       : outcome.snapshot;
+  });
+
+  // 말풍선에 그릴 그림 한 장. 화면은 이 경로로만 그림 바이트를 받는다.
+  ipcMain.handle("crew:image", async (event, imageId: unknown) => {
+    if (
+      !window ||
+      event.sender !== window.webContents ||
+      event.senderFrame !== window.webContents.mainFrame
+    )
+      throw new Error("현재 앱 창에서 요청해 주세요.");
+    return typeof imageId === "string" ? store.imageDataUrl(imageId) : null;
   });
 
   async function showWindow() {

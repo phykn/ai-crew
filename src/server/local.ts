@@ -42,8 +42,20 @@ const modelList = z.object({
 });
 
 async function connectLocal(signal: AbortSignal) {
-  const { baseUrl: baseURL, model: configuredModel } = localTarget();
-  let model = configuredModel;
+  return openChatModel(localTarget(), signal);
+}
+
+/**
+ * OpenAI 호환 주소 하나를 chat 모델로 연다. 모델 이름이 없으면 서버가 알려 주는
+ * 불러온 모델을 고른다. 비서의 로컬 모델과 비전(그림 읽기) 모델이 같은 길을 쓴다.
+ */
+export async function openChatModel(
+  target: { baseUrl: string; model?: string | null },
+  signal: AbortSignal,
+  name = "ai-crew-local",
+) {
+  const baseURL = target.baseUrl.replace(/\/+$/, "");
+  let model = target.model ?? undefined;
   if (!model) {
     const result = await fetch(baseURL + "/models", {
       signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
@@ -67,7 +79,7 @@ async function connectLocal(signal: AbortSignal) {
     throw new Error("로컬 서버에서 모델을 불러온 뒤 다시 보내 주세요.");
 
   return createOpenAICompatible({
-    name: "ai-crew-local",
+    name,
     baseURL,
     apiKey: process.env.AI_CREW_LOCAL_API_KEY,
     includeUsage: true,

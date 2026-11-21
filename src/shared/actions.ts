@@ -145,6 +145,21 @@ export function roleSkillNames(roleId: RoleId): string[] {
 }
 
 const identifier = z.uuid();
+/** 채팅에 붙일 수 있는 그림 종류와 장수·크기 한도. 화면과 저장이 같은 값을 쓴다. */
+export const chatImageTypes = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+] as const;
+export const maxChatImages = 6;
+export const maxChatImageBytes = 8 * 1024 * 1024;
+const chatImage = z.strictObject({
+  name: z.string().trim().min(1).max(120),
+  mediaType: z.enum(chatImageTypes),
+  /** 원본 바이트를 base64로 옮긴 값. */
+  data: z.string().min(1).max(Math.ceil((maxChatImageBytes * 4) / 3) + 4),
+});
 const roleId = z.enum(roles.map(({ id }) => id));
 const provider = z.enum(["local", "codex"]);
 const approvalMode = z.enum(["manual", "auto", "always"]);
@@ -301,6 +316,8 @@ export const actions = z.discriminatedUnion("type", [
     baseUrl: z.url().max(2048).nullable(),
     model: z.string().trim().max(120).nullable(),
     enabled: z.boolean(),
+    /** 그림도 읽는 멀티모달 엔드포인트인지. 비전(수아)이 이 연결을 쓴다. */
+    vision: z.boolean().optional(),
   }),
   z.strictObject({
     type: z.literal("model.update"),
@@ -309,6 +326,7 @@ export const actions = z.discriminatedUnion("type", [
     baseUrl: z.url().max(2048).nullable().optional(),
     model: z.string().trim().max(120).nullable().optional(),
     enabled: z.boolean().optional(),
+    vision: z.boolean().optional(),
   }),
   z.strictObject({ type: z.literal("model.remove"), id: identifier }),
   z.strictObject({
@@ -359,7 +377,10 @@ export const actions = z.discriminatedUnion("type", [
     type: z.literal("chat.send"),
     sessionId: identifier,
     requestId: identifier,
-    text: z.string().trim().min(1).max(32000),
+    /** 그림만 보내는 메시지도 있어 글은 비어 있을 수 있다. 글과 그림 중 하나는 있어야 한다. */
+    text: z.string().trim().max(32000),
+    /** 첨부한 그림. base64이며 메인이 파일로 저장한 뒤 메시지에 붙인다. */
+    images: z.array(chatImage).max(maxChatImages).optional(),
     /** 답변 중이어도 끊지 않고 앞선 답변 뒤 대기열에 넣는다(Ctrl/Cmd+Enter). */
     queue: z.boolean().optional(),
   }),
@@ -490,10 +511,21 @@ const interruptionReasons = [
   "quit",
 ] as const;
 export type InterruptionReason = (typeof interruptionReasons)[number];
+/** 저장한 그림 한 장. 화면은 id로 메인에서 바이트를 받아 그린다. */
+export type MessageImage = {
+  id: string;
+  name: string;
+  mediaType: string;
+  byteSize: number;
+};
+/** 화면에서 아직 보내지 않은 그림 한 장. */
+export type ChatImage = z.infer<typeof chatImage>;
 export type Message = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  /** 이 메시지에 붙은 그림. 없으면 빈 배열이다. */
+  images: MessageImage[];
   state: Completion;
   error: string | null;
   jobId: string | null;
@@ -630,6 +662,8 @@ export type ModelConnection = {
   baseUrl: string | null;
   model: string | null;
   enabled: boolean;
+  /** 그림도 읽는 엔드포인트인지. 비전(수아)이 이 연결로 그림을 읽는다. */
+  vision: boolean;
 };
 export type ViewState = {
   tab: "chat" | "log" | "memory" | "workflow";
@@ -752,6 +786,8 @@ type RunResult = Snapshot & { diagnostics?: DiagnosticsReport };
 export type CrewApi = {
   run: (action: Action) => Promise<RunResult>;
   subscribe: (receive: (event: ChatEvent | null) => void) => () => void;
+  /** 저장한 그림 한 장을 data URL로 읽는다. 없는 그림이면 null. */
+  image: (imageId: string) => Promise<string | null>;
 };
 
 declare global {

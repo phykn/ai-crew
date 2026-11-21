@@ -195,19 +195,24 @@ export class StoreWorkflow extends StoreMembers {
   listModelConnections() {
     return this.db
       .prepare(
-        `SELECT id, name, provider, base_url AS baseUrl, model, enabled
+        `SELECT id, name, provider, base_url AS baseUrl, model, enabled, vision
          FROM model_connections ORDER BY rowid`,
       )
       .all()
-      .map((row) => ({ ...row, enabled: Boolean(row.enabled) })) as ModelConnection[];
+      .map((row) => ({
+        ...row,
+        enabled: Boolean(row.enabled),
+        vision: Boolean(row.vision),
+      })) as ModelConnection[];
   }
 
-  addModelConnection(connection: ModelConnection) {
+  addModelConnection(connection: Omit<ModelConnection, "vision"> & { vision?: boolean }) {
     this.checkConnection(connection);
     this.transaction(() => {
       this.db
         .prepare(
-          "INSERT INTO model_connections VALUES (?, ?, ?, ?, ?, ?, ?)",
+          `INSERT INTO model_connections (id, name, provider, base_url, model, enabled, vision, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           connection.id,
@@ -216,6 +221,7 @@ export class StoreWorkflow extends StoreMembers {
           connection.baseUrl,
           connection.model,
           Number(connection.enabled),
+          Number(connection.vision ?? false),
           new Date().toISOString(),
         );
       this.logCurrent("사용자 · 모델 연결 추가 · " + connection.name);
@@ -234,13 +240,14 @@ export class StoreWorkflow extends StoreMembers {
     this.transaction(() => {
       this.db
         .prepare(
-          "UPDATE model_connections SET name = ?, base_url = ?, model = ?, enabled = ? WHERE id = ?",
+          "UPDATE model_connections SET name = ?, base_url = ?, model = ?, enabled = ?, vision = ? WHERE id = ?",
         )
         .run(
           next.name,
           next.baseUrl,
           next.model,
           Number(next.enabled),
+          Number(next.vision),
           id,
         );
       this.logCurrent("사용자 · 모델 연결 수정 · " + next.name);
@@ -259,7 +266,9 @@ export class StoreWorkflow extends StoreMembers {
     return row.name as string;
   }
 
-  protected checkConnection(connection: ModelConnection) {
+  protected checkConnection(
+    connection: Pick<ModelConnection, "name" | "provider" | "baseUrl">,
+  ) {
     if (!connection.name.trim())
       throw new Error("연결 이름을 적어 주세요.");
     if (connection.provider === "local") {

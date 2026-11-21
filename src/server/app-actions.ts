@@ -226,6 +226,7 @@ export class ActionRunner {
           baseUrl: action.baseUrl,
           model: action.model,
           enabled: action.enabled,
+          vision: action.vision ?? false,
         });
         this.syncModels();
         break;
@@ -381,13 +382,14 @@ const descriptions: Record<string, string> = {
   "job.apply": "검증을 마친 업무 브랜치를 원본에 반영해요.",
   "job.cleanup": "끝난 업무의 워크트리를 정리하고 기록은 남겨요.",
   "notification.read": "업무 알림을 읽음으로 표시해요.",
-  "model.add": "모델 연결을 추가해요.",
-  "model.update": "모델 연결 이름·주소·모델·사용 여부를 바꿔요.",
+  "model.add": "모델 연결을 추가해요. 그림도 읽는 엔드포인트면 비전으로 표시해요.",
+  "model.update":
+    "모델 연결 이름·주소·모델·사용 여부·비전 표시를 바꿔요.",
+  "chat.send": "비서에게 메시지와 그림을 보내요.",
   "model.remove": "모델 연결을 제거해요.",
   "diagnostics.run":
     "Git 저장소·Codex 설치·로컬 모델·MCP 서버 상태를 점검해요.",
   "app.quit": "앱을 종료해요. 진행 중인 실행은 기존 종료 절차를 따라요.",
-  "chat.send": "비서에게 메시지를 보내요.",
   "chat.queue.cancel": "대기열에서 메시지 하나를 빼요.",
   "chat.stop": "응답 생성을 멈춰요.",
   "job.answer": "권한 요청에 허용·거절로 답해요.",

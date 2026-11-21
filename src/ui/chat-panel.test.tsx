@@ -28,6 +28,8 @@ function renderChat(
       revisionJob={undefined}
       sending={false}
       composeText=""
+      attachments={[]}
+      setAttachments={() => {}}
       commandSuggestions={[]}
       error=""
       showCamp={false}
@@ -214,6 +216,53 @@ test("the composer bar keeps folder and approval left, send right", () => {
     // 승인 모드는 긴 select 대신 아이콘과 짧은 라벨이 붙은 알약이다.
     expect(html).toContain('class="approval-text"');
     expect(html).toContain('aria-label="승인 모드"');
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("shows attached pictures above the composer and inside the sent bubble", () => {
+  const directory = mkdtempSync(join(tmpdir(), "crew-chat-"));
+  const store = new CrewStore(join(directory, "crew.sqlite"));
+  try {
+    store.openFolder("/work/chat-images");
+    const sessionId = store.snapshot().session!.id;
+    const png = {
+      name: "screen.png",
+      mediaType: "image/png" as const,
+      data: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),
+    };
+    // 그림만 보낸 메시지도 말풍선에 남는다.
+    store.beginResponse(sessionId, randomUUID(), "", "running", [png]);
+    const html = renderChat(store.snapshot(), {
+      attachments: [
+        {
+          id: "preview-1",
+          name: "붙이기전.png",
+          mediaType: "image/png",
+          data: png.data,
+          byteSize: 2048,
+          preview: "data:image/png;base64," + png.data,
+        },
+      ],
+      composeText: "",
+    });
+    // 붙이는 버튼은 왼쪽 컨트롤 바에 있다.
+    expect(html).toContain('class="icon-button attach"');
+    expect(html).toContain("그림 붙이기");
+    // 보내기 전 그림은 입력창 위에 썸네일과 빼기 버튼으로 보인다.
+    expect(html).toContain('aria-label="붙인 그림"');
+    expect(html).toContain('src="data:image/png;base64,' + png.data + '"');
+    expect(html).toContain('aria-label="붙이기전.png 빼기"');
+    expect(html).toContain("2KB");
+    // 보낸 그림은 말풍선 안에서 파일 이름으로 보인다(바이트는 메인에서 따로 받는다).
+    expect(html).toContain('class="bubble-images"');
+    expect(html).toContain("screen.png");
+    // 그림이 붙어 있으면 글 없이도 보내기가 열린다. 글이 없고 그림도 없을 때만 잠긴다.
+    expect(html).not.toMatch(/class="icon-button send"[^>]*disabled/);
+    const empty = renderChat(store.snapshot(), { composeText: "" });
+    expect(empty).toMatch(/class="icon-button send"[^>]*disabled/);
   } finally {
     store.close();
     rmSync(directory, { recursive: true, force: true });

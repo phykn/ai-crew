@@ -47,6 +47,11 @@ test("model connections are added, paused, changed and removed through the same 
 
     await runner.run({ type: "model.update", id, enabled: false });
     expect(store.snapshot().modelConnections[0].enabled).toBe(false);
+    // 그림도 읽는 연결은 비전으로 표시해 두고, 비전(수아)이 그 연결을 쓴다.
+    expect(store.snapshot().modelConnections[0].vision).toBe(false);
+    await runner.run({ type: "model.update", id, vision: true });
+    expect(store.snapshot().modelConnections[0].vision).toBe(true);
+    await runner.run({ type: "model.update", id, vision: false });
     expect(() =>
       store.addModelConnection({
         id: randomUUID(),

@@ -27,6 +27,8 @@ type ContinuityOptions = {
    * 이미 있는 경우)에서 쓴다.
    */
   excerpt?: boolean;
+  /** 사용자 메시지에 붙은 그림의 설명. 메시지 id별로 한 덩이다. */
+  imageNotes?: Map<string, string>;
 };
 
 /** 지침에 넣을 때 길이를 묶어 둔다. 앞부분이 이어받기에 가장 중요하다. */
@@ -68,9 +70,16 @@ export function conversationHistory(
   const entries: HistoryEntry[] = [];
   for (const message of messages) {
     if (message.id === options.excludeId || skip.has(message.id)) continue;
-    if (!message.text.trim()) continue;
+    const attachment = options.imageNotes?.get(message.id);
+    if (!message.text.trim() && !attachment) continue;
     if (message.role === "user") {
-      entries.push({ role: "user", content: message.text });
+      // 그림은 사용자가 쓴 글 바로 뒤에 붙여, 모델이 무엇에 대한 그림인지 알게 한다.
+      entries.push({
+        role: "user",
+        content: attachment
+          ? [message.text, attachment].filter((part) => part.trim()).join("\n\n")
+          : message.text,
+      });
       continue;
     }
     if (message.state === "complete")

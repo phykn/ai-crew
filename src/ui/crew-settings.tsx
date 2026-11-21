@@ -56,6 +56,7 @@ export function CrewSettings({
             baseUrl: value,
             model: String(input.get("model") ?? "").trim() || null,
             enabled: true,
+            vision: input.get("vision") === "on",
           }
         : form === "server"
         ? { type: "mcp.connect", projectId, serverId: id, name, url: value }
@@ -273,8 +274,22 @@ export function CrewSettings({
                 {connection.name} · {connection.provider}
                 {connection.baseUrl ? " · " + connection.baseUrl : ""}
                 {connection.model ? " · " + connection.model : ""}
+                {connection.vision ? " · 비전" : ""}
                 {connection.enabled ? "" : " · 사용 안 함"}
               </span>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void save({
+                    type: "model.update",
+                    id: connection.id,
+                    vision: !connection.vision,
+                  })
+                }
+              >
+                {connection.vision ? "비전 해제" : "비전으로"}
+              </button>
               <button
                 type="button"
                 disabled={busy}
@@ -324,6 +339,10 @@ export function CrewSettings({
               <label>
                 모델 이름 (선택)
                 <input name="model" maxLength={120} />
+              </label>
+              <label>
+                <input type="checkbox" name="vision" />
+                그림도 읽는 모델(비전)
               </label>
             </>
           ) : form === "server" ? (

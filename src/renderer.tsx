@@ -10,6 +10,7 @@ import { findChatCommand, suggestChatCommands } from "./shared/chat-commands";
 import { type Action, type Snapshot } from "./shared/actions";
 import { CampPanel } from "./ui/camp-panel";
 import { ChatPanel } from "./ui/chat-panel";
+import type { ChatAttachment } from "./ui/chat-attachments";
 import { DiagnosticsBanner } from "./ui/diagnostics-banner";
 import type { DiagnosticsReport } from "./server/diagnostics";
 import { Toolbar } from "./ui/toolbar";
@@ -23,6 +24,7 @@ function Workspace() {
   const [commandsDismissed, setCommandsDismissed] = useState(false);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [revision, setRevision] = useState<{
     id: string;
     text: string;
@@ -266,7 +268,8 @@ function Workspace() {
 
   async function send(mode: "now" | "queue" = "now") {
     const text = (revision?.text ?? draft).trim();
-    if (!data?.session || !text || sending) return;
+    // 그림만 보내는 메시지도 있다. 글도 그림도 없을 때만 보내지 않는다.
+    if (!data?.session || (!text && !attachments.length) || sending) return;
     setSending(true);
     following.current = true;
     const request = {
@@ -274,6 +277,14 @@ function Workspace() {
       requestId: crypto.randomUUID(),
       text,
     };
+    // 첨부는 추가 지시가 아니라 새 메시지에만 붙는다. 보낸 뒤에는 비운다.
+    const images = revision
+      ? []
+      : attachments.map(({ name, mediaType, data: bytes }) => ({
+          name,
+          mediaType,
+          data: bytes,
+        }));
     if (revision) {
       if (
         await run({
@@ -285,14 +296,18 @@ function Workspace() {
       )
         setRevision(null);
     } else {
-      await run(
-        {
-          type: "chat.send",
-          ...request,
-          ...(mode === "queue" ? { queue: true } : {}),
-        },
-        true,
-      );
+      if (
+        await run(
+          {
+            type: "chat.send",
+            ...request,
+            ...(images.length ? { images } : {}),
+            ...(mode === "queue" ? { queue: true } : {}),
+          },
+          true,
+        )
+      )
+        setAttachments([]);
     }
     setSending(false);
     composer.current?.focus();
@@ -484,6 +499,8 @@ function Workspace() {
             revisionJob={revisionJob}
             sending={sending}
             composeText={composeText}
+            attachments={attachments}
+            setAttachments={setAttachments}
             commandSuggestions={commandSuggestions}
             error={error}
             showCamp={showCamp}

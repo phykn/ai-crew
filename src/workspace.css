@@ -1,3 +1,20 @@
+/* 나눔고딕을 앱 번들에 넣고 직접 등록한다. 운영체제에 폰트가 없어도, 오프라인이어도
+   항상 같은 글꼴로 그린다. 파일 출처와 라이선스는 같은 폴더의 OFL.txt에 있다. */
+@font-face {
+  font-family: "Nanum Gothic";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./ui/fonts/NanumGothic-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nanum Gothic";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./ui/fonts/NanumGothic-Bold.woff2") format("woff2");
+}
+
 * {
   box-sizing: border-box;
 }
@@ -2943,6 +2960,106 @@ textarea::-webkit-scrollbar {
 .queue-cancel svg {
   width: 12px;
   height: 12px;
+}
+/* 붙인 그림: 입력창 바로 위에 작은 썸네일과 이름·크기를 늘어놓는다. 팔레트는 토큰만 쓰고,
+   그라디언트 없이 단색으로 둔다. */
+.compose-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 1px 6px;
+  list-style: none;
+}
+.compose-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  padding: 3px 4px 3px 3px;
+  border: 1px solid var(--line-control);
+  border-radius: 10px;
+  background: var(--surface-control);
+  color: var(--text);
+  font-size: var(--font-detail);
+}
+.compose-attachment img {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  background: var(--card);
+  object-fit: cover;
+}
+.attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-size {
+  flex: none;
+  color: var(--dim);
+  font-size: 11px;
+}
+.attachment-remove {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+}
+.attachment-remove:hover:not(:disabled) {
+  background: var(--selected);
+  color: var(--text);
+}
+.attachment-remove svg {
+  width: 12px;
+  height: 12px;
+}
+.attach-notice {
+  margin: 0;
+  padding: 2px 4px 4px;
+  color: var(--warm);
+  font-size: var(--font-detail);
+}
+/* 그림을 끌어오는 동안 받을 자리를 보여 준다. */
+.composer.dragging {
+  border-color: var(--honey);
+  outline: 2px dashed var(--honey);
+  outline-offset: 2px;
+}
+/* 말풍선 안의 그림. 썸네일을 이름과 함께 보여 주고, 바이트를 받기 전에는 이름표만 둔다. */
+.bubble-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+.bubble-image {
+  margin: 0;
+}
+.bubble-image img {
+  display: block;
+  max-width: 200px;
+  max-height: 200px;
+  border: 1px solid var(--line-control);
+  border-radius: 9px;
+  background: var(--card);
+  object-fit: cover;
+}
+.bubble-image figcaption {
+  padding: 3px 6px;
+  border: 1px solid var(--line-control);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--dim);
+  font-size: 11px;
 }
 /* 좁은 폭: 글자 라벨은 숨기고 아이콘만 남긴다. 아이콘만으로도 무엇인지 알 수 있게
    각 버튼의 aria-label·title은 그대로 둔다. */

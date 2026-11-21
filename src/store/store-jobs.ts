@@ -1,26 +1,98 @@
 // Sessions, messages, jobs, follow-ups, and job revisions.
 
 import { randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
 import {
+  chatImageTypes,
+  type ChatImage,
   type Completion,
   type InterruptionReason,
   type Job,
   type Message,
+  type MessageImage,
   type WorkPlan,
 } from "../shared/actions";
 import { sanitizeText } from "../server/diagnostic-sanitizer";
 import { StoreWorkspace } from "./store-workspace";
+
+/** 저장한 그림 한 장의 안쪽 기록. 화면에는 `MessageImage`만 나간다. */
+export type StoredMessageImage = MessageImage & {
+  /** 데이터 폴더 아래 실제 파일 자리. */
+  path: string;
+  /** 그림에서 이미 읽어 둔 설명. 아직 안 읽었으면 null. */
+  note: string | null;
+};
+
+/** 미디어 타입에 붙는 확장자. 파일 이름이 아니라 타입에서 정한다. */
+const imageExtensions: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+};
+
 export class StoreJobs extends StoreWorkspace {
   getMessages(sessionId: string) {
+    const images = this.db
+      .prepare(
+        `SELECT i.id, i.message_id AS messageId, i.name, i.media_type AS mediaType, i.byte_size AS byteSize
+         FROM message_images i JOIN messages m ON m.id = i.message_id
+         WHERE m.session_id = ? ORDER BY i.rowid`,
+      )
+      .all(sessionId) as (MessageImage & { messageId: string })[];
+    const byMessage = new Map<string, MessageImage[]>();
+    for (const { messageId, ...image } of images) {
+      byMessage.set(messageId, [...(byMessage.get(messageId) ?? []), image]);
+    }
     return this.db
       .prepare(
         "SELECT id, role, text, state, error, job_id AS jobId, interrupted, interrupt_reason AS interruptReason FROM messages WHERE session_id = ? ORDER BY rowid",
       )
       .all(sessionId)
       .map((row) => ({
-        ...(row as Omit<Message, "interrupted"> & { interrupted: number }),
+        ...(row as Omit<Message, "interrupted" | "images"> & {
+          interrupted: number;
+        }),
         interrupted: Number(row.interrupted) === 1,
+        images: byMessage.get(String(row.id)) ?? [],
       })) as Message[];
+  }
+
+  /** 그림을 읽는 실행(비전)이 파일 경로와 이미 읽어 둔 설명까지 함께 본다. */
+  readMessageImages(messageId: string) {
+    return this.db
+      .prepare(
+        `SELECT id, name, media_type AS mediaType, byte_size AS byteSize, path, note
+         FROM message_images WHERE message_id = ? ORDER BY rowid`,
+      )
+      .all(messageId) as StoredMessageImage[];
+  }
+
+  /** 그림에서 읽은 설명을 남긴다. 같은 그림을 다시 묻지 않는다. */
+  saveImageNote(id: string, note: string) {
+    this.db
+      .prepare("UPDATE message_images SET note = ? WHERE id = ?")
+      .run(note, id);
+  }
+
+  /** 화면이 말풍선에 그릴 그림 한 장을 data URL로 읽는다. 저장소 밖 경로는 읽지 않는다. */
+  imageDataUrl(id: string) {
+    const row = this.db
+      .prepare(
+        "SELECT path, media_type AS mediaType FROM message_images WHERE id = ?",
+      )
+      .get(id) as { path: string; mediaType: string } | undefined;
+    if (!row) return null;
+    const root = resolve(this.attachmentsRoot) + sep;
+    if (!resolve(row.path).startsWith(root)) return null;
+    try {
+      const bytes = readFileSync(row.path).toString("base64");
+      return `data:${row.mediaType};base64,${bytes}`;
+    } catch {
+      // 파일이 지워졌으면 화면은 이름표만 그린다.
+      return null;
+    }
   }
 
   clearSession(sessionId: string, requestId: string) {
@@ -50,6 +122,7 @@ export class StoreJobs extends StoreWorkspace {
     requestId: string,
     text: string,
     state: "running" | "queued" = "running",
+    images: ChatImage[] = [],
   ) {
     const prior = this.db
       .prepare("SELECT session_id, text FROM requests WHERE id = ?")
@@ -59,6 +132,8 @@ export class StoreJobs extends StoreWorkspace {
         throw new Error("다른 전송에 쓰인 요청이에요.");
       return null;
     }
+    if (!text.trim() && !images.length)
+      throw new Error("메시지나 그림 중 하나는 보내 주세요.");
     const responseId = randomUUID();
     this.transaction(() => {
       const add = this.db.prepare(
@@ -66,10 +141,13 @@ export class StoreJobs extends StoreWorkspace {
       );
       add.run(requestId, sessionId, "user", text, "complete");
       add.run(responseId, sessionId, "assistant", "", state);
+      this.saveMessageImages(requestId, images);
       this.db
         .prepare("INSERT INTO requests VALUES (?, ?, ?, ?)")
         .run(requestId, sessionId, text, responseId);
-      const title = Array.from(text.replace(/\s+/g, " ")).slice(0, 60).join("");
+      const title = text.trim()
+        ? Array.from(text.replace(/\s+/g, " ")).slice(0, 60).join("")
+        : images.length + "장의 그림";
       this.db
         .prepare(
           "UPDATE sessions SET title = CASE WHEN NOT EXISTS (SELECT 1 FROM messages WHERE session_id = ? AND role = 'user' AND id <> ?) THEN ? ELSE title END, draft = '' WHERE id = ?",
@@ -77,6 +155,39 @@ export class StoreJobs extends StoreWorkspace {
         .run(sessionId, requestId, title, sessionId);
     });
     return responseId;
+  }
+
+  /**
+   * 그림을 데이터 폴더에 쓰고 메시지에 매단다. 파일 이름은 메시지마다 따로 만들고,
+   * 확장자는 사용자가 준 이름이 아니라 미디어 타입에서 정해 경로를 밖으로 내보내지 않는다.
+   */
+  private saveMessageImages(messageId: string, images: ChatImage[]) {
+    if (!images.length) return;
+    const folder = join(this.attachmentsRoot, messageId);
+    mkdirSync(folder, { recursive: true });
+    const add = this.db.prepare(
+      `INSERT INTO message_images
+        (id, message_id, name, media_type, path, byte_size, note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
+    );
+    const createdAt = new Date().toISOString();
+    for (const image of images) {
+      if (!chatImageTypes.includes(image.mediaType))
+        throw new Error("그림 파일만 붙일 수 있어요.");
+      const id = randomUUID();
+      const bytes = Buffer.from(image.data, "base64");
+      const path = join(folder, id + imageExtensions[image.mediaType]);
+      writeFileSync(path, bytes);
+      add.run(
+        id,
+        messageId,
+        image.name.slice(0, 120),
+        image.mediaType,
+        path,
+        bytes.byteLength,
+        createdAt,
+      );
+    }
   }
 
   /** 앞선 답변이 끝난 뒤 기다리던 응답을 시작한다. */

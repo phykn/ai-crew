@@ -15,6 +15,7 @@ import { CrewStore } from "../store/store";
 
 function message(patch: Partial<Message> & Pick<Message, "id" | "role" | "text">): Message {
   return {
+    images: [],
     state: "complete",
     error: null,
     jobId: null,
@@ -191,4 +192,28 @@ test("can carry the cut-off tail itself for a thread that lost it", () => {
   });
   expect(notice).toContain("여기까지 만들었어요");
   expect(notice).toContain("앱을 닫아서");
+});
+
+test("a picture-only message reaches the prompt with what the vision model saw", () => {
+  const messages = [
+    message({ id: "u1", role: "user", text: "", images: [] }),
+    message({ id: "a1", role: "assistant", text: "무엇을 도와드릴까요?" }),
+    message({ id: "u2", role: "user", text: "이 오류 뭐야?" }),
+  ];
+  const notes = new Map([
+    [
+      "u1",
+      "[첨부 이미지 1 · shot.png · image/png · 184KB]\n'저장 실패' 오류 창이 보입니다.",
+    ],
+  ]);
+  expect(conversationHistory(messages, { imageNotes: notes })).toEqual([
+    {
+      role: "user",
+      content: "[첨부 이미지 1 · shot.png · image/png · 184KB]\n'저장 실패' 오류 창이 보입니다.",
+    },
+    { role: "assistant", content: "무엇을 도와드릴까요?" },
+    { role: "user", content: "이 오류 뭐야?" },
+  ]);
+  // 그림 설명이 없는 빈 메시지는 그대로 빠진다.
+  expect(conversationHistory(messages)).toHaveLength(2);
 });

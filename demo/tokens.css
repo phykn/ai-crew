@@ -1,3 +1,19 @@
+/* 목업 페이지도 앱과 같은 글꼴 파일을 쓴다. 파일은 src/ui/fonts에 한 벌만 둔다. */
+@font-face {
+  font-family: "Nanum Gothic";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../src/ui/fonts/NanumGothic-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nanum Gothic";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../src/ui/fonts/NanumGothic-Bold.woff2") format("woff2");
+}
+
 :root {
   color-scheme: dark;
   font:

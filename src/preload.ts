@@ -3,6 +3,7 @@ import type { Action, ChatEvent, CrewApi } from "./shared/actions";
 
 const api: CrewApi = {
   run: (action: Action) => ipcRenderer.invoke("crew:action", action),
+  image: (imageId: string) => ipcRenderer.invoke("crew:image", imageId),
   subscribe(receive) {
     const listener = (
       _event: Electron.IpcRendererEvent,

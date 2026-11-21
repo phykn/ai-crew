@@ -26,6 +26,8 @@ function renderChat(data: ReturnType<CrewStore["snapshot"]>) {
       revisionJob={undefined}
       sending={false}
       composeText=""
+      attachments={[]}
+      setAttachments={() => {}}
       commandSuggestions={[]}
       error=""
       showCamp={false}

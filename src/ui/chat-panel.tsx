@@ -4,12 +4,23 @@
 import { useEffect, useRef, useState } from "react";
 import {
   approvalLabels,
+  maxChatImages,
   type Action,
   type ApprovalMode,
   type Message,
   type Snapshot,
 } from "../shared/actions";
 import { copyText } from "./clipboard";
+import {
+  AttachmentStrip,
+  MessageImages,
+  collectAttachments,
+  dragHasImages,
+  imageAccept,
+  imageFiles,
+  pastedImages,
+  type ChatAttachment,
+} from "./chat-attachments";
 import { composerAction, composerHint } from "./chat-keys";
 import { queueChips } from "../shared/chat-queue";
 import { ChatStatus } from "./chat-status";
@@ -34,6 +45,9 @@ type ChatPanelProps = {
   revisionJob: Snapshot["jobs"][number] | undefined;
   sending: boolean;
   composeText: string;
+  /** 아직 보내지 않은 그림. 보내면 비운다. */
+  attachments: ChatAttachment[];
+  setAttachments: (attachments: ChatAttachment[]) => void;
   commandSuggestions: [string, string][];
   error: string;
   showCamp: boolean;
@@ -219,6 +233,8 @@ export function ChatPanel({
   revisionJob,
   sending,
   composeText,
+  attachments,
+  setAttachments,
   commandSuggestions,
   error,
   showCamp,
@@ -242,6 +258,9 @@ export function ChatPanel({
   const [commandIndex, setCommandIndex] = useState(0);
   const [search, setSearch] = useState<string | null>(null);
   const [queueNotice, setQueueNotice] = useState("");
+  const [attachNotice, setAttachNotice] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const imagePicker = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   // 입력창 위에 띄울 대기열 칩. 대기 중인 응답 앞의 사용자 메시지가 그 내용이다.
   const chips = queueChips(data?.messages ?? []);
@@ -258,6 +277,7 @@ export function ChatPanel({
     data?.messages.filter(
       (message) =>
         message.text ||
+        message.images.length ||
         message.error ||
         message.state === "running" ||
         message.state === "stopping" ||
@@ -324,6 +344,23 @@ export function ChatPanel({
       () => setCopied((current) => (current === message.id ? null : current)),
       1500,
     );
+  }
+
+  // 붙일 수 없는 그림은 까닭을 입력창에 남기고, 붙일 수 있는 것은 미리보기에 더한다.
+  async function attach(files: File[]) {
+    if (!files.length) return;
+    // 추가 지시에는 그림을 실을 자리가 없다. 붙이기 전에 그 사실을 알린다.
+    if (revision) {
+      setAttachNotice("추가 지시에는 그림을 붙일 수 없어요. 새 메시지로 보내 주세요.");
+      return;
+    }
+    const { added, problems } = await collectAttachments(
+      files,
+      attachments,
+      maxChatImages,
+    );
+    if (added.length) setAttachments([...attachments, ...added]);
+    setAttachNotice(problems.join(" "));
   }
 
   return (
@@ -448,7 +485,10 @@ export function ChatPanel({
                         <PendingBubble queued={false} />
                       ) : null
                     ) : (
-                      message.text
+                      <>
+                        <MessageImages images={message.images} />
+                        {message.text}
+                      </>
                     )}
                     {message.state === "stopped" && <small>응답 중단</small>}
                     {message.state === "stopping" && <small>중단 중</small>}
@@ -575,10 +615,28 @@ export function ChatPanel({
           </p>
         )}
         <form
-          className="composer"
+          className={dragging ? "composer dragging" : "composer"}
           onSubmit={(event) => {
             event.preventDefault();
             void send("now");
+          }}
+          onDragOver={(event) => {
+            // 그림을 끌어오면 입력창이 받을 자리를 보여 준다. 글 끌어오기는 그대로 둔다.
+            if (!dragHasImages(event.dataTransfer)) return;
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={(event) => {
+            if (event.currentTarget.contains(event.relatedTarget as Node | null))
+              return;
+            setDragging(false);
+          }}
+          onDrop={(event) => {
+            const files = imageFiles(event.dataTransfer?.files);
+            setDragging(false);
+            if (!files.length) return;
+            event.preventDefault();
+            void attach(files);
           }}
         >
           {commandSuggestions.length > 0 && (
@@ -659,6 +717,19 @@ export function ChatPanel({
               <span className="visually-hidden" role="status" aria-live="polite">
                 {queueNotice}
               </span>
+              <AttachmentStrip
+                attachments={attachments}
+                disabled={sending}
+                onRemove={(index) => {
+                  setAttachments(attachments.filter((_, at) => at !== index));
+                  setAttachNotice("");
+                }}
+              />
+              {attachNotice && (
+                <p className="attach-notice" role="alert">
+                  {attachNotice}
+                </p>
+              )}
             <textarea
               ref={composer}
               aria-label="비서에게 메시지"
@@ -678,6 +749,13 @@ export function ChatPanel({
                 if (revision)
                   setRevision({ ...revision, text: event.target.value });
                 else saveDraft(event.target.value);
+              }}
+              onPaste={(event) => {
+                // 화면을 캡처해 그대로 붙여넣는 길. 글 붙여넣기는 그대로 둔다.
+                const files = pastedImages(event.clipboardData);
+                if (!files.length) return;
+                event.preventDefault();
+                void attach(files);
               }}
               onKeyDown={(event) => {
                 // 한글 조합 중에는 어떤 키도 전송·대기열로 쓰지 않는다.
@@ -739,6 +817,33 @@ export function ChatPanel({
             />
             <div className="compose-tools">
               <div className="compose-left">
+              <input
+                ref={imagePicker}
+                className="visually-hidden"
+                type="file"
+                accept={imageAccept}
+                multiple
+                aria-label="붙일 그림 고르기"
+                onChange={(event) => {
+                  const files = imageFiles(event.target.files);
+                  event.target.value = "";
+                  void attach(files);
+                }}
+              />
+              <button
+                type="button"
+                className="icon-button attach"
+                aria-label="그림 붙이기"
+                title={
+                  revision
+                    ? "추가 지시에는 그림을 붙일 수 없어요"
+                    : "그림 붙이기 · 붙여넣기나 끌어다 놓기도 돼요"
+                }
+                disabled={!data?.session || sending || !!revision}
+                onClick={() => imagePicker.current?.click()}
+              >
+                <Icon name="image" />
+              </button>
               <button
                 type="button"
                 className="folder project-toggle"
@@ -844,7 +949,7 @@ export function ChatPanel({
                         ? "지금 답변을 끊고 이 메시지를 먼저 보내요 (Ctrl+Enter는 대기열)"
                         : "보내기 (Enter)"
                     }
-                    disabled={!composeText.trim() || sending}
+                    disabled={(!composeText.trim() && !attachments.length) || sending}
                   >
                     <Icon name="send" />
                   </button>

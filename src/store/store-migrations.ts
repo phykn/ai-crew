@@ -13,7 +13,7 @@ export function initStoreSchema(db: DatabaseSync) {
     const migration = db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 39)
+    if (migration.user_version > 40)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       db.exec(`
@@ -571,6 +571,31 @@ export function initStoreSchema(db: DatabaseSync) {
       }[];
       for (const { id } of projects) seedDefaultSkills(db, id);
       db.exec("PRAGMA user_version = 39; COMMIT;");
+    }
+    if (migration.user_version < 40) {
+      // 채팅에 붙인 그림을 메시지에 매단다. 바이트는 데이터 폴더의 파일에 두고 여기엔 길과
+      // 비전이 읽어 둔 설명(note)만 남긴다. 그림을 읽는 모델 연결은 vision 표시로 고른다.
+      const columns = new Set(
+        (
+          db.prepare("PRAGMA table_info(model_connections)").all() as {
+            name: string;
+          }[]
+        ).map(({ name }) => name),
+      );
+      db.exec("BEGIN;");
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS message_images (
+          id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES messages(id),
+          name TEXT NOT NULL, media_type TEXT NOT NULL, path TEXT NOT NULL,
+          byte_size INTEGER NOT NULL, note TEXT, created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS message_images_by_message ON message_images(message_id);
+      `);
+      if (!columns.has("vision"))
+        db.exec(
+          "ALTER TABLE model_connections ADD COLUMN vision INTEGER NOT NULL DEFAULT 0;",
+        );
+      db.exec("PRAGMA user_version = 40; COMMIT;");
     }
     db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",

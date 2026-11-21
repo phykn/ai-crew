@@ -115,6 +115,8 @@ function ChatPanelForPicker({
       revisionJob={undefined}
       sending={false}
       composeText=""
+      attachments={[]}
+      setAttachments={() => {}}
       commandSuggestions={[]}
       error=""
       showCamp={false}

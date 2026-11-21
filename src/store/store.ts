@@ -15,6 +15,9 @@
 //   StoreSnapshot  the single snapshot the renderer and app MCP read
 
 import { DatabaseSync } from "node:sqlite";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { StoreSnapshot } from "./store-snapshot";
 import { initStoreSchema } from "./store-migrations";
 
@@ -24,6 +27,12 @@ export class CrewStore extends StoreSnapshot {
   constructor(path: string) {
     const db = new DatabaseSync(path);
     initStoreSchema(db);
-    super(db);
+    // 메모리 저장소는 둘 폴더가 없다. 그때만 임시 폴더를 가리키게 하고, 그림을 저장할 때 만든다.
+    super(
+      db,
+      path === ":memory:"
+        ? join(tmpdir(), "crew-attachments", randomUUID())
+        : join(dirname(path), "attachments"),
+    );
   }
 }

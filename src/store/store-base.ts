@@ -27,7 +27,11 @@ export const defaultViewState = (): ViewState => ({
 });
 
 export class StoreBase {
-  constructor(protected db: DatabaseSync) {}
+  /** `attachmentsRoot`는 채팅에 붙인 그림 파일을 두는 폴더다. 저장소 파일 옆에 둔다. */
+  constructor(
+    protected db: DatabaseSync,
+    protected attachmentsRoot: string,
+  ) {}
 
   close() {
     this.db.close();

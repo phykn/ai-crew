@@ -1763,7 +1763,7 @@ summary:focus-visible {
 .flow-canvas {
   position: relative;
   flex: 1 1 auto;
-  min-height: 420px;
+  min-height: 340px;
   border: 1px solid var(--line-control);
   border-radius: var(--radius-surface);
   background: var(--panel);
@@ -1818,8 +1818,8 @@ summary:focus-visible {
 .edge-cut {
   position: absolute;
   pointer-events: all;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -1827,7 +1827,7 @@ summary:focus-visible {
   border-radius: 50%;
   background: color-mix(in srgb, var(--card) 90%, #fff);
   color: var(--dim);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1;
   cursor: pointer;
   box-shadow: 0 1px 3px #2f29231f;
@@ -1971,6 +1971,13 @@ summary:focus-visible {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-2);
+}
+.stage-fields label {
+  flex: 1 1 150px;
+  min-width: 120px;
+}
+.stage-fields label:first-child {
+  flex: 2 1 220px;
 }
 .stage-inspector label {
   display: flex;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BaseEdge,
@@ -18,6 +18,7 @@ import {
   type NodeProps,
   type OnConnectEnd,
   type OnNodesChange,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -180,6 +181,8 @@ export function WorkflowPanel({
   const [pickedEdge, setPickedEdge] = useState<string | null>(null);
   const [saved, setSaved] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const canvas = useRef<HTMLDivElement>(null);
+  const instance = useRef<ReactFlowInstance<StageNode, FlowEdge> | null>(null);
   const workflows = data.workflows;
   const current =
     workflows.find(({ id }) => id === draft?.id) ??
@@ -229,6 +232,22 @@ export function WorkflowPanel({
       };
     });
   }, [flow, pickedEdge]);
+
+  // 속성 줄이 열리고 닫혀 캔버스 높이가 크게 바뀌면 그래프 전체가 다시 보이게 맞춘다.
+  useEffect(() => {
+    const element = canvas.current;
+    if (!element) return;
+    let previous = element.clientHeight;
+    const observer = new ResizeObserver(([entry]) => {
+      const height = entry.contentRect.height;
+      if (!height) return;
+      if (previous && Math.abs(height - previous) > 60)
+        instance.current?.fitView({ padding: 0.12, duration: 200 });
+      previous = height;
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   // 고른 연결선은 Delete/Backspace로 바로 끊는다. 입력 중인 글자는 건드리지 않는다.
   useEffect(() => {
@@ -301,7 +320,9 @@ export function WorkflowPanel({
     setPickedEdge(null);
   };
   const addStage = () => {
-    const id = "stage-" + (flow.graph.stages.length + 1);
+    let n = flow.graph.stages.length + 1;
+    while (flow.graph.stages.some(({ id }) => id === "stage-" + n)) n++;
+    const id = "stage-" + n;
     const y = Math.max(0, ...flow.graph.stages.map(({ y: top }) => top)) + 120;
     update({
       ...flow.graph,
@@ -428,7 +449,12 @@ export function WorkflowPanel({
         </span>
       </div>
       {error && <p role="alert">{error}</p>}
-      <div className="flow-canvas">
+      <div
+        ref={canvas}
+        className="flow-canvas"
+        role="region"
+        aria-label="워크플로우 캔버스. 노드를 끌어 옮기고, 노드의 연결점에서 다른 노드로 끌어 실행 순서를 이어요."
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -451,6 +477,9 @@ export function WorkflowPanel({
           onEdgeClick={(_, edge) => {
             setPickedEdge(edge.id);
             setPicked(null);
+          }}
+          onInit={(flowInstance) => {
+            instance.current = flowInstance;
           }}
           onPaneClick={() => {
             setPicked(null);
@@ -498,10 +527,13 @@ export function WorkflowPanel({
               aria-hidden
             />
             <strong>{stage.title || "이름 없는 단계"}</strong>
-            <small className="muted">
-              {roles.find(({ id }) => id === stage.roleId)?.title ??
-                stage.roleId}
-            </small>
+            {roles.find(({ id }) => id === stage.roleId)?.title !==
+              stage.title && (
+              <small className="muted">
+                {roles.find(({ id }) => id === stage.roleId)?.title ??
+                  stage.roleId}
+              </small>
+            )}
             <button type="button" onClick={() => setPicked(null)}>
               닫기
             </button>

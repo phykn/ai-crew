@@ -12,6 +12,7 @@ import {
   webglAvailable,
 } from "../../../../src/frontend/ui/camp/pixi-layout";
 import { crewHeight as crewArtHeight } from "../../../../src/frontend/ui/camp/art/crew";
+import { tileSize } from "../../../../src/frontend/ui/camp/art/ground";
 
 test("캠프 좌표는 화면 크기에 맞춰 픽셀로 옮겨진다", () => {
   expect(stagePoint({ width: 800, height: 600 }, { x: 50, y: 25 })).toEqual({
@@ -29,10 +30,10 @@ test("캐릭터 키는 무대 높이를 따르되 정해진 범위를 벗어나�
 test("바닥·오브젝트·캐릭터가 모두 같은 아트 배율 하나를 쓴다", () => {
   const size = { width: 1200, height: 900 };
   const unit = artUnit(size);
-  // 캐릭터 원본 36px이 곧 화면의 캐릭터 키가 된다.
+  // The crew's art height in pixels becomes the crew height on screen.
   expect(crewArtHeight * unit).toBeCloseTo(crewHeight(size));
-  // 16px 바닥 타일은 그 배율만큼 커진다.
-  expect(16 * unit).toBeCloseTo(48);
+  // Every floor tile scales by the same single unit.
+  expect(tileSize * unit).toBeCloseTo((tileSize * crewHeight(size)) / crewArtHeight);
   // 창이 작아져도 세 그림의 배율은 여전히 하나다.
   const small = { width: 600, height: 400 };
   expect(crewArtHeight * artUnit(small)).toBeCloseTo(crewHeight(small));

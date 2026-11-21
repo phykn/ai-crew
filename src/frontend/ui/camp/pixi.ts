@@ -269,16 +269,19 @@ export async function createCampStage(
   fireGlow.zIndex = 10_000_000;
   world.addChild(fireGlow);
 
-  const lantern = (options.objects ?? []).find((object) => object.kind === "crates");
-  const tent = (options.objects ?? []).find((object) => object.kind === "tent");
-  const lanternLight = lantern && glowTexture ? new PIXI.Sprite(glowTexture) : null;
-  if (lanternLight) {
-    lanternLight.anchor.set(0.5, 0.5);
-    lanternLight.blendMode = "add";
-    lanternLight.tint = 0xffb668;
-    lanternLight.zIndex = 9_999_999;
-    world.addChild(lanternLight);
-  }
+  const lanterns = (options.objects ?? []).filter(
+    (object) => object.kind === "crates" || object.kind === "lanternpost",
+  );
+  const lanternLights = lanterns.flatMap((object) => {
+    if (!glowTexture) return [];
+    const light = new PIXI.Sprite(glowTexture);
+    light.anchor.set(0.5, 0.5);
+    light.blendMode = "add";
+    light.tint = 0xffb668;
+    light.zIndex = 9_999_999;
+    world.addChild(light);
+    return [{ object, light }];
+  });
 
   const cursorLight = glowTexture ? new PIXI.Sprite(glowTexture) : null;
   if (cursorLight) {
@@ -375,14 +378,16 @@ export async function createCampStage(
     fireGlow.position.set(fire.x, fire.y - size.height * 0.02);
     fireGlow.width = size.width * 0.34;
     fireGlow.height = size.height * 0.34;
-    if (lanternLight && lantern) {
-      const point = stagePoint(size, lantern);
-      lanternLight.position.set(
-        point.x + size.width * 0.02,
-        point.y - lantern.h * unit * 0.72,
+    for (const { object, light } of lanternLights) {
+      const point = stagePoint(size, object);
+      const isPost = object.kind === "lanternpost";
+      light.position.set(
+        point.x + (isPost ? -size.width * 0.004 : size.width * 0.02),
+        point.y - object.h * unit * (isPost ? 0.62 : 0.72),
       );
-      lanternLight.width = size.width * 0.16;
-      lanternLight.height = size.width * 0.16;
+      const span = size.width * (isPost ? 0.13 : 0.16);
+      light.width = span;
+      light.height = span;
     }
     if (cursorLight) {
       cursorLight.width = size.width * 0.34;
@@ -472,7 +477,7 @@ export async function createCampStage(
     const glow = reducedMotion ? 0.72 : flicker(time);
     // 모닥불에 가까이 선 크루가 많을수록 불빛이 조금 밝아진다.
     fireGlow.alpha = 0.1 + glow * 0.16 + firePulse.value + (crewWorking ? 0.03 : 0);
-    if (lanternLight) lanternLight.alpha = 0.08 + glow * 0.06;
+    for (const { light } of lanternLights) light.alpha = 0.08 + glow * 0.06;
     if (!reducedMotion) placeParticles();
     if (cursorLight) cursorLight.position.set(cursorAt.x, cursorAt.y);
     app.render();
@@ -486,7 +491,7 @@ export async function createCampStage(
     view.quickX((actor.x / 100) * size.width);
     view.quickY((actor.y / 100) * size.height);
     // 앉은 크루는 통나무 위에 걸터앉아 다리가 통나무 앞으로 나온다.
-    view.root.zIndex = sortZ(actor.y + (actor.posture === "sit" ? 0.2 : 0), actor.memberId);
+    view.root.zIndex = sortZ(actor.y + (actor.posture === "sit" ? 0.9 : 0), actor.memberId);
 
     if (actor.posture === "walk") animate(view, "walk");
     else if (actor.posture === "sit") animate(view, "sit");
@@ -614,6 +619,7 @@ export async function createCampStage(
       gsap.killTweensOf(parallax);
       for (const ember of embers) gsap.killTweensOf(ember.state);
       for (const firefly of fireflies) gsap.killTweensOf(firefly.state);
+      for (const view of views.values()) gsap.killTweensOf(view.root);
       views.clear();
       try {
         app.destroy({ removeView: true }, { children: true, texture: true });

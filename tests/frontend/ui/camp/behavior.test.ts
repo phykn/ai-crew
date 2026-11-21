@@ -300,13 +300,20 @@ test("쉬는 크루는 한두 명씩만 움직이고 자리에서 자리로 순�
   expect(new Set(seatsUsed).size).toBe(seatsUsed.length);
 });
 
-test("캠프에는 개별 오브젝트 5종과 통나무 벤치 세 개가 발밑 좌표로 놓인다", () => {
+test("캠프에는 열두 가지 오브젝트와 통나무 벤치 세 개가 발밑 좌표로 놓인다", () => {
   expect([...new Set(campObjects.map(({ kind }) => kind))].sort()).toEqual([
     "bench",
+    "bush",
     "campfire",
     "crates",
+    "firewood",
+    "lanternpost",
+    "maptable",
+    "rock",
+    "signpost",
     "tent",
     "wagon",
+    "workbench",
   ]);
   const benches = campObjects.filter(({ kind }) => kind === "bench");
   expect(benches).toHaveLength(3);
@@ -325,4 +332,6 @@ test("캠프에는 개별 오브젝트 5종과 통나무 벤치 세 개가 발�
     ).toHaveLength(1);
   expect(strollSpots.length).toBeGreaterThan(8);
   expect(workSpots.length).toBeGreaterThanOrEqual(6);
+  // 꾸밈 오브젝트는 캠프 가장자리를 따라 놓여 동선을 막지 않는다.
+  expect(campObjects.length).toBeGreaterThanOrEqual(16);
 });

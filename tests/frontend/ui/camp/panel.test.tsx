@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "vitest";
+import { campObjects } from "../../../../src/frontend/ui/camp/behavior";
 import { CampPanel } from "../../../../src/frontend/ui/camp/panel";
 import { ChatPanel } from "../../../../src/frontend/ui/chat/panel";
 import { isWalkable } from "../../../../src/frontend/ui/camp/behavior";
@@ -56,7 +57,7 @@ test("the camp draws the crew on walkable ground with seats, signs and bubbles",
     // 통나무 벤치 3개가 각각 만질 수 있는 오브젝트로 올라간다.
     expect(html.match(/camp-object bench/g)?.length).toBe(3);
     // 오브젝트마다 투명 WebP 그림이 같은 좌표에 얹힌다.
-    expect(html.match(/class="camp-object-art"/g)?.length).toBe(7);
+    expect(html.match(/class="camp-object-art"/g)?.length).toBe(campObjects.length);
     // 캐릭터마다 이름표와 말풍선 자리가 있고, 고용된 크루는 앉아 있거나 서 있다.
     expect(html).toContain('class="character-bubble"');
     expect(html).toContain("is-sitting");

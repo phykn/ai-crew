@@ -6,7 +6,7 @@
 // 천막·마차·모닥불·벤치·보급 상자가 놓인 발밑 자리만 돌아서 지나간다.
 
 import type { JobState, RoleId } from "../../../shared/actions";
-import { objectSize } from "./art/scene";
+import { objectSize, type ObjectKind } from "./art/scene";
 
 export type Point = { x: number; y: number };
 type Facing = "left" | "right";
@@ -51,6 +51,17 @@ const obstacles: CampObstacle[] = [
   { id: "bench-east", kind: "ellipse", center: { x: 64.5, y: 52.6 }, rx: 5.2, ry: 1 },
   { id: "bench-south", kind: "ellipse", center: { x: 50, y: 61.4 }, rx: 5.6, ry: 1.2 },
   { id: "crates", kind: "ellipse", center: { x: 13, y: 80 }, rx: 4.2, ry: 2.4 },
+  { id: "signpost", kind: "ellipse", center: { x: 44, y: 28.4 }, rx: 1.8, ry: 1 },
+  { id: "workbench", kind: "ellipse", center: { x: 57.2, y: 35.4 }, rx: 3, ry: 1.3 },
+  { id: "firewood", kind: "ellipse", center: { x: 26.5, y: 42.6 }, rx: 2.6, ry: 1.1 },
+  { id: "maptable", kind: "ellipse", center: { x: 17.5, y: 50.6 }, rx: 3, ry: 1.2 },
+  { id: "lantern-west", kind: "ellipse", center: { x: 42.6, y: 38.8 }, rx: 0.9, ry: 0.6 },
+  { id: "lantern-east", kind: "ellipse", center: { x: 58.6, y: 62.4 }, rx: 0.9, ry: 0.6 },
+  { id: "bush-north", kind: "ellipse", center: { x: 88, y: 22.6 }, rx: 2.6, ry: 1.5 },
+  { id: "bush-west", kind: "ellipse", center: { x: 11.5, y: 68.6 }, rx: 2.6, ry: 1.5 },
+  { id: "bush-south", kind: "ellipse", center: { x: 78, y: 89 }, rx: 2.6, ry: 1.5 },
+  { id: "rock-east", kind: "ellipse", center: { x: 72.5, y: 62.4 }, rx: 2.4, ry: 1.3 },
+  { id: "rock-south", kind: "ellipse", center: { x: 24, y: 62.8 }, rx: 2.4, ry: 1.3 },
 ];
 
 function pointInPolygon(point: Point, polygon: Point[]) {
@@ -221,7 +232,7 @@ export const campSpots: CampSpot[] = [...seats, ...workSpots, ...strollSpots];
 /** 캠프 그림 위에 얹는 개별 오브젝트. 좌표는 바닥에 닿는 발밑 중심이다. */
 export type CampObject = {
   id: string;
-  kind: "campfire" | "bench" | "tent" | "wagon" | "crates";
+  kind: ObjectKind;
   x: number;
   y: number;
   /** 그림의 실제 픽셀 크기. 화면 크기는 아트 배율을 곱해 정한다. */
@@ -238,6 +249,17 @@ export const campObjects: CampObject[] = [
   { id: "bench-east", kind: "bench", x: 64.5, y: 55.6, ...objectSize("bench"), label: "통나무 벤치" },
   { id: "bench-south", kind: "bench", x: 50, y: 64.4, ...objectSize("bench"), label: "통나무 벤치" },
   { id: "crates", kind: "crates", x: 13, y: 80, ...objectSize("crates"), label: "보급 상자" },
+  { id: "signpost", kind: "signpost", x: 44, y: 28.4, ...objectSize("signpost"), label: "이정표" },
+  { id: "workbench", kind: "workbench", x: 57.2, y: 35.4, ...objectSize("workbench"), label: "공구 작업대" },
+  { id: "firewood", kind: "firewood", x: 26.5, y: 42.6, ...objectSize("firewood"), label: "장작 더미" },
+  { id: "maptable", kind: "maptable", x: 17.5, y: 50.6, ...objectSize("maptable"), label: "지도 테이블" },
+  { id: "lantern-west", kind: "lanternpost", x: 42.6, y: 38.8, ...objectSize("lanternpost"), label: "랜턴 등" },
+  { id: "lantern-east", kind: "lanternpost", x: 58.6, y: 62.4, ...objectSize("lanternpost"), label: "랜턴 등" },
+  { id: "bush-north", kind: "bush", x: 88, y: 22.6, ...objectSize("bush"), label: "덤불" },
+  { id: "bush-west", kind: "bush", x: 11.5, y: 68.6, ...objectSize("bush"), label: "덤불" },
+  { id: "bush-south", kind: "bush", x: 78, y: 89, ...objectSize("bush"), label: "덤불" },
+  { id: "rock-east", kind: "rock", x: 72.5, y: 62.4, ...objectSize("rock"), label: "이끼 바위" },
+  { id: "rock-south", kind: "rock", x: 24, y: 62.8, ...objectSize("rock"), label: "이끼 바위" },
 ];
 
 // ── 길 찾기 ────────────────────────────────────────────────────────────────

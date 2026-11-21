@@ -97,6 +97,13 @@ const fireGlow = (x: number, y: number) =>
 
 const objectNotes: Record<string, string> = {
   campfire: "🔥 모닥불 · 장작이 타고 있어요",
+  signpost: "🪧 이정표 · 오늘의 안내가 붙어 있어요",
+  workbench: "🔧 작업대 · 망치와 모루가 가지런해요",
+  firewood: "🪵 장작 더미 · 도끼는 그루터기에 꽂혀 있어요",
+  maptable: "🗺️ 지도 테이블 · 다음 행선지를 펼쳐 두었어요",
+  lanternpost: "🏮 랜턴 등 · 길목을 따뜻하게 밝혀요",
+  bush: "🌿 덤불 · 잎에 이슬이 맺혔어요",
+  rock: "🪨 이끼 바위 · 이끼가 폭신해요",
   bench: "🪵 통나무 벤치 · 걸터앉아 쉬는 자리",
   tent: "⛺ 천막 · 크루가 여기서 잠깐 쉬어요",
   wagon: "🛻 마차 · 보급과 장비를 실어 왔어요",
@@ -914,7 +921,7 @@ export function CampPanel({
                 {
                   left: left + "%",
                   top: top + "%",
-                  zIndex: Math.round(top * 100) + 1,
+                  zIndex: Math.round(top * 100) + (posture === "sit" ? 60 : 1),
                   "--depth": depthOf(top),
                   "--scale": "1",
                   "--fire-glow": fireGlow(left, top),

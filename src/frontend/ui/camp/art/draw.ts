@@ -1,5 +1,5 @@
 // Pixel primitives on pixlrt's PixelCanvas: every camp pixel is placed and
-// outlined here, so tiles, props and crew share one pixel grid and one outline.
+// outlined here, so tiles, props and crew share one grid and one outline.
 
 import { PixelCanvas, type Frame } from "pixlrt/core";
 
@@ -122,6 +122,139 @@ export function shadowEllipse(
       put(canvas, x, y, rgba(color, alpha));
     }
   }
+}
+
+/** A rounded rectangle: the shape most props and every crew limb starts from. */
+export function roundRect(
+  canvas: PixelCanvas,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  color: Rgba,
+) {
+  if (width <= 0 || height <= 0) return;
+  const r = Math.max(0, Math.min(radius, Math.floor(Math.min(width, height) / 2)));
+  for (let row = 0; row < height; row += 1) {
+    const fromTop = row;
+    const fromBottom = height - 1 - row;
+    const depth = Math.min(fromTop, fromBottom);
+    let inset = 0;
+    if (depth < r) {
+      const dy = r - depth - 0.5;
+      inset = Math.round(r - Math.sqrt(Math.max(0, r * r - dy * dy)));
+    }
+    hline(canvas, x + inset, y + row, width - inset * 2, color);
+  }
+}
+
+/** A rounded shape lit from the upper left: light along the top and left, shade
+ * along the bottom and right, so every object shares one light direction. */
+export function pillow(
+  canvas: PixelCanvas,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  base: Rgba,
+  light: Rgba,
+  dark: Rgba,
+) {
+  roundRect(canvas, x, y, width, height, radius, base);
+  for (let row = 0; row < height; row += 1) {
+    for (let col = width - 1; col >= 0; col -= 1) {
+      if (canvas.getPixel(x + col, y + row)[3] === 0) continue;
+      put(canvas, x + col, y + row, dark);
+      break;
+    }
+  }
+  for (let col = 0; col < width; col += 1) {
+    for (let row = height - 1; row >= 0; row -= 1) {
+      if (canvas.getPixel(x + col, y + row)[3] === 0) continue;
+      put(canvas, x + col, y + row, dark);
+      break;
+    }
+  }
+  for (let row = 0; row < Math.min(radius + 1, height); row += 1) {
+    for (let col = 0; col < width; col += 1) {
+      if (canvas.getPixel(x + col, y + row)[3] === 0) continue;
+      if (row === 0 || col === 0) put(canvas, x + col, y + row, light);
+      break;
+    }
+  }
+}
+
+/** A dome (half ellipse) standing on `baseY`: canopies, bushes, stone tops. */
+export function dome(
+  canvas: PixelCanvas,
+  cx: number,
+  baseY: number,
+  rx: number,
+  ry: number,
+  color: Rgba,
+) {
+  for (let row = 0; row <= ry; row += 1) {
+    const t = row / ry;
+    const half = Math.round(rx * Math.sqrt(Math.max(0, 1 - t * t)));
+    hline(canvas, cx - half, baseY - row, half * 2 + 1, color);
+  }
+}
+
+/** One-row highlight that follows the topmost opaque pixel of each column. */
+export function rimLight(
+  canvas: PixelCanvas,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: Rgba,
+) {
+  for (let col = 0; col < width; col += 1) {
+    for (let row = 0; row < height; row += 1) {
+      if (canvas.getPixel(x + col, y + row)[3] === 0) continue;
+      put(canvas, x + col, y + row, color);
+      break;
+    }
+  }
+}
+
+/** One-pixel shade down the right edge of whatever is already painted. */
+export function rightShade(
+  canvas: PixelCanvas,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: Rgba,
+  thickness = 1,
+) {
+  for (let row = 0; row < height; row += 1) {
+    for (let step = 0; step < thickness; step += 1) {
+      for (let col = width - 1 - step; col >= 0; col -= 1) {
+        if (canvas.getPixel(x + col, y + row)[3] === 0) continue;
+        put(canvas, x + col, y + row, color);
+        break;
+      }
+    }
+  }
+}
+
+/** Paint only where the target is still transparent (keeps earlier shapes). */
+export function onlyBehind(
+  canvas: PixelCanvas,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: Rgba,
+) {
+  for (let row = 0; row < height; row += 1)
+    for (let col = 0; col < width; col += 1) {
+      if (canvas.getPixel(x + col, y + row)[3] > 0) continue;
+      put(canvas, x + col, y + row, color);
+    }
 }
 
 /** Checkerboard dither inside a box: `parity` 0 or 1 picks the phase. */

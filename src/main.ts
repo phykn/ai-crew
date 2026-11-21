@@ -7,24 +7,24 @@ import {
   type Message,
   type ModelDetails,
 } from "./shared/actions";
-import { ActionRunner } from "./server/app-actions";
-import { resolveAppManual } from "./server/app-manual";
-import { appTools } from "./server/app-tools";
+import { ActionRunner } from "./server/app/actions";
+import { resolveAppManual } from "./server/app/manual";
+import { appTools } from "./server/app/tools";
 import { ChatQueue } from "./shared/chat-queue";
-import { continuationNotice, conversationHistory } from "./server/chat-continuity";
+import { continuationNotice, conversationHistory } from "./server/chat/continuity";
 import { findChatCommand } from "./shared/chat-commands";
-import { CodexConnection } from "./server/codex";
+import { CodexConnection } from "./server/codex/connection";
 import { StopFence } from "./workflow/engine-fence";
-import { classifyModelFailure } from "./server/model-errors";
-import { runLocal, setLocalConnection } from "./server/local";
-import { CrewMcp } from "./server/mcp";
+import { classifyModelFailure } from "./server/chat/errors";
+import { runLocal, setLocalConnection } from "./server/chat/local";
+import { CrewMcp } from "./server/mcp/client";
 import { crewInstructions } from "./shared/crew-definition";
 import { wikiReference } from "./shared/wiki-reference";
 import { StyleWatch } from "./workflow/style-watch";
 import { CrewStore } from "./store/store";
 import { CrewWorkflow } from "./workflow/workflow";
-import { wikiTools } from "./server/wiki-tools";
-import { imageNotes, setVisionConnection } from "./server/vision";
+import { wikiTools } from "./server/chat/wiki-tools";
+import { imageNotes, setVisionConnection } from "./server/chat/vision";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;

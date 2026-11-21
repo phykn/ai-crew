@@ -9,13 +9,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
-import { CodexConnection } from "../server/codex";
+import { CodexConnection } from "../server/codex/connection";
 import { DirectoryFence, ReloadDefer, StopFence } from "./engine-fence";
-import { decideLocal } from "../server/local";
+import { decideLocal } from "../server/chat/local";
 import { CrewStore } from "../store/store";
 import { CrewWorkflow } from "./workflow";
 
-vi.mock("../server/local", () => ({ decideLocal: vi.fn() }));
+vi.mock("../server/chat/local", () => ({ decideLocal: vi.fn() }));
 afterEach(() => vi.resetAllMocks());
 
 test("a stop makes the running generation stale and only that one", () => {

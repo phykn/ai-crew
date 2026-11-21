@@ -6,7 +6,7 @@ import {
   type CrewSkill,
   type RoleId,
 } from "./actions";
-import type { StyleReport } from "../store/store-style";
+import type { StyleReport } from "../store/style";
 import type { WikiReference } from "./wiki-reference";
 
 /**

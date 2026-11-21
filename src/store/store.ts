@@ -18,10 +18,10 @@ import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { StoreSnapshot } from "./store-snapshot";
-import { initStoreSchema } from "./store-migrations";
+import { StoreSnapshot } from "./snapshot";
+import { initStoreSchema } from "./migrations";
 
-export { defaultViewState } from "./store-base";
+export { defaultViewState } from "./base";
 
 export class CrewStore extends StoreSnapshot {
   constructor(path: string) {

@@ -13,9 +13,9 @@
 
 import { resolve, sep } from "node:path";
 import { planFiles, planTargets, type Job } from "../shared/actions";
-import { ModelLimitError } from "../server/model-errors";
-import { StalePlan, ClarificationRequired } from "./workflow-support";
-import { WorkflowRecovery } from "./workflow-recovery";
+import { ModelLimitError } from "../server/chat/errors";
+import { StalePlan, ClarificationRequired } from "./support";
+import { WorkflowRecovery } from "./recovery";
 
 export class CrewWorkflow extends WorkflowRecovery {
   delegate(sessionId: string, responseId: string, text: string) {

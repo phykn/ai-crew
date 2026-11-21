@@ -11,12 +11,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
-import { CodexConnection } from "../server/codex";
-import { decideLocal } from "../server/local";
+import { CodexConnection } from "../server/codex/connection";
+import { decideLocal } from "../server/chat/local";
 import { CrewStore } from "../store/store";
 import { CrewWorkflow } from "./workflow";
 
-vi.mock("../server/local", () => ({ decideLocal: vi.fn() }));
+vi.mock("../server/chat/local", () => ({ decideLocal: vi.fn() }));
 afterEach(() => vi.resetAllMocks());
 
 test("peer consultation and a follow-up share a job with separate approvals", async () => {

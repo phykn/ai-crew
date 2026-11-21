@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import type { CrewMember, CrewSkill, McpEndpoint, McpGrant } from "./actions";
-import { codexMcpConfig } from "../server/codex-mcp";
+import { codexMcpConfig } from "../server/codex/mcp-config";
 import { requiredTools, skillStates } from "./skill-status";
 
 const skills: CrewSkill[] = [

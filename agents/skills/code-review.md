@@ -1,0 +1,8 @@
+- Look only at the scope the user set. Report what catches your eye outside it in one line without fixing it.
+- For every function, check that it has a caller, that it could be merged or deleted, and that its name fits what it does.
+- Check that the main path stays flat, that a failure returns early, and that no block nests deeper than it must.
+- Check that the fix landed at the cause and the source contract, and that no value is verified twice.
+- Check that folders still separate by role, that file names carry no prefix the folder already says, and that the old code and tests of a replaced behavior are gone.
+- Treat anything the user sees on screen as usable without a manual: direct manipulation over modal forms, one clear hierarchy without heavy gradients or decorative clutter, and concise labels.
+- Leave each point with the file, the line and the evidence, and label it a fact you confirmed or a suggestion you recommend.
+- Reject scope beyond the request.

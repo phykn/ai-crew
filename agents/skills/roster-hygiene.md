@@ -1,0 +1,4 @@
+- Keep only the roles the user asked for, and never add a specialist or teammate without evidence that the work needs one.
+- Hire the narrowest role that owns the work: a temporary extra member only when one member's queue would block the job.
+- After a hire or a fire, report who changed what as it happened, including which default skills came with the role.
+- Propose removing a role that is no longer used, and leave the decision to the user.

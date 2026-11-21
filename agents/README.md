@@ -1,6 +1,6 @@
 # AI Crew agent instructions
 
-One assistant talks with the user, and the other eight roles work on the assistant's instruction. A role's data — its name, skills, trigger and prompt — has one source in `roles` in `src/shared/actions.ts`, and the default skills assigned to every role when a project is first opened have one source in `defaultSkills` in `src/backend/store/skills.ts`. This document is a summary of both; when they differ, the code wins.
+One assistant talks with the user, and the other eight roles work on the assistant's instruction. A role's data — its name, skills, trigger and prompt — has one source in `roles` in `src/shared/actions.ts`. The default skills assigned to every role when a project is first opened are Markdown files in `agents/skills/`, listed with their role by `defaultSkills` in `src/backend/store/skills.ts`. This document is a summary of both; when they differ, the code wins.
 
 ## Roles
 
@@ -20,17 +20,19 @@ The nine starting roles are a starting roster, not a fixed crew. Every role can 
 
 ## Default skills
 
-Each sentence turns the user's code and document principles and their way of finishing work (groove) into a rule, and each skill's Markdown body is appended to its role's prompt.
+Each file holds the rules that role works by, one concrete instruction per line, and its Markdown body is appended to that role's prompt.
 
 | Role | Skill | What it holds |
 |---|---|---|
-| Assistant | Groove 작업 조율 | Decides what has to be finished first and calls only the roles it needs. Decides a reversible thing instead of asking and names the assumption. Hands work back only for plan approval, the same check failing twice, work only a person can do, and an irreversible action. Opens a report with what finished and the evidence. |
+| Assistant | 작업 조율 | Decides what has to be finished first and calls only the roles it needs. Decides a reversible thing instead of asking and names the assumption. Hands work back only for plan approval, the same check failing twice, work only a person can do, and an irreversible action. Opens a report with what finished and the evidence. |
 | HR | 로스터 정리 | Keeps only the requested roles and never grows the roster without evidence. Reports a changed roster as it happened and only proposes removing a role nothing uses. |
-| Development | Groove 구현 & 정리 | The smallest change, only code that has a caller, functions in execution order, a one-line why, a fix at the cause, and callers, tests, documents and settings changed with a name. |
+| Development | 구현 원칙 | The smallest change, flat control flow with early returns, only code that has a caller, functions in execution order, a one-line why, a fix at the cause, and callers, tests, documents and settings changed with a name. |
+| Development | 화면 설계 | One named art direction, no generic dashboard furniture, one reading order, space instead of borders, one status and one action per row, and a check at the narrowest width and in the empty state. |
 | Build | 단계별 검증·정리 | The cheapest check first, the whole verification once at the end. Reports only the commands run and their output, and deletes artifacts and temporary folders. |
 | Docs | 간결한 문서 작성 | The conclusion first. Deletes what the file name or the title already said, fixes the order before adding a sentence, and uses only real file names and commands actually run. |
 | Style | 코드 스타일 | Folder and file boundaries, execution order, verb-first names, the comment rule, and no uncalled code, one-use wrapper or repeated check. |
 | Style | 문서 스타일 | Conclusion first, text that repeats the title, order that confuses, real file names and commands, and nothing outside the requested part changed. |
+| Style | 화면 설계 점검 | The same art-direction rules, read as a checklist on every changed screen. |
 | Review | 코드 리뷰 | Only the scoped change. For every function its caller, whether it merges or deletes, and whether its name fits. Points are split into facts and suggestions. |
 | Review | 문서 리뷰 | Whether the document matches the real code and screen, and no file name that does not exist and no command never run. |
 | Test | 빠른 회귀 테스트 | A small double for a heavy model, one test file per module, one strong test, and one regression test whenever a bug is fixed. |

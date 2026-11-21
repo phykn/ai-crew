@@ -16,13 +16,13 @@ top of `src/` because it is the bridge between the two.
 - `src/frontend/ui/` — the renderer's views. `camp/` draws the camp with PixiJS and GSAP from the pixlrt pixel art in `camp/art/` (shared palette, 16px ground tiles, crew poses and props), `chat/` the conversation with its composer keys, search, decision cards and status, `panels/` the workflow, wiki, worklog and memory panels with crew settings, toolbar, notifications and the diagnostics banner, and `common/` markdown, clipboard, text diff and the presentational parts every panel shares.
 - `src/shared/` — the contracts the main process and the screen read together: action schemas and crew roles (`actions.ts`), role definitions (`crew-definition.ts`), the prompt budget for the project wiki (`wiki-reference.ts`), skill state, the chat queue and chat commands.
 - `tests/` — every `*.test.ts` and `*.test.tsx`, in the same shape as the source it checks (`tests/backend/…`, `tests/frontend/…`, `tests/shared/…`). No test sits beside the code.
-- `agents/` — the documents agents read: the app manual the assistant answers usage questions from, and the app MCP, job execution and screen behavior specs.
+- `agents/` — the documents agents read: the app manual the assistant answers usage questions from, the app MCP, job execution and screen behavior specs, and `agents/skills/` — one Markdown file per default skill, seeded into every new project and read through a raw import in `src/backend/store/skills.ts`.
 - `scripts/` — one-off tools: Codex type generation and the packaged-app smoke check.
 - `demo/` — the browser mockup.
 
 ## Rules
 
-- Product flow follows `agents/interaction.md`, and implementation order follows `docs/groove/PLAN.md`. `docs/` is a temporary note that leaves the repository; documents agents read live in `agents/`.
+- Product flow follows `agents/interaction.md`, and implementation order follows `docs/plan/PLAN.md`. `docs/` is a temporary note that leaves the repository; documents agents read live in `agents/`.
 - The screen and the app MCP call the same behavior in the main process.
 - A file belongs to one layer: `src/backend/` may not import `src/frontend/`, and a new test goes to `tests/` under the path that mirrors the file it checks.
 - When a value, function, settings key or file name changes, change its callers, tests, documents and settings in the same job.

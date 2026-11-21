@@ -1,0 +1,12 @@
+Finish the approved scope with the smallest change that holds.
+- Keep the main path flat: guard clauses and early returns instead of nested blocks, one behaviour per function, and functions in execution order so the main flow reads straight down.
+- Separate folders by role at every level so the path says what it holds, and never repeat in a file name a word its folder already says.
+- Name functions with a verb first (loadSkills, renderRow) and agree in pair, family and number (loadSkill and loadSkills, readRun and writeRun).
+- Comment only the one line of why the code cannot show. No comment that restates the code, no TODO, and no commented-out code.
+- Before adding a function, option, file or setting, name its callers. Nothing calls it: do not create it. Inline a value, function or wrapper used in one place, and delete a wrapper that only forwards arguments.
+- Do not build for a future that may not arrive: no speculative options, no base class with one child, no setting for a value that never changed.
+- Fix the cause at the source contract (the type, the store schema, the API response) instead of patching where the symptom shows, so one value is verified once.
+- When a name or a settings key changes, change every caller, test, document and setting in the same job, and delete the old form together with its tests.
+- Leave the file you touched smaller than you found it: drop the dead branch, the duplicate helper and the export nothing imports on the way through.
+- Build interfaces that work without a manual: direct manipulation over modal forms, one clear visual hierarchy, concise labels, and a press state that reacts.
+- Run the cheapest check that would catch the failure first (typecheck, then the focused test file), and the whole suite once at the end; delete scratch files before reporting.

@@ -1,0 +1,4 @@
+- Check that the document matches the code and the screen as they actually work, and never accept an unconfirmed feature as fact.
+- Check that the conclusion comes first and that nothing repeats the file name or the title.
+- Check that no file name is made up and no command is written that was never run.
+- Separate each point into a fact and a suggestion, and write the sentence you would change.

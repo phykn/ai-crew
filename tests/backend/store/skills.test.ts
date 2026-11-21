@@ -11,8 +11,8 @@ import { CrewStore } from "../../../src/backend/store/store";
 
 const folder = () => realpathSync(mkdtempSync(join(tmpdir(), "crew-skills-")));
 
-test("모든 역할에 기본 스킬이 있고, MCP 도구 권한을 요구하지 않는다", () => {
-  // crew_skills.id는 저장본 전체에서 하나뿐이라 프로젝트 id가 앞에 붙는다.
+test("every role starts with a default skill that asks for no MCP tool", () => {
+  // crew_skills.id is unique across the store, so the project id leads each id.
   expect(new Set(defaultSkills.map(({ id }) => id)).size).toBe(
     defaultSkills.length,
   );
@@ -21,12 +21,24 @@ test("모든 역할에 기본 스킬이 있고, MCP 도구 권한을 요구하�
   for (const skill of defaultSkills) {
     expect(skill.name.length).toBeGreaterThan(1);
     expect(skill.markdown.length).toBeGreaterThan(40);
-    // 백틱 안에 server/tool 모양을 쓰면 skill-status가 MCP 권한 대기로 읽는다.
+    // A backticked server/tool shape would read as an MCP permission wait.
     expect(requiredTools(skill.markdown)).toEqual([]);
   }
 });
 
-test("새 프로젝트에 기본 스킬이 배정되어 준비 상태로 뜨고, 해제하면 돌아오지 않는다", () => {
+test("the interface skill reaches both the builder and the style check", () => {
+  const design = defaultSkills.filter(({ markdown }) =>
+    markdown.includes("one named art direction"),
+  );
+  expect(design.map(({ roleId }) => roleId).sort()).toEqual([
+    "development",
+    "style",
+  ]);
+  for (const skill of design)
+    expect(skill.markdown).not.toContain("card inside");
+});
+
+test("a new project gets every default skill ready, and a removed one stays gone", () => {
   const root = folder();
   const path = join(root, ".crew.sqlite");
   const store = new CrewStore(path);
@@ -40,14 +52,14 @@ test("새 프로젝트에 기본 스킬이 배정되어 준비 상태로 뜨고,
     expect(
       store.snapshot().skillStates.map(({ state }) => state),
     ).toEqual(defaultSkills.map(() => "ready"));
-    // 배정된 스킬 문장이 그 역할의 지침에 함께 들어간다.
+    // The planted body reaches the role's instruction.
     const development = store.readMembers(projectId, "development")[0];
     expect(
       crewInstructions(development, store.listSkills(projectId)),
     ).toContain("Inline a value, function or wrapper used in one place");
     const coding = store
       .listSkills(projectId)
-      .find(({ id }) => id === projectId + ":groove-coding")!;
+      .find(({ id }) => id === projectId + ":engineering-principles")!;
     store.removeSkill(projectId, coding.memberId, coding.id);
   } finally {
     store.close();
@@ -55,7 +67,7 @@ test("새 프로젝트에 기본 스킬이 배정되어 준비 상태로 뜨고,
   const reopened = new CrewStore(path);
   try {
     const ids = reopened.listSkills(projectId).map(({ id }) => id);
-    expect(ids).not.toContain(projectId + ":groove-coding");
+    expect(ids).not.toContain(projectId + ":engineering-principles");
     expect(ids).toHaveLength(defaultSkills.length - 1);
   } finally {
     reopened.close();
@@ -63,7 +75,7 @@ test("새 프로젝트에 기본 스킬이 배정되어 준비 상태로 뜨고,
   }
 });
 
-test("예전 저장본을 열면 이미 있는 프로젝트에 기본 스킬을 한 번 심는다", () => {
+test("opening an older store plants the defaults once", () => {
   const root = folder();
   const path = join(root, ".crew.sqlite");
   const store = new CrewStore(path);

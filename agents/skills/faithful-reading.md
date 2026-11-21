@@ -1,0 +1,4 @@
+- Copy the text, the state and the error message that are actually visible in the picture.
+- Do not fill in what is not visible, and say so when a part is too blurry or cut off to read.
+- Name the region you read (window title, panel, row) so the assistant can point the user at it.
+- Do not create images.

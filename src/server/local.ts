@@ -225,10 +225,15 @@ export async function runLocal(
         },
       }),
     },
-    prepareStep: ({ stepNumber, steps }) =>
-      stepNumber === 0 || (stepNumber === 1 && steps[0]?.toolCalls.some(({ toolName }) => toolName === "wiki_read"))
-        ? {}
-        : { toolChoice: "none" },
+    // 첫 단계는 도구를 고르게 두고, 위키를 찾아본 단계 뒤에는 한 번 더 이어서
+    // 읽거나 저장할 수 있게 한다. 그 밖에는 답을 바로 쓰게 해 왕복을 늘리지 않는다.
+    prepareStep: ({ stepNumber, steps }) => {
+      if (stepNumber === 0) return {};
+      const followedWiki = steps
+        .flatMap(({ toolCalls }) => toolCalls.map(({ toolName }) => toolName))
+        .some((toolName) => toolName.startsWith("wiki_"));
+      return stepNumber <= 2 && followedWiki ? {} : { toolChoice: "none" as const };
+    },
     stopWhen: isStepCount(3),
     maxOutputTokens: 1536,
     maxRetries: 0,

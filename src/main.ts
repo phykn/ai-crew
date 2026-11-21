@@ -18,10 +18,11 @@ import { classifyModelFailure } from "./server/model-errors";
 import { runLocal, setLocalConnection } from "./server/local";
 import { CrewMcp } from "./server/mcp";
 import { crewInstructions } from "./shared/crew-definition";
+import { wikiReference } from "./shared/wiki-reference";
 import { StyleWatch } from "./workflow/style-watch";
 import { CrewStore } from "./store/store";
 import { CrewWorkflow } from "./workflow/workflow";
-import { mentionsWiki, wikiTools } from "./server/wiki-tools";
+import { wikiTools } from "./server/wiki-tools";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -94,7 +95,7 @@ async function startApp() {
     let failure: string | null = null;
     const started = performance.now();
     const details: ModelDetails = {};
-    const wiki = store.wikiOutline(project.id);
+    const wiki = wikiReference(store.wikiDigest(project.id), text);
     const notice = continuationNotice(messages, {
       excludeId: id,
       skip,
@@ -177,19 +178,13 @@ async function startApp() {
           },
           {
             ...appTools(runner),
-            ...(mentionsWiki(text)
-              ? wikiTools(
-                  store,
-                  {
-                    projectId: project.id,
-                    sessionId,
-                    canRead: wiki.length > 0,
-                  },
-                  assistant,
-                  controller.signal,
-                  () => publish(null),
-                )
-              : {}),
+            ...wikiTools(
+              store,
+              { projectId: project.id, sessionId },
+              assistant,
+              controller.signal,
+              () => publish(null),
+            ),
           },
         );
       }

@@ -309,6 +309,8 @@ export class WorkflowDevelopment extends WorkflowPlanning {
       const move = plan.moves?.find(({ to }) => to === path);
       return move ? move.from + " → " + path : path;
     });
+    // 검증 단계가 위키에 남긴 지식은 업무가 끝난 자리에서 함께 드러낸다.
+    const knowledge = this.store.wikiUpdatesForJob(job.id);
     this.store.recordJob(
       job,
       "complete",
@@ -316,7 +318,14 @@ export class WorkflowDevelopment extends WorkflowPlanning {
       plan,
       null,
       paths.join(", ") +
-        " 파일을 변경했어요. 리뷰·스타일·테스트를 같은 변경 버전에서 통과했어요.",
+        " 파일을 변경했어요. 리뷰·스타일·테스트를 같은 변경 버전에서 통과했어요." +
+        (knowledge.length
+          ? " 위키에 " +
+            knowledge
+              .map(({ title, version }) => "「" + title + "」 v" + version)
+              .join(", ") +
+            " 문서를 남겨 다음 작업이 다시 알아보지 않게 했어요."
+          : ""),
     );
   }
 }

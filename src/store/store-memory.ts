@@ -8,6 +8,7 @@ import {
   type WikiPage,
   type WikiRevision,
 } from "../shared/actions";
+import type { WikiDigest } from "../shared/wiki-reference";
 import { StoreRun } from "./store-run";
 export class StoreMemory extends StoreRun {
   listMemories(projectId: string, ownerId?: string) {
@@ -69,6 +70,65 @@ export class StoreMemory extends StoreRun {
       links: (JSON.parse(links) as string[]).filter((id) => ids.has(id)),
       revisions: readRevisions.all(page.id) as WikiRevision[],
     }));
+  }
+
+  /**
+   * 프롬프트에 넣을 위키 내용. 변경 이력은 빼고 본문과 연결만 읽으며 최근에 쓴 문서부터 준다.
+   * 본문을 그대로 넘기는 이유는, 도구를 쓸 수 없는 모델도 제목만 보고 넘기지 않고
+   * 요청과 겹치는 문서를 읽을 수 있게 하기 위해서다.
+   */
+  wikiDigest(projectId: string) {
+    const pages = this.db.prepare(`
+      SELECT id, title, body, version, links FROM wiki_pages
+      WHERE project_id = ? AND deleted = 0 ORDER BY rowid DESC
+    `).all(projectId) as (Omit<WikiPage, "links" | "revisions"> & { links: string })[];
+    const ids = new Set(pages.map(({ id }) => id));
+    return pages.map(({ links, ...page }): WikiDigest => ({
+      ...page,
+      links: (JSON.parse(links) as string[]).filter((id) => ids.has(id)),
+    }));
+  }
+
+  searchWiki(projectId: string, query: string, limit = 5) {
+    const words = [
+      ...new Set(
+        query
+          .toLowerCase()
+          .split(/[^0-9a-z가-힣]+/)
+          .filter((word) => word.length >= 2),
+      ),
+    ];
+    if (!words.length) return [];
+    return this.wikiDigest(projectId)
+      .map((page) => ({
+        page,
+        score: words.reduce(
+          (sum, word) =>
+            sum +
+            (page.title.toLowerCase().includes(word) ? 4 : 0) +
+            (page.body.toLowerCase().includes(word) ? 1 : 0),
+          0,
+        ),
+      }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || a.page.title.localeCompare(b.page.title))
+      .slice(0, limit)
+      .map(({ page }) => ({
+        id: page.id,
+        title: page.title,
+        version: page.version,
+        excerpt: page.body.replace(/\s+/g, " ").trim().slice(0, 220),
+      }));
+  }
+
+  /** 이 업무가 위키에 남긴 문서. 업무가 끝날 때 쌓인 지식을 요약에 드러낸다. */
+  wikiUpdatesForJob(jobId: string) {
+    return this.db.prepare(`
+      SELECT id, title, version FROM wiki_pages
+      WHERE deleted = 0 AND id IN (
+        SELECT page_id FROM wiki_revisions WHERE source_job_id = ?
+      ) ORDER BY title, id
+    `).all(jobId) as { id: string; title: string; version: number }[];
   }
 
   wikiOutline(projectId: string) {

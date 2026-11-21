@@ -5,6 +5,7 @@ import { expect, test } from "vitest";
 import { roles } from "../shared/actions";
 import { bundledAppManual, loadAppManual, resolveAppManual } from "./app-manual";
 import { crewInstructions } from "../shared/crew-definition";
+import { wikiReference } from "../shared/wiki-reference";
 import { CrewStore } from "../store/store";
 
 test("앱 매뉴얼을 읽어 비서 지침에 넣는다", () => {
@@ -22,12 +23,12 @@ test("앱 매뉴얼을 읽어 비서 지침에 넣는다", () => {
     provider: "local" as const,
     hired: true,
   };
-  expect(crewInstructions(member, [], [], [], { appManual: manual })).toContain(
+  expect(crewInstructions(member, [], [], undefined, { appManual: manual })).toContain(
     "이 앱의 사용법 매뉴얼",
   );
   // 매뉴얼은 비서에게만 간다. 다른 역할은 앱 사용법을 답하지 않는다.
   expect(
-    crewInstructions({ ...member, roleId: "docs", id: "docs" }, [], [], [], {
+    crewInstructions({ ...member, roleId: "docs", id: "docs" }, [], [], undefined, {
       appManual: manual,
     }),
   ).not.toContain("이 앱의 사용법 매뉴얼");
@@ -83,7 +84,7 @@ test("매뉴얼은 저장된 기억·위키와 함께 비서 프롬프트에 들
       assistant,
       [],
       store.listMemories(projectId, assistant.id),
-      store.wikiOutline(projectId),
+      wikiReference(store.wikiDigest(projectId), ""),
       { appManual: loadAppManual([process.cwd()]) },
     );
     expect(instructions).toContain("유일한 창구");

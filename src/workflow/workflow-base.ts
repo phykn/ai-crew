@@ -22,6 +22,7 @@ import { decideLocal } from "../server/local";
 import { ModelLimitError, classifyModelFailure } from "../server/model-errors";
 import { CrewMcp } from "../server/mcp";
 import { mentionsWiki, wikiTools } from "../server/wiki-tools";
+import { wikiReference } from "../shared/wiki-reference";
 import { maxRetries } from "./workflow-support";
 
 export class WorkflowBase {
@@ -177,7 +178,7 @@ export class WorkflowBase {
         ]),
       )
       .digest("hex");
-    const wiki = this.store.wikiOutline(job.projectId);
+    const wiki = wikiReference(this.store.wikiDigest(job.projectId), job.request);
     system += "\n\n" + crewInstructions(
       member,
       skills,
@@ -213,10 +214,17 @@ export class WorkflowBase {
                 signal,
                 this.mcp.modelTools(job, member, signal),
                 details,
-                wiki.length || mentionsWiki(job.request)
+                // 위키에 읽을 문서가 있거나 사용자가 위키를 말했을 때만 도구를 연다.
+                // 문서가 없는 평범한 업무에 도구를 열면 로컬 모델이 submit_result 전에
+                // 도구를 한 번 더 부르느라 단계가 늘어난다.
+                wiki.outline.length || mentionsWiki(job.request)
                   ? wikiTools(
                       this.store,
-                      { projectId: job.projectId, sessionId: job.sessionId, jobId: job.id, canRead: wiki.length > 0 },
+                      {
+                        projectId: job.projectId,
+                        sessionId: job.sessionId,
+                        jobId: job.id,
+                      },
                       member,
                       signal,
                       this.notify,

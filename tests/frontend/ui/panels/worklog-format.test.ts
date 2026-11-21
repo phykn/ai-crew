@@ -36,21 +36,21 @@ test("splits a name, a role, the user and an unknown word into role and name", (
     { text: "태오 · camp/art/palette.ts 32색 팔레트", recordedAt: null },
     members,
   );
-  expect(byName.label).toBe("개발 · 태오");
+  expect(byName.label).toBe("개발 태오");
   expect(byName.color).toBe("#b4d59d");
   expect(byName.body).toBe("camp/art/palette.ts 32색 팔레트");
 
-  expect(parseActivity({ text: "개발 · 타일맵" }, members).label).toBe("개발 · 태오");
-  expect(parseActivity({ text: "인사팀 · 후보 준비" }, members).label).toBe("인사 · 지민");
+  expect(parseActivity({ text: "개발 · 타일맵" }, members).label).toBe("개발 태오");
+  expect(parseActivity({ text: "인사팀 · 후보 준비" }, members).label).toBe("인사 지민");
   expect(parseActivity({ text: "테스트 · 183개 통과" }, members).label).toBe(
-    "테스트 · 민재",
+    "테스트 민재",
   );
   expect(parseActivity({ text: "사용자 · 리뷰 승인" }, members).label).toBe("사용자");
 });
 
 test("keeps both sides of a hand-off in the badge", () => {
   const row = parseActivity({ text: "개발 → 스타일 · 캠프 톤 확인" }, members);
-  expect(row.label).toBe("개발 · 태오 → 스타일 · 유진");
+  expect(row.label).toBe("개발 태오 → 스타일 유진");
   expect(row.body).toBe("캠프 톤 확인");
 });
 
@@ -70,6 +70,6 @@ test("keeps the whole sentence when the writer is unknown", () => {
 
 test("splits on the first separator only", () => {
   const row = parseActivity({ text: "현우 · 팔레트 0개 · 모든 픽셀 통과" }, members);
-  expect(row.label).toBe("리뷰 · 현우");
+  expect(row.label).toBe("리뷰 현우");
   expect(row.body).toBe("팔레트 0개 · 모든 픽셀 통과");
 });

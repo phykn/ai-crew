@@ -11,7 +11,7 @@ export type LogRow = {
   /** HH:MM:SS in 24-hour time; empty when the entry has no timestamp */
   time: string;
   status: LogStatus;
-  /** "개발 · 태오", "비서 · 하나 → 계획", "사용자", "시스템" */
+  /** "개발 태오", "비서 하나 → 계획", "사용자", "시스템" */
   label: string;
   /** The role colour, or the system grey when the writer is unknown */
   color: string;
@@ -85,7 +85,7 @@ function badgeOf(
     .map((part, index) => {
       const found = who[index];
       if (!found) return part;
-      return found.name ? found.role + " · " + found.name : found.role;
+      return found.name ? found.role + " " + found.name : found.role;
     })
     .join(" → ");
   return { label, color: who.find(Boolean)!.color };

@@ -119,81 +119,80 @@ summary:focus-visible {
 .camp-tools {
   position: absolute;
   z-index: 5;
-  inset: var(--space-5) var(--space-5) auto;
+  inset: var(--space-4) var(--space-4) auto;
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: var(--space-3);
 }
+/* One wood plaque in the top left: the camp and its roster open from the same tag. */
+.camp-hud {
+  position: relative;
+}
+.camp-hud > summary,
 .camp-badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 7px 13px 7px 11px;
-  border-radius: 999px;
-  background: #fffdf8e0;
-  box-shadow: 0 2px 10px #2f29231f;
-  color: var(--text);
-  font: 700 15px/1 Georgia, serif;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 12px 8px 10px;
+  border: 2px solid #3b2416;
+  border-radius: 3px;
+  background: #8a5a34;
+  box-shadow:
+    inset 0 2px 0 #b07d4e,
+    inset 0 -2px 0 #5f3d24,
+    inset 2px 0 0 #a06b40,
+    0 3px 0 #2b1a0f;
+  color: #fdf3d9;
+  font: 700 15px/1 "Galmuri11", "Nanum Gothic", monospace;
   letter-spacing: 0.02em;
-  backdrop-filter: blur(6px);
+  text-shadow: 0 1px 0 #2b1a0f;
 }
+.camp-hud > summary::-webkit-details-marker {
+  display: none;
+}
+.camp-hud > summary svg,
 .camp-badge svg {
   width: 17px;
   height: 17px;
-  color: var(--warm);
-  filter: drop-shadow(0 0 6px #ffb85c9c);
+  color: #ffc46a;
+  filter: drop-shadow(0 0 5px #ffb85c9c);
 }
+.camp-hud > summary em,
 .camp-badge em {
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: #e9c6911f;
-  color: #eccd97;
-  font: 500 11px/1.2 -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 2px 6px 3px;
+  border-radius: 2px;
+  background: #5f3d24;
+  box-shadow: inset 0 2px 0 #3f2819;
+  color: #ffe3a1;
+  font: 700 12px/1 "Galmuri11", "Nanum Gothic", monospace;
   font-style: normal;
   letter-spacing: 0;
 }
-.roster summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  cursor: pointer;
-  list-style: none;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: #17130bdc;
+.camp-hud-caret {
+  width: 0;
+  height: 0;
+  margin-left: 2px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #ffe3a1;
+  transition: transform 0.1s steps(2, end);
+}
+.camp-hud[open] > summary {
+  background: #74492b;
   box-shadow:
-    inset 0 0 0 1px #f3cf8f2e,
-    0 4px 14px #0000004d;
-  color: #f0e5d1;
-  font-size: var(--font-detail);
-  backdrop-filter: blur(6px);
+    inset 0 2px 0 #9d6a41,
+    inset 0 -2px 0 #4a3120,
+    0 1px 0 #2b1a0f;
 }
-.roster summary::-webkit-details-marker {
-  display: none;
-}
-.roster summary::after {
-  content: "▾";
-  color: #c8b795;
-  font-size: 10px;
-  line-height: 1;
-}
-.roster[open] summary {
-  color: var(--warm);
-}
-.roster-dots {
-  display: inline-flex;
-  gap: 3px;
-}
-.roster-dots i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  box-shadow: 0 0 5px #ffffff40;
+.camp-hud[open] .camp-hud-caret {
+  transform: rotate(180deg);
 }
 .crew-list {
   position: absolute;
-  right: 0;
+  left: 0;
   top: calc(100% + 8px);
   width: min(440px, 100%);
   padding: 8px 12px 10px;
@@ -5258,4 +5257,100 @@ textarea::-webkit-scrollbar {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   One camp tag.
+   The camp and the crew roster share a single wooden plaque in the top left;
+   the top right of the scene stays empty so the art reads.
+   ───────────────────────────────────────────────────────────────────────── */
+.camp-tools {
+  justify-content: flex-start;
+}
+.camp-tools .camp-hud > summary,
+.camp-tools .camp-badge {
+  border: 2px solid #3b2416;
+  border-radius: 3px;
+  background: #8a5a34;
+  color: #fdf3d9;
+  font-family: var(--px-font);
+  font-size: 13px;
+  box-shadow:
+    inset 0 2px 0 #b07d4e,
+    inset 0 -2px 0 #5f3d24,
+    0 3px 0 #2b1a0f;
+  backdrop-filter: none;
+}
+.camp-tools .camp-hud > summary em,
+.camp-tools .camp-badge em {
+  background: #5f3d24;
+  color: #ffe3a1;
+  box-shadow: inset 0 2px 0 #3f2819;
+  font-family: var(--px-font);
+  font-size: 11px;
+}
+.camp-tools .camp-hud > summary .icon,
+.camp-tools .camp-badge .icon {
+  color: #ffc46a;
+}
+.camp-hud[open] > summary {
+  background: #74492b;
+}
+.camp-hud .crew-list {
+  border: 2px solid var(--px-ink);
+  border-radius: 3px;
+  background: var(--px-parchment-2);
+  box-shadow:
+    inset 2px 2px 0 var(--px-frame-light),
+    inset -2px -2px 0 var(--px-frame-shade),
+    0 3px 0 var(--px-lip);
+  backdrop-filter: none;
+}
+.camp-hud .crew-row {
+  padding: 5px 8px;
+}
+.camp-hud .crew-row + .crew-row {
+  border-top: 2px solid #e5d3ae;
+}
+.camp-hud .crew-row:nth-child(odd) {
+  background: var(--px-row);
+}
+.camp-hud .employment {
+  border: 0;
+  border-radius: 2px;
+  background: #eddcc6;
+  color: #8a6a48;
+  font-family: var(--px-font);
+  font-size: 10px;
+  box-shadow: none;
+}
+.camp-hud .employment[aria-pressed="true"] {
+  background: var(--px-sage);
+  color: var(--px-sage-ink);
+}
+/* The name tag over a crew member: the name, then the state on the same line. */
+.character-tag i {
+  margin-left: 4px;
+  color: #6b4f2d;
+  font-style: normal;
+  font-weight: 500;
+}
+
+/* The scene sits inside the same wooden window as the work panel: an ink edge,
+   a lit bevel, the wood body and a soft shade where the art meets the frame. */
+.camp::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  border: 3px solid #2b1a0f;
+  box-shadow:
+    inset 0 0 0 3px #b98d5a,
+    inset 0 0 0 5px #8a5a34,
+    inset 0 0 0 7px #5f3d24,
+    inset 0 0 18px #2b1a0f66;
+}
+.camp-tools {
+  inset: 22px 22px auto;
 }

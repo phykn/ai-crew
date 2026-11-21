@@ -82,7 +82,7 @@ export function ChatStatus({
             {crew.length
               ? crew.map(({ name }) => name).join(", ")
               : (assistant?.name ?? "비서")}
-            {active ? " · " + phase[active.state] : " · 대기"}
+            {active ? " " + phase[active.state] : " 대기"}
           </strong>
           <small>
             {active

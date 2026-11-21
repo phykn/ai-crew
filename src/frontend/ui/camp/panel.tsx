@@ -96,18 +96,26 @@ const fireGlow = (x: number, y: number) =>
   Math.max(0, 1 - Math.hypot(x - 59.7, y - 61.8) / 15).toFixed(2);
 
 const objectNotes: Record<string, string> = {
-  campfire: "🔥 모닥불 · 장작이 타고 있어요",
-  signpost: "🪧 이정표 · 오늘의 안내가 붙어 있어요",
-  workbench: "🔧 작업대 · 망치와 모루가 가지런해요",
-  firewood: "🪵 장작 더미 · 도끼는 그루터기에 꽂혀 있어요",
-  maptable: "🗺️ 지도 테이블 · 다음 행선지를 펼쳐 두었어요",
-  lanternpost: "🏮 랜턴 등 · 길목을 따뜻하게 밝혀요",
-  bush: "🌿 덤불 · 잎에 이슬이 맺혔어요",
-  rock: "🪨 이끼 바위 · 이끼가 폭신해요",
-  bench: "🪵 통나무 벤치 · 걸터앉아 쉬는 자리",
-  tent: "⛺ 천막 · 크루가 여기서 잠깐 쉬어요",
-  wagon: "🛻 마차 · 보급과 장비를 실어 왔어요",
-  crates: "📦 보급 상자 · 등불이 켜져 있어요",
+  campfire: "🔥 모닥불, 장작이 타고 있어요",
+  signpost: "🪧 이정표, 오늘의 안내가 붙어 있어요",
+  alchemy: "⚗️ 연금 작업대, 약병과 주문서가 놓여 있어요",
+  firewood: "🪵 장작 더미, 도끼는 그루터기에 꽂혀 있어요",
+  notice: "📌 게시판, 크루의 쪽지가 붙어 있어요",
+  bush: "🌿 덤불, 잎에 이슬이 맺혔어요",
+  rock: "🪨 이끼 바위, 이끼가 폭신해요",
+  bench: "🪵 통나무 벤치, 걸터앉아 쉬는 자리",
+  tent: "⛺ 천막, 크루가 여기서 잠깐 쉬어요",
+  wagon: "🛻 덮개 마차, 보급과 장비를 실어 왔어요",
+  crates: "📦 보급 상자, 로프와 짐이 쌓여 있어요",
+  banner: "🚩 깃발, 크루의 문양이 펄럭여요",
+  barrel: "🛢️ 나무통, 물과 식량이 들어 있어요",
+  crystal: "🔮 보라 수정 기둥, 은은하게 빛나요",
+  crystalSea: "💠 하늘색 수정 기둥, 시원한 빛이 돌아요",
+  easel: "🎨 이젤, 그리던 그림이 걸려 있어요",
+  telescope: "🔭 망원경, 멀리 능선을 살펴요",
+  cauldron: "🍲 솥, 초록 약이 끓고 있어요",
+  pine: "🌲 소나무, 공터를 감싸고 있어요",
+  oak: "🌳 참나무, 그늘을 드리워요",
 };
 
 function bubbleFor(id: string, label: string) {
@@ -539,14 +547,9 @@ export function CampPanel({
       <div className="camp-glow" aria-hidden="true" />
       <div className="camp-canvas-host" aria-hidden="true" ref={stageHost} />
       <div className="camp-tools">
-        <strong className="camp-badge">
-          <Icon name="fire" />
-          <span>캠프</span>
-          {data?.current && <em>활성 크루 {hired}</em>}
-        </strong>
-        {data?.current && (
+        {data?.current ? (
           <details
-            className="roster"
+            className="camp-hud"
             open={legend}
             onToggle={(event) => {
               if (event.currentTarget.open !== legend)
@@ -554,21 +557,10 @@ export function CampPanel({
             }}
           >
             <summary>
-              <span className="roster-dots" aria-hidden="true">
-                {data.members
-                  .filter((member) => member.hired)
-                  .slice(0, 4)
-                  .map((member) => (
-                    <i
-                      key={member.id}
-                      style={{
-                        background: roles.find(({ id }) => id === member.roleId)
-                          ?.color,
-                      }}
-                    />
-                  ))}
-              </span>
-              크루 · {hired}
+              <Icon name="fire" />
+              <span>캠프</span>
+              <em>크루 {hired}</em>
+              <i className="camp-hud-caret" aria-hidden="true" />
             </summary>
             <div className="crew-list">
               {data.members
@@ -584,7 +576,7 @@ export function CampPanel({
                           role.title +
                           " " +
                           (member.hired ? "고용" : "미고용") +
-                          (member.id !== role.id ? " · " + member.name : "")
+                          (member.id !== role.id ? " " + member.name : "")
                         }
                         aria-pressed={member.hired}
                         onClick={() => {
@@ -653,7 +645,7 @@ export function CampPanel({
                         aria-label={
                           role.title +
                           " 모델" +
-                          (member.id !== role.id ? " · " + member.name : "")
+                          (member.id !== role.id ? " " + member.name : "")
                         }
                         value={member.provider}
                         onChange={(event) => {
@@ -829,6 +821,11 @@ export function CampPanel({
               )}
             </div>
           </details>
+        ) : (
+          <strong className="camp-badge">
+            <Icon name="fire" />
+            <span>캠프</span>
+          </strong>
         )}
       </div>
       <div className="camp-stage">
@@ -933,7 +930,7 @@ export function CampPanel({
             >
               <span className="character-tag">
                 <b>{member.name}</b>
-                {status ? " · " + status : ""}
+                {status ? <i>{status}</i> : null}
               </span>
               <span className="character-bubble" aria-hidden="true" />
               <span className="character-body">

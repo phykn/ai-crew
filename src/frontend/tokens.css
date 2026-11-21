@@ -1,4 +1,4 @@
-/* 앱과 목업(demo/)이 함께 쓰는 색·간격 토큰과 글꼴. 글꼴 파일은 ui/fonts에 한 벌만 둔다. */
+/* Colour, spacing and font tokens shared by the app and the demo mockup. */
 @font-face {
   font-family: "Nanum Gothic";
   font-style: normal;

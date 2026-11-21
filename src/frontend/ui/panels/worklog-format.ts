@@ -1,19 +1,19 @@
-// 활동 기록 한 줄을 화면이 그릴 수 있는 모양으로 나눈다.
+// Splits one stored activity entry into the pieces a row shows.
 //
-// 저장되는 값(`activity.text`)은 "역할 · 내용"처럼 사람이 읽는 한 문장이고, 그 계약은
-// 그대로 둔다. 여기서는 그 문장을 시간·완료 여부·역할 배지·본문으로 나누기만 한다.
+// The stored `activity.text` stays a human sentence ("role · sentence") so the
+// existing contract and tests hold; only the screen needs it broken apart.
 
 import { roles, type CrewMember } from "../../../shared/actions";
 
 export type LogStatus = "done" | "running" | "failed";
 
 export type LogRow = {
-  /** HH:MM:SS (24시간) — 기록 시각이 없으면 빈 문자열 */
+  /** HH:MM:SS in 24-hour time; empty when the entry has no timestamp */
   time: string;
   status: LogStatus;
   /** "개발 · 태오", "비서 · 하나 → 계획", "사용자", "시스템" */
   label: string;
-  /** 역할 고유 색. 알 수 없으면 시스템 회색 */
+  /** The role colour, or the system grey when the writer is unknown */
   color: string;
   body: string;
 };
@@ -26,7 +26,6 @@ const failedPattern =
 const runningPattern =
   /시작|진행|대기|기다|요청|시도|받는 중|작성 중|여는 중|보내는 중|복구 중/;
 
-/** 기록 시각을 화면용 24시간 시:분:초로 만든다. */
 export function formatLogTime(recordedAt: string | null | undefined): string {
   if (!recordedAt) return "";
   const at = new Date(recordedAt);
@@ -35,7 +34,7 @@ export function formatLogTime(recordedAt: string | null | undefined): string {
   return `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`;
 }
 
-/** 문장에 담긴 낱말로 완료 여부를 고른다. 기록은 대개 이미 끝난 일이라 기본은 완료다. */
+/** Most entries record something already finished, so an unknown sentence reads as done. */
 export function logStatus(text: string): LogStatus {
   if (failedPattern.test(text)) return "failed";
   if (runningPattern.test(text)) return "running";
@@ -53,7 +52,6 @@ function memberWho(member: CrewMember): Who {
   };
 }
 
-/** 역할 이름 하나를 그 역할을 맡은 크루로 바꾼다. */
 function roleWho(role: (typeof roles)[number], members: CrewMember[]): Who {
   const holder = members.find(({ roleId }) => roleId === role.id);
   return holder
@@ -61,7 +59,6 @@ function roleWho(role: (typeof roles)[number], members: CrewMember[]): Who {
     : { role: role.title, name: role.name, color: role.color };
 }
 
-/** 이름이나 역할 이름 하나를 크루의 역할·이름으로 바꾼다. 모르는 말이면 null. */
 export function whoOf(token: string, members: CrewMember[] = []): Who | null {
   const word = token.trim();
   if (!word) return null;
@@ -70,13 +67,13 @@ export function whoOf(token: string, members: CrewMember[] = []): Who | null {
   if (member) return memberWho(member);
   const role = roles.find(({ title }) => title === word);
   if (role) return roleWho(role, members);
-  // "인사팀"처럼 역할 이름에 말을 덧붙인 기록이 있다.
+  // Some writers append a word to the role, as in "인사팀".
   const stem = word.replace(/(팀|담당|파트)$/, "");
   const stemmed = roles.find(({ title }) => title === stem);
   return stemmed ? roleWho(stemmed, members) : null;
 }
 
-/** 맨 앞의 "누가" 부분을 역할 배지로 만든다. 다음 단계로 넘기는 기록은 화살표를 남긴다. */
+/** A hand-off keeps both sides of the arrow so the badge shows the move. */
 function badgeOf(
   head: string,
   members: CrewMember[],
@@ -94,7 +91,6 @@ function badgeOf(
   return { label, color: who.find(Boolean)!.color };
 }
 
-/** 활동 기록 하나를 한 줄로 나눈다. 누가 했는지 알 수 없으면 "시스템"으로 둔다. */
 export function parseActivity(
   entry: { text: string; recordedAt?: string | null },
   members: CrewMember[] = [],

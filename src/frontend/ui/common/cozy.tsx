@@ -1,5 +1,5 @@
-// 작업 패널이 함께 쓰는 작은 조각들: 양피지 접기 카드, 완료 여부 배지, 역할 배지,
-// 비었을 때의 안내 카드. 기본 <details> 삼각형 대신 직접 그린 셰브론을 쓴다.
+// Small pieces the work panels share: parchment disclosures, status and role
+// badges, and the empty-state card.
 
 import type { ReactNode } from "react";
 import type { LogStatus } from "../panels/worklog-format";
@@ -19,7 +19,7 @@ export function Chevron() {
   );
 }
 
-/** 접히는 양피지 카드. 안쪽에 또 접는 카드를 두지 않는다. */
+/** A parchment disclosure; never nest another one inside it. */
 export function CozyDetails({
   title,
   className,
@@ -51,7 +51,7 @@ const statusLabels: Record<LogStatus, string> = {
   failed: "실패",
 };
 
-/** 완료(세이지 체크) · 진행(버터 점) · 실패(코랄 ✕)를 글자 없이 아이콘으로만 보여 준다. */
+/** Done (sage check), running (butter dot), failed (coral cross) as icons only. */
 export function StatusBadge({ status }: { status: LogStatus }) {
   return (
     <span className={`log-status log-status-${status}`} title={statusLabels[status]}>
@@ -82,7 +82,7 @@ export function StatusBadge({ status }: { status: LogStatus }) {
   );
 }
 
-/** 역할 고유 색 점이 들어간 작은 파스텔 알약. */
+/** A compact pastel pill carrying the role's own colour dot. */
 export function RoleBadge({ label, color }: { label: string; color: string }) {
   return (
     <span className="log-role-badge">
@@ -117,7 +117,7 @@ const emptyPaths: Record<EmptyIcon, ReactNode> = {
   list: <path d="M4 5.2h8M4 8h8M4 10.8h4.4" />,
 };
 
-/** 비었을 때의 안내 카드. 회색 문장 하나 대신 아이콘과 짧은 설명을 둔다. */
+/** Icon and one short line instead of a bare grey sentence. */
 export function EmptyState({
   icon,
   title,

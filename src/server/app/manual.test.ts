@@ -11,8 +11,8 @@ import { CrewStore } from "../../store/store";
 test("앱 매뉴얼을 읽어 비서 지침에 넣는다", () => {
   const manual = loadAppManual([process.cwd()]);
   expect(manual).toBeTruthy();
-  expect(manual).toContain("# AI Crew app manual");
-  expect(manual).toContain("style watcher");
+  expect(manual).toContain("# AI Crew 사용 매뉴얼");
+  expect(manual).toContain("스타일 감시자");
   expect(manual).toContain("diagnostics.run");
   expect(manual).toContain("createCrewHttpServer");
 
@@ -24,14 +24,14 @@ test("앱 매뉴얼을 읽어 비서 지침에 넣는다", () => {
     hired: true,
   };
   expect(crewInstructions(member, [], [], undefined, { appManual: manual })).toContain(
-    "This app's manual",
+    "이 앱의 사용법 매뉴얼",
   );
   // 매뉴얼은 비서에게만 간다. 다른 역할은 앱 사용법을 답하지 않는다.
   expect(
     crewInstructions({ ...member, roleId: "docs", id: "docs" }, [], [], undefined, {
       appManual: manual,
     }),
-  ).not.toContain("This app's manual");
+  ).not.toContain("이 앱의 사용법 매뉴얼");
 });
 
 test("매뉴얼이 없으면 지침에 억지로 넣지 않는다", () => {
@@ -45,7 +45,7 @@ test("매뉴얼이 없으면 지침에 억지로 넣지 않는다", () => {
     ).toBeNull();
     // 패키징한 앱에는 저장소 파일이 없으므로 빌드에 넣은 본문으로 대신한다.
     expect(resolveAppManual([empty])).toBe(bundledAppManual);
-    expect(bundledAppManual).toContain("# AI Crew app manual");
+    expect(bundledAppManual).toContain("# AI Crew 사용 매뉴얼");
   } finally {
     rmSync(empty, { recursive: true, force: true });
   }
@@ -87,8 +87,8 @@ test("매뉴얼은 저장된 기억·위키와 함께 비서 프롬프트에 들
       wikiReference(store.wikiDigest(projectId), ""),
       { appManual: loadAppManual([process.cwd()]) },
     );
-    expect(instructions).toContain("only channel between the user and the crew");
-    expect(instructions).toContain("This app's manual");
+    expect(instructions).toContain("유일한 창구");
+    expect(instructions).toContain("이 앱의 사용법 매뉴얼");
   } finally {
     store.close();
     rmSync(root, { recursive: true, force: true });

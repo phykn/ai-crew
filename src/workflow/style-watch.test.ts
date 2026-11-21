@@ -86,13 +86,13 @@ test("스타일 보고는 사용자 말풍선이 아니라 비서가 읽는 보�
       undefined,
       { styleReports: reports },
     );
-    expect(instructions).toContain("Style watcher report");
+    expect(instructions).toContain("스타일 감시자 보고");
     expect(instructions).toContain("src/a.ts");
     // 다른 역할의 프롬프트에는 비서에게 가는 보고를 싣지 않는다.
     const style = store.readMembers(projectId, "style")[0];
     expect(
       crewInstructions(style, [], [], undefined, { styleReports: reports }),
-    ).not.toContain("Style watcher report");
+    ).not.toContain("스타일 감시자 보고");
   } finally {
     store.close();
     rmSync(root, { recursive: true, force: true });

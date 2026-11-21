@@ -1,66 +1,66 @@
-# The app helper and the AI Crew MCP
+# 앱 도우미와 AI Crew MCP
 
-The user talks to the assistant as usual. The app helper looks up how something works and, when asked, does the AI Crew operation a person could do on screen. Help, screen movement, running a job, editing, saving and changing settings are all approached the same way. The assistant passes the request on and says the result in the original conversation.
+사용자는 평소처럼 비서에게 말한다. 앱 도우미는 사용법을 찾아 알려주고, 부탁받으면 사람이 화면에서 할 수 있는 AI Crew의 조작을 대신한다. 도움말, 화면 이동, 업무 실행, 편집·저장과 설정 변경까지 같은 방식으로 접근한다. 비서가 요청을 전달하고 결과를 원래 대화에서 말한다.
 
-## How an action continues in conversation
+## 대화에서 동작이 이어지는 방식
 
-| What the user said | What the helper does | What the user sees |
+| 사용자가 말한 것 | 도우미가 하는 일 | 사용자에게 보이는 결과 |
 |---|---|---|
-| "How do I change the workflow?" | Reads the current screen and the help for that feature. | The assistant gives a short explanation that can be followed in this window. |
-| "Show me why the last test stopped" | Finds the job in the current project, reads the record and opens that log. When several jobs match and the request does not single one out, it returns titles and times to the assistant. | The log is filtered to that job. The assistant says the reason it confirmed from the record. If several jobs match, it asks once in the original chat which one. |
-| "Run that test again" | Checks the ID and latest state of the job chosen before and runs the same action as `continue` on screen. | That job goes through the existing resume rules. If the real run has not started, the waiting state and the reason are given. |
-| "Add an accessibility review after development and do it for every screen job from now on" | Checks the current project's flow and assignees, then adds a conditional stage to the graph draft. After verifying the connection, the handoff artifact and the completion criteria, it saves with the scope the user asked for. | The changed node and connection can be checked in the same editor. The assistant states the version and the condition the next new job will use. |
-| "Delete this memory" | Finds the project, the assignee and the memory, and when a run rule is attached, reads the effect and the options as the existing delete procedure does. | When the target is clear, the same delete procedure runs. When it must decide between deleting only the memory and dropping the rule too, the existing confirmation opens. |
+| “워크플로우는 어떻게 고쳐?” | 현재 화면과 해당 기능의 도움말을 읽는다. | 비서가 지금 창에서 따라 할 수 있는 짧은 설명을 한다. |
+| “지난 테스트가 멈춘 이유 보여줘” | 현재 프로젝트에서 업무를 찾고, 기록을 읽은 뒤 해당 로그를 연다. 후보가 여러 건이고 요청만으로 구별하기 어려우면 비서에게 제목과 시각을 반환한다. | 로그는 해당 업무로 필터링된다. 비서는 기록으로 확인한 이유를 말한다. 후보가 여러 건이면 원래 채팅에서 어느 업무인지 한 번 묻는다. |
+| “그 테스트 이어서 돌려줘” | 앞서 선택한 업무의 ID와 최신 상태를 확인하고 화면의 ‘이어가기’와 같은 동작을 실행한다. | 그 업무가 기존 재개 절차를 거친다. 실제 실행이 아직 시작되지 않았으면 대기 상태와 이유를 알려준다. |
+| “개발 뒤에 접근성 검토를 붙이고 앞으로 화면 작업마다 해줘” | 현재 프로젝트의 흐름과 담당을 확인하고, 조건부 단계를 그래프 초안에 추가한다. 연결, 인계 산출물, 완료 조건을 검증한 뒤 사용자가 요청한 범위로 저장한다. | 변경된 노드와 연결을 같은 편집기에서 확인할 수 있다. 다음 새 업무에서 적용할 버전과 조건을 비서가 알려준다. |
+| “이 기억 지워줘” | 프로젝트·담당자·기억을 찾고, 연결된 실행 규칙이 있으면 기존 삭제 절차에 맞춰 영향과 선택지를 읽는다. | 대상이 명확하면 같은 삭제 절차를 진행한다. 기억만 지울지 규칙도 해제할지 결정이 필요하면 기존 확인을 연다. |
 
-A request that changes the screen is answered with success only after the real panel moved. A request for an explanation is handled as a read. While a work screen is opened or its state is read, job runs keep going as they were. When the user's answer is needed, the existing approval card or the assistant's question is used, and the detailed operations and results stay in the related log.
+화면을 바꾸는 요청은 실제 패널이 이동한 뒤 성공으로 답한다. 설명 요청은 읽기로 처리한다. 작업 화면을 열거나 상태를 읽는 동안에는 업무 실행 상태가 그대로 이어진다. 사용자에게 답이 필요하면 기존 승인 카드나 비서의 질문을 사용하고, 세부 조작과 결과는 관련 로그에 남긴다.
 
-## Feature scope
+## 기능 범위
 
-For every feature the user can operate, the actions that can run are defined. A read gives the current value, the possible choices, the target ID and the state. A key press, a click or a drag is how the screen calls that feature. MCP calls the action those inputs would produce directly.
+사용자가 조작할 수 있는 기능마다 실행 가능한 동작을 정의한다. 읽기에는 현재 값, 가능한 선택, 대상 ID와 상태를 제공한다. 키 입력, 클릭, 드래그는 화면에서 해당 기능을 호출하는 방식이다. MCP는 그 입력으로 성립하는 동작을 직접 호출한다.
 
-| Area | Read | Run |
+| 영역 | 읽기 | 실행 |
 |---|---|---|
-| Screen and camp | Current project, session, tab, working characters, chosen job, open detail | Switch chat, log, memory, workflow; switch camp and work view in a narrow window; resize the work panel; fold and unfold the crew legend and a detail; open a job from a character or a handoff scene; go to a related message, log or document; go back to the earlier screen |
-| Project | Registered folders, connection state, last session, the app records a removal would affect | Open the folder picker or a folder access was granted to; switch, reconnect or remove a project. The source files stay outside what removing a project touches. |
-| Session and composer | Session list and titles, conversation record, draft, current follow-up target, registered commands | New conversation; load or delete an earlier session; write or edit a draft; attach or clear the target; send a message or resend a failed one; run a registered slash command and `/clear` |
-| Job and approval | Job state, participants, handoffs, change and test results, waiting questions, current approval mode | Open a job and its question; approve or ask to revise the current plan version; add a follow-up to a named job; stop a response or a named job; continue or retry; allow or refuse a permission question; answer a general question; change the approval mode |
-| Log and usage | Work history, run counts, time and usage per assignee and model, plan and change history and artifacts | Filter all or one job; open an event, evidence or artifact; attach a follow-up to a plan comment or a changed range |
-| Job workspace | Source folder or the per-job worktree, base commit, change versions and apply state | Choose an isolated run; request and confirm applying; clean up a finished workspace |
-| Crew | Role, name, hired state (`hired`, `not hired`), current job, role definition, model and connection state, skill state, required permissions, blocking reason, MCP settings and memory links | Choose a role and name in the legend; rename; open the role definition; set the model; open a skill detail, its run log or its approval question; add or remove a skill; grant or revoke MCP servers and tool permissions; request, adopt and assign a candidate; hire, fire or rehire a regular member or a temp member |
-| Model and connection | Connected Codex and local LLM, available models, connection state and supported features | Add, edit and remove a model connection the user can set, check the connection, assign a model per role. Sign-in and credential entry open that settings screen and continue with the user input the operating system or provider requires. |
-| Shared wiki | Contents, nodes and references, body and source, versions and change timeline | Switch between list, node and timeline; open a document or a source; create, edit, save and delete a document and its references; open the change history; keep or drop an attached rule |
-| Agent memory | Per-assignee memory the user can see in this project, and its source | Choose an assignee; open a memory and its source; delete a memory the UI allows and handle an attached rule |
-| Workflow | Default flow per job type, saved versions and drafts, stages, connections and check results | Choose a flow; add, move, change and delete stages and connections; edit assignee, permission request, run condition, handoff and completion criteria; save layout; check and save a draft; apply to the next new job, the current job or this once, as the user asks |
-| App help and settings | Guidance for the current screen, possible actions, setting values and their effect | Open the settings screen; change the app settings the UI offers; quit and restart the app and restore the earlier session. When a run is going at quit time, the existing quit procedure applies. |
+| 화면·캠프 | 현재 프로젝트·세션·탭·일하는 캐릭터·선택한 업무·열린 상세 | 대화·로그·메모리·워크플로우 전환, 좁은 창의 캠프↔작업 보기, 작업 패널 폭 조정, 크루 범례와 상세 펼치기·접기, 캐릭터·인계 장면에서 업무 열기, 관련 메시지·로그·문서로 이동, 이전 화면 복귀 |
+| 프로젝트 | 등록 폴더, 연결 여부, 마지막 세션, 제거 시 영향받는 앱 기록 | 폴더 선택기를 열거나 접근이 부여된 폴더를 열기, 프로젝트 전환·다시 연결·제거. 원본 파일은 앱의 프로젝트 제거 범위 밖에 둔다. |
+| 세션·입력창 | 세션 목록과 제목, 대화 기록, 초안, 현재 추가 지시 대상, 등록 명령 | 새 대화, 이전 세션 로드·삭제, 초안 작성·수정, 대상 연결·해제, 메시지 보내기·실패한 전송 재시도, 등록된 슬래시 명령 실행과 `/clear` |
+| 업무·승인 | 업무 상태, 참여자, 인계, 변경분·테스트 결과, 기다리는 질문, 현재 승인 모드 | 업무와 질문 열기, 현재 계획 버전 승인·수정 요청, 명시한 업무에 추가 지시, 응답 생성 또는 지정 업무 멈춤, 이어가기·재시도, 권한 질문에 허용·거절, 일반 질문에 답변, 승인 모드 변경 |
+| 로그·사용량 | 작업 이력, 담당·모델별 실행 횟수·시간·사용량, 계획·변경 이력과 산출물 | 전체·업무별 필터, 사건·근거·산출물 열기, 계획 의견과 변경 구간에 추가 지시 연결 |
+| 업무 작업공간 | 원본 폴더 또는 업무별 워크트리, 기준 커밋, 변경 버전과 반영 상태 | 격리 실행 선택, 반영 요청과 확인, 종료된 작업공간 정리 |
+| 크루 | 역할·별명·고용 상태(`고용`·`미고용`), 현재 업무, 역할 지침, 모델·연결 상태, 스킬 상태·필요 권한·차단 이유, MCP 설정과 기억 링크 | 범례에서 역할과 별명 선택, 별명 변경, 역할 지침 열기, 모델 지정, 스킬 상세·실행 로그·연결된 승인 질문 열기, 스킬 추가·해제, MCP 서버와 도구 권한 부여·회수, 후보 요청·채택·배정, 정규 팀원·알바 고용·해고·재고용 |
+| 모델·연결 | 연결된 Codex·로컬 LLM, 사용 가능 모델, 연결 상태와 지원 기능 | 사용자가 설정할 수 있는 모델 연결 추가·수정·제거, 연결 확인, 역할별 모델 지정. 로그인·자격 증명 입력은 해당 설정 화면을 열고 운영체제나 제공자가 요구하는 사용자 입력으로 이어간다. |
+| 공유 위키 | 목차, 노드와 참조, 본문·출처, 버전과 변경 타임라인 | 목록·노드·타임라인 전환, 문서·출처 열기, 문서와 참조 생성·편집·저장·삭제, 변경 이력 열기, 연결된 규칙 유지 또는 해제 |
+| 에이전트 기억 | 현재 프로젝트에서 사용자가 볼 수 있는 담당자별 기억과 출처 | 담당자 선택, 기억과 출처 열기, UI에서 가능한 기억 삭제와 연결 규칙 처리 |
+| 워크플로우 | 업무 유형별 기본 흐름, 저장 버전과 초안, 단계·연결·검증 결과 | 흐름 선택, 단계·연결 추가·이동·변경·삭제, 담당·권한 요청·실행 조건·인계·완료 조건 편집, 배치 저장, 초안 검증·저장, 다음 새 업무·이번 업무·이번에만 중 사용자 요청에 맞춰 적용 |
+| 앱 도움말·설정 | 현재 화면 안내, 가능한 동작, 설정값과 그 영향 | 설정 화면 열기, UI에서 제공하는 앱 설정 변경, 앱 종료·재실행 뒤 기존 세션 복원. 종료할 때 진행 중인 실행이 있으면 기존 종료 절차를 그대로 수행한다. |
 
-When a folder or sign-in screen is opened, or an existing confirmation was raised, the helper returns a `waiting for input` state. The result is settled only after the choice is made. Quit and restart first record that the request was accepted, and the result is confirmed once the same session is restored in the reopened app. When a new user feature is added to the app, the same action ID and read path are attached to the MCP catalog.
+폴더·로그인 화면을 열었거나 기존 확인을 띄웠을 때는 ‘입력 대기’ 상태를 반환한다. 선택이 끝난 뒤에만 결과값을 확정한다. 종료·재실행은 먼저 요청 접수를 기록하고, 다시 열린 앱에서 같은 세션이 복원된 뒤 결과를 확인한다. 앱에 새 사용자 기능을 붙이면 같은 조작 ID와 조회 수단을 MCP 카탈로그에도 연결한다.
 
-## The shared run path
+## 공통 실행 경로
 
-The Electron main process holds the list of user actions and the runner. Each item's ID, target type, input validation, required permission and state condition live in one place. The IPC of the React screen and the app MCP call the same runner. A screen navigation replies from the renderer of the named window whether it applied, and a lasting change is handled by the existing job, settings and save logic. The same log, approval, version check and camp event happen on both sides. Inside the app the assistant's helper MCP connection is granted that delegation scope.
+Electron 메인 프로세스에 사용자 동작 목록과 실행기를 둔다. 각 항목의 ID, 대상 유형, 입력 검증, 필요한 권한, 상태 조건은 한곳에서 관리한다. React 화면의 IPC와 앱 MCP가 같은 실행기를 호출한다. 화면 탐색은 지정 창의 렌더러에서 적용 여부를 회신하고, 영속 변경은 기존 업무·설정·저장 로직이 처리한다. 같은 로그, 승인, 버전 검사와 캠프 이벤트가 양쪽에서 발생한다. 앱 안에서는 비서가 호출한 도우미의 MCP 연결에 해당 위임 범위를 부여한다.
 
-The MCP tool surface is narrowed to the three below. A feature's actions and input schemas are found through a search.
+MCP의 도구 표면은 아래 세 개로 좁힌다. 기능별 동작과 입력 스키마는 검색 결과에서 찾아 쓴다.
 
-| Tool | Input | Return |
+| 도구 | 입력 | 반환 |
 |---|---|---|
-| `app_find_actions` | A search term or a feature area | Action IDs that fit the permission and the current context, their descriptions, target types, input schemas and, where needed, the user input condition |
-| `app_read` | The item to read, project, session and target IDs, a page position when needed | Screen state, target candidates, the records allowed, current versions. When there are many targets, the position of the next page |
-| `app_act` | An action ID, a target ID, registered arguments and, for a change or a send, a request ID and the base version of that target | The applied result or a wait for input or approval, the changed target and version, the failure reason and the record to link |
+| `app_find_actions` | 검색어 또는 기능 영역 | 권한과 현재 맥락에 맞는 조작 ID, 설명, 대상 유형, 입력 스키마, 필요한 경우 사용자 입력 조건 |
+| `app_read` | 조회 항목, 프로젝트·세션·대상 ID, 필요할 때 페이지 위치 | 화면 상태, 대상 후보, 허용된 기록, 현재 버전. 대상이 많으면 다음 페이지 위치를 함께 준다. |
+| `app_act` | 조작 ID, 대상 ID, 등록된 인자, 변경 또는 전송의 경우 요청 ID와 해당 대상의 기준 버전 | 적용 결과 또는 입력·승인 대기, 변경된 대상과 버전, 실패 이유, 연결할 기록 |
 
-For example, `workflow.connect_nodes` takes the source and destination stage IDs of the same draft. `workflow.save` takes the draft and the base version and saves after the same checks as the screen. `job.resume` takes the exact job ID and goes through the existing state checks, and `approval.answer` takes the current question ID and an allow or a refuse. Text returned by a tool, or an argument a model passed, is input material: the runner checks the registered input and the user's permission.
+예를 들어 `workflow.connect_nodes`는 같은 초안의 출발·도착 단계 ID를 받는다. `workflow.save`는 초안과 기준 버전을 받아 화면과 같은 검사 후 저장한다. `job.resume`는 정확한 업무 ID로 기존 상태 검사를 거치고, `approval.answer`는 현재 질문 ID와 허용·거절을 받는다. 도구의 결과로 받은 텍스트나 모델이 넘긴 인자는 입력 자료이며, 실행기가 등록된 입력과 사용자 권한을 확인한다.
 
-## Permission and concurrent operation
+## 권한과 동시 조작
 
-- **User delegation.** When the assistant passes a new user request to the helper, the app links the request's source, project, session and the action scope allowed. A request to be told progress links a read, and an explicit request to fix something links the edit of that target. Several actions needed inside one delegation may run. A project switch, or a change in another project, applies to a target named or chosen clearly. A delegation passed to a peer is handled with that peer's current permission.
-- **Checking the current state.** Immediately before the real call, the app checks the delegation scope, the agent's current permission, the target's ownership and the approval policy. Permission edits and deletes go through the same actions as the UI, and raise the same confirmation when the state on screen needs one. An `allow` the helper passes is handled with that ID only when the user decided it after seeing the current approval question. Auto and always follow the existing approval policy. Tool responses and logs return the connection state instead of credentials.
-- **Contention.** When the user changes a job or a draft, a state change is judged by the named ID and base version. When an older input could overwrite a newer edit, the draft is kept and the changed item is named. When the user moves to another session during a screen operation, the current screen wins and the result and a link stay in the original conversation. A deleted target or a replaced approval question is read again in its latest state.
-- **Duplicates and failures.** The same request ID with the same arguments returns the first result. The same ID with different arguments asks for the new intent. When a failure comes mid-way, the actions done and the actions left are told apart. When, for example, a node connection landed but the save check failed, the editing draft is kept and the error is given. A retry follows the existing job and permission rules.
-- **Recording.** A save or a run change links the user request, the helper that actually ran, and the action, target, version and result applied. When the helper moved the screen, the place confirmed on screen is returned. The assistant leaves only the result the user asked about and the next choice it needs in the conversation.
+- **사용자 위임.** 비서가 새 사용자 요청을 도우미에게 넘길 때 앱이 요청의 출처·프로젝트·세션·허용할 동작 범위를 연결한다. 진행 상황을 알려 달라는 요청에는 조회를, 고쳐 달라는 명시적 요청에는 그 대상의 편집을 연결한다. 같은 위임 안에서 필요한 여러 조작을 할 수 있다. 프로젝트 전환이나 다른 프로젝트의 변경은 이름 또는 선택이 분명한 대상에 적용한다. 다른 동료에게 전달된 위임은 동료의 현재 권한에서 처리한다.
+- **현재 상태 확인.** 실제 호출 직전에 앱이 위임 범위, 에이전트의 현재 권한, 대상 소속, 승인 정책을 확인한다. 권한 편집과 삭제도 기존 UI와 같은 조작으로 수행하며, 화면에서 사용자 확인이 필요한 상태라면 같은 확인 절차를 연다. 도우미가 전달하는 ‘허용’은 현재 승인 질문을 보고 사용자가 결정한 경우에 그 ID로 처리한다. 자동과 항상 모드는 기존 승인 정책을 따른다. 도구 응답과 로그에는 자격 증명 대신 연결 상태를 돌려준다.
+- **경합.** 사용자가 업무나 초안을 바꾸면 상태 변경은 명시한 ID와 기준 버전을 기준으로 판정한다. 오래된 입력이 최신 편집을 덮어쓸 수 있으면 초안을 보존하고 변경된 항목을 알려준다. 화면 조작 도중 사용자가 다른 세션으로 이동하면 현재 화면을 우선하고, 원래 대화에 결과와 열기 링크를 남긴다. 삭제된 대상이나 교체된 승인 질문은 최신 상태로 다시 확인한다.
+- **중복과 실패.** 같은 요청 ID와 같은 인자로 다시 들어오면 최초 결과를 돌려준다. 같은 ID로 다른 인자가 오면 새 의도를 확인한다. 연속 작업 도중 실패하면 완료한 동작과 남은 동작을 구분한다. 예를 들어 노드 연결은 반영됐으나 저장 검증이 실패했다면 편집 초안을 보존하고 오류를 알려준다. 재시도는 기존 업무와 권한 규칙을 따른다.
+- **기록.** 저장이나 실행 변경에는 사용자 요청, 실제 실행한 도우미, 적용한 동작·대상·버전·결과를 연결한다. 도우미가 화면으로 이동했으면 화면에서 확인된 위치를 돌려준다. 비서는 사용자가 물은 결과와 필요한 다음 선택만 대화에 남긴다.
 
-## Acceptance criteria
+## 인수 기준
 
-1. The difference between the list of user action IDs and the MCP catalog is empty. Every area in the table is compared, including opening a screen, reading, input and saving, and actions that need a confirmation such as permissions and deletes.
-2. In the same project, stop a job, answer an approval, rehire a member and save a workflow once from a button and once from MCP. Under the same conditions the same state change, permission decision and screen event happen, and the record tells apart who really ran it.
-3. Ask to show why it stopped on two jobs with the same name. After reading the candidates, open the chosen job's log. Each job keeps its stopped state. When a resume is then requested explicitly, only the one chosen goes through the existing procedure.
-4. Make the save check fail after adding a node and a connection. The draft and the error stay in the graph the user sees and the saved version does not change. UI and MCP results agree for the existing wiki delete confirmation, a cancelled folder picker and a click on an earlier approval card.
-5. Reproduce an ID from another project, a revoked permission, an old version, a duplicate request, and the user switching tabs directly while the helper works. The permission decision and the first result hold, and after the direct tab switch the screen stays where the user chose.
+1. 사용자 조작 ID 목록과 MCP 카탈로그의 차집합이 비어 있어야 한다. 화면 열기·조회, 입력·저장, 권한·삭제처럼 확인이 필요한 조작까지 표의 전 영역을 대조한다.
+2. 같은 프로젝트에서 버튼과 MCP로 각각 업무 중단, 승인 응답, 팀원 재고용, 워크플로우 저장을 실행한다. 같은 조건에서 같은 상태 전이·권한 판정·화면 이벤트가 발생하고 기록에는 실제 실행 주체가 구분된다.
+3. 이름이 겹치는 업무 두 건에서 “멈춘 이유 보여줘”를 요청한다. 후보를 읽은 뒤 선택한 업무의 로그를 연다. 각 업무는 중단 상태를 유지한다. 이어서 명시적으로 재개를 요청했을 때 선택한 한 건만 기존 절차를 거친다.
+4. 노드 추가와 연결 뒤 저장 검증을 실패시킨다. 사용자가 보는 그래프에 초안과 오류가 남고 저장 버전은 그대로다. 기존 위키 삭제 확인, 폴더 선택 취소, 이전 승인 카드 클릭에서도 UI와 MCP 결과가 일치한다.
+5. 다른 프로젝트의 ID, 회수된 권한, 오래된 버전, 중복 요청, 도우미 동작 중 직접 탭 이동을 각각 재현한다. 권한 판정과 최초 결과가 유지되고, 직접 탭 이동 이후 화면은 사용자가 선택한 위치에 남는다.

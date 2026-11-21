@@ -9,7 +9,7 @@ export function appTools(runner: ActionRunner): ToolSet {
   return {
     app_find_actions: tool({
       description:
-        "Find the ID, description and input schema of an action the screen can run. Narrow it by feature area.",
+        "화면에서 할 수 있는 동작의 ID, 설명, 입력 스키마를 찾는다. 기능 영역으로 좁힐 수 있다.",
       inputSchema: jsonSchema<{ query?: string; area?: string }>({
         type: "object",
         properties: {
@@ -21,7 +21,7 @@ export function appTools(runner: ActionRunner): ToolSet {
     }),
     app_read: tool({
       description:
-        "Read the current project, session, tab, jobs, waiting approvals, crew, skill states, workflow and usage.",
+        "현재 프로젝트·세션·탭·업무·대기 중 승인·크루·스킬 상태·워크플로우·사용량을 읽는다.",
       inputSchema: jsonSchema<Record<string, never>>({
         type: "object",
         properties: {},
@@ -30,7 +30,7 @@ export function appTools(runner: ActionRunner): ToolSet {
     }),
     app_act: tool({
       description:
-        "Run an action found with app_find_actions through the same runner as the screen. An action that needs user input returns a waiting-for-input result.",
+        "app_find_actions에서 찾은 동작을 화면과 같은 실행기로 실행한다. 사용자 입력이 필요한 동작은 '입력 대기'를 돌려준다.",
       inputSchema: jsonSchema<{
         action: Record<string, unknown>;
         requestId?: string;

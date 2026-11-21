@@ -1,149 +1,205 @@
-# AI Crew app manual
+# AI Crew 사용 매뉴얼
 
-This manual is the evidence the in-app assistant answers from when it is asked "how do I use this app?" or "what is this button?". Screen names and features match the real code (`src/`) and nothing that does not exist is described. The app reads `agents/APP_MANUAL.md` at startup and puts it into the assistant's instructions, so editing this file changes the next conversation without rebuilding the app.
+이 문서는 앱 안의 비서가 "이 앱 어떻게 써?", "이 버튼 뭐야?" 같은 질문에 근거로 쓰는 매뉴얼입니다.
+화면 이름과 기능은 실제 코드(`src/`)와 맞춰 적었고, 없는 기능은 적지 않았습니다. 앱이 뜰 때
+`agents/APP_MANUAL.md`를 읽어 비서의 지침에 넣으므로, 이 파일을 고치면 앱을 다시 만들지 않아도
+다음 대화부터 반영됩니다.
 
-## 1. What this app does
+## 1. 이 앱이 하는 일
 
-AI Crew is a desktop app that opens one local folder of the user's as a project and lets the user **talk with a single assistant** while several roles work behind it. The assistant answers a simple question itself; a request that needs several hands, such as changing code, is planned and handed to roles like development, review, style and test, then reported back as one conversation. A file change goes through approval and verification, and who changed what stays in the job log and the audit record. All data stays on this computer.
+AI Crew는 사용자의 로컬 폴더 하나를 프로젝트로 열어 두고, **비서 한 명과만 대화하면서** 그 뒤에서
+여러 역할이 일하는 모습을 지켜보는 데스크톱 앱입니다. 비서는 간단한 질문에는 바로 답하고, 코드를
+고치는 일처럼 여럿이 나눠야 하는 요청은 계획을 세워 개발·리뷰·스타일·테스트 같은 역할에 맡긴 뒤
+결과를 모아 한 대화로 돌려줍니다. 파일을 바꾸는 일은 승인 절차와 검증을 거치고, 누가 무엇을
+바꿨는지 로그와 감사 기록에 남습니다. 모든 데이터는 이 컴퓨터 안에만 있습니다.
 
-## 2. Screen layout
+## 2. 화면 구성
 
-| Place | What is there | How it is used |
+| 위치 | 무엇이 있나 | 어떻게 쓰나 |
 |---|---|---|
-| Left **camp** | A flat camp yard with a campfire at its center and a tent, a wagon, three log benches and a supply crate around it, the crew characters, role-colored name tags and states (waiting, planning, developing, verifying, not hired), collapsed **crew legend** | The characters show who is in which state now. The yard is flat grass with a dirt path and no sky, cliff or water, so the whole yard is walkable and the crew turns around the tent, the wagon, the campfire, the benches and the crates. Characters and props are sorted by their feet, so walking behind the tent, the wagon or a bench really hides a character and stepping forward puts it in front. When work is assigned, the assistant walks to the assignee and hands it over, and style and review watch beside the worker. Hovering the tent, the wagon, the campfire, a bench or the crates shows a tag, and pressing makes sparks rise and the firelight pulse. Hiring, name, model and skills are set on each legend row. In a narrow window the campfire button at the top switches between the camp view and the work view. |
-| Top **toolbar** | Campfire (camp and work), chat, log, memory, workflow, pulse (environment diagnostics), bell (notifications), ≡ (session list) | A tab icon swaps the same right panel. The project folder is not at the top but on the **folder tag above the composer, beside the approval mode**. Pick a recent project there or open the operating system picker with "open folder…". |
-| **Chat** tab | Assistant and user bubbles, composer, approval card, running-job banner | See section 4. |
-| **Log** tab | Per-job activity (delegation, plan, change, verification, failure, retry), check results and evidence, and **model runs** (count, time, tokens and cost per role and model) | It can be narrowed to one job, and a completion report opens it with "job log". |
-| **Memory** tab | Two sections: **memory** (project-wide and per assignee) and the **project wiki** (explorer and graph) | Memory is carried into the next conversation by the assistant. The wiki is a document the team shares, and its version and author stay. The explorer searches title and body and links on with chips for "pages that reference this page" and "pages this page points to"; the graph places pages by connection depth and opens the same page when pressed. The wiki is read before work by the assistant and every role, and confirmed rules, structures and decisions are written back. |
-| **Workflow** tab | Stages and connections of a job flow, assignee role, run condition, handoff artifact, completion criteria, saved versions | Drag a node with the mouse to move it, and drag from its connection point onto another stage's connection point (or its card) to join the running order. Pressing a connection line shows a ✕ to cut it, or press Delete. Pressing a node edits name, assignee and condition on the line below. Saving the flow used for new jobs checks broken connections, cycles and missing required stages. |
+| 왼쪽 **캠프** | 모닥불과 크루 캐릭터, 역할색 이름표와 상태(대기·계획·개발·검증·미고용), 접힌 **크루 범례** | 캐릭터는 지금 누가 무슨 상태인지 보여 주는 화면입니다. 크루는 오두막 앞·모닥불·다리 사이를 실제로 걸어 다니고, 쉬는 크루는 통나무 의자에 걸터앉습니다. 일이 배정되면 비서가 담당자 옆으로 걸어가 전하고, 스타일·리뷰는 일하는 사람 옆에서 지켜봅니다. 통나무 의자·모닥불·작업대·오두막 등불에 마우스를 올리면 팻말이 뜨고 누르면 반응합니다. 고용·별명·모델·스킬 설정은 범례의 각 줄에서 합니다. 좁은 창에서는 상단 모닥불 버튼으로 캠프 보기와 작업 보기를 오갑니다. |
+| 상단 **툴바** | 모닥불(캠프↔작업), 대화, 로그, 메모리, 워크플로우, 맥박(환경 진단), 종(알림), ≡(세션 목록) | 탭 아이콘은 같은 오른쪽 패널을 바꿔 끼웁니다. 프로젝트 폴더는 상단이 아니라 **입력창 위(승인 모드 옆)의 폴더 팻말**에 있습니다. 최근 프로젝트를 고르거나 "폴더 열기…"로 운영체제 선택기를 엽니다. |
+| **대화** 탭 | 비서와 사용자의 말풍선, 입력창, 승인 카드, 진행 중 업무 배너 | 아래 4장을 참고하세요. |
+| **로그** 탭 | 업무별 활동 기록(위임·계획·변경·검증·실패·재시도), 검증 결과와 근거, **모델 실행**(역할·모델별 횟수, 소요 시간, 토큰, 비용) | 업무 하나로 좁혀 볼 수 있고, 완료 보고에서 "업무 로그"를 눌러 바로 열립니다. |
+| **메모리** 탭 | 두 구역: **기억**(프로젝트 공통/담당자별)과 **프로젝트 위키**(탐색기·그래프) | 기억은 비서가 다음 대화에도 가져옵니다. 위키는 팀이 같이 보는 문서이며 버전과 작성자가 남습니다. 탐색기에서는 제목·본문 검색과 '이 문서를 참조하는 문서 / 이 문서가 가리키는 문서' 칩으로 이어 읽고, 그래프에서는 연결 깊이별로 놓인 문서를 눌러 같은 내용을 엽니다. 위키는 비서와 모든 역할이 작업 전에 참고하고, 확인한 규칙·구조·결정을 다시 남깁니다. |
+| **워크플로우** 탭 | 업무 흐름의 단계·연결, 담당 역할, 실행 조건, 인계 산출물, 완료 조건, 저장 버전 | 노드를 마우스로 끌어 옮기고, 아래 연결점에서 다른 단계의 연결점(또는 카드)으로 끌어 실행 순서를 잇습니다. 연결선을 누르면 ✕가 떠서 바로 끊거나 Delete로 끊습니다. 노드를 누르면 아래 줄에서 이름·담당·조건을 고칩니다. 새 업무에 쓸 흐름을 저장하면 끊긴 연결·순환·필수 단계 누락을 검사합니다. |
 
-## 3. The assistant and the eight roles
+## 3. 비서와 여덟 역할
 
-**The conversation happens only with the assistant.** Every message the user writes in the composer goes to the assistant. The other roles never talk to the user directly; they report results and questions to the assistant, which passes them on in the user's words. The tools that operate the app itself (reading screen state, finding an action, running an action) are used by the assistant too.
+**대화는 비서와만 합니다.** 사용자가 입력창에 쓰는 모든 메시지는 비서에게 갑니다. 나머지 역할은
+사용자와 직접 대화하지 않고, 결과와 질문을 비서에게 보고하면 비서가 사용자 말로 옮겨 전합니다.
+앱 자체를 조작하는 도구(화면 상태 읽기, 동작 찾기, 동작 실행)도 비서가 직접 씁니다.
 
-| id | Role | Name | Skills | When it runs | What it does |
+| id | 역할 | 이름 | 스킬 | 언제 도나 | 하는 일 |
 |---|---|---|---|---|---|
-| `assistant` | Assistant (비서) | 하나 | Chat · app control · delegation | Every message the user sends | The only conversation channel. Splits the request, plans, and gathers the returned reports; also runs the app-control tools |
-| `hr` | HR (인사) | 지민 | Hire · fire | An instruction to hire or fire crew | Changes the roster with `crew.hire` and `crew.fire`; starting roles can be fired and rehired too |
-| `development` | Development (개발) | 태오 | Code | The code-change stage of an approved plan | Writes the real files inside the approved scope, through the write permission and approval scope |
-| `build` | Build (빌드) | 도윤 | Build · release | A build, package, publish or release stage | Runs builds, checks artifacts, prepares build facts for release notes; publishing waits for the user's confirmation |
-| `docs` | Docs (문서) | 서연 | Documents | A request for a README, release note or guide | Writes documents (writing, not reviewing); never writes an unconfirmed feature |
-| `style` | Style (스타일) | 유진 | Code · documents | **Every time a file is saved, automatically** | The style watcher: folder and file structure, file-name rules, comments and document sentences. It reports to the assistant and does not fix |
-| `review` | Review (리뷰) | 현우 | Code · documents | A code or document review stage | Checks that a saved change does what was asked and that a document matches the real behavior; a point carries the file, line and evidence |
-| `test` | Test (테스트) | 민재 | Tests | A test run stage | Runs the tests and fills missing cases; leaves the command and its result as evidence |
-| `vision` | Vision (비전) | 수아 | Reading images | When an image or screenshot must be read | Reads and describes an image for a text-only local model; it never creates an image |
+| `assistant` | 비서 | 하나 | 대화 · 앱 제어 · 업무 분배 | 사용자가 보내는 모든 메시지 | 유일한 대화 창구. 요청을 쪼개 지시하고, 계획을 세우고, 돌아온 보고를 모아 전달. 앱 조작 도구도 직접 실행 |
+| `hr` | 인사 | 지민 | 채용 · 해고 | 크루를 뽑거나 내보내 달라는 지시 | `crew.hire`·`crew.fire`로 로스터를 바꿈. 기본 역할도 해고·재고용 가능 |
+| `development` | 개발 | 태오 | 코드 | 승인된 계획의 코드 변경 단계 | 승인 범위 안에서 실제 파일을 씀. 쓰기 권한과 승인 범위를 거침 |
+| `build` | 빌드 | 도윤 | 빌드 · 배포 | 빌드·패키징·배포·릴리스 단계 | 빌드 명령 실행, 산출물 확인, 릴리스 노트용 빌드 결과 정리. 배포처럼 되돌리기 어려운 일은 사용자 확인을 거침 |
+| `docs` | 문서 | 서연 | 문서 | README·릴리스 노트·가이드 작성 요청 | 문서를 새로 씀(리뷰가 아니라 작성). 확인 못 한 기능은 쓰지 않음 |
+| `style` | 스타일 | 유진 | 코드 · 문서 | **파일이 저장될 때마다 자동** | 스타일 감시자. 폴더·파일 구조, 파일명 규칙, 주석, 문서 문장을 봄. 고치지 않고 비서에게 보고 |
+| `review` | 리뷰 | 현우 | 코드 · 문서 | 코드·문서 검토 단계 | 저장된 변경이 요청한 동작을 만족하는지, 문서가 실제 동작과 맞는지 검토. 지적은 파일·줄·근거로 남김 |
+| `test` | 테스트 | 민재 | 테스트 | 테스트 실행·보강 단계 | 테스트를 대신 돌리고 부족한 케이스도 채움. 실행 명령과 결과를 근거로 남김 |
+| `vision` | 비전 | 수아 | 그림 읽기 | 그림·스크린샷을 읽어야 할 때 | 텍스트만 보는 로컬 모델을 대신해 이미지를 읽고 설명. 그림을 만들어 내지는 않음 |
 
-- Planning is **the assistant's job**, not a separate role, so the default flow is `plan (assistant) → development → (review ∥ style ∥ test) → report (assistant)`.
-- `build`, `docs` and `vision` are not fixed in the default flow; they run when added as a stage in the workflow editor or when the assistant hands them that work.
-- A role's instruction, skills and trigger are data (`roles` in `src/shared/actions.ts`), and the definition MD on screen and the agent prompt read the same content.
+- 계획 세우기는 별도 역할이 아니라 **비서의 일**입니다. 그래서 기본 흐름은 `계획(비서) → 개발 → (리뷰 ∥ 스타일 ∥ 테스트) → 보고(비서)`입니다.
+- `build`·`docs`·`vision`은 기본 흐름에 고정되어 있지 않고, 워크플로우 편집기에서 단계로 추가하거나 비서가 그 역할에 맡길 때 돕니다.
+- 역할의 지침·스킬·트리거는 코드의 데이터(`src/shared/actions.ts`의 `roles`)에 있고, 화면의 "정의 MD"와 에이전트 프롬프트가 같은 내용을 읽습니다.
 
-**Each role's working rules.** The instructions follow the user's code and document principles (user-wiki) and their way of finishing work (groove). Every role stays inside the scope the user set, separates what it confirmed from what it suggests, and speaks in changed lines, functions and files and in checks actually run. Development keeps a linear structure that reads in execution order, verb-first function names and a one-line why-only comment; it leaves no uncalled code, one-use wrapper or repeated check and fixes the cause and the source contract rather than the symptom. Documents put the conclusion first, delete wording that repeats the title or file name, and use only real file names and commands actually run. Review splits its points into facts and suggestions about whether a function is needed, its name and whether the fix is at the source contract, and style only watches the same criteria every time a file changes. Tests replace a heavy model with a small double to stay fast and leave one strong test and a regression test. Build runs the cheap checks first, the whole verification once at the end, and reports only the commands it ran and their results. The assistant asks only when an answer is not in the files and a wrong guess would be expensive, and hands work back only for plan approval, the same check failing twice, work only a person can do, and an irreversible action.
+**역할별 작업 원칙.** 지침은 코드·문서 작성 원칙(User Wiki)과 작업 진행 방식(Groove)을 따릅니다. 모든 역할은
+사용자가 정한 범위를 넘지 않고, 확인한 사실과 제안을 구분해 보고하며, 바뀐 줄·함수·파일 수와 실제로 돌린 검사
+결과로 말합니다. 개발은 실행 순서대로 읽히는 선형 구조, 동사로 시작하는 함수명, '왜'만 남긴 한 줄 주석을 지키고
+호출자가 없는 코드·1회용 래퍼·중복 검증을 남기지 않으며 증상이 아니라 원인 지점·원본 계약에서 고칩니다. 문서는
+결론을 앞에 두고 제목·파일명과 겹치는 말을 지우며 실제 파일명과 실행해 본 명령만 씁니다. 리뷰는 함수
+필요성·이름·원본 계약 수정 여부를 사실과 제안으로 나눠 지적하고, 스타일은 같은 기준을 파일이 바뀔 때마다 감시만
+합니다. 테스트는 무거운 모델을 작은 대역으로 바꿔 빠르게 돌리고 강한 테스트 하나와 회귀 테스트를 남깁니다. 빌드는
+싼 검사부터 돌리고 마지막에 전체 검증을 한 번 하며, 실제로 실행한 명령과 결과만 보고합니다. 비서는 파일에서 답을
+찾을 수 없고 잘못 짚으면 되돌리기 비싼 것만 묻고, 사용자에게 넘기는 때를 계획 승인·같은 검증 두 번 실패·사람만 할
+수 있는 일·되돌릴 수 없는 동작 네 가지로 한정합니다.
 
-These rules are assigned with the role instruction as **default skills** (`groove-triage`, `roster-hygiene`, `groove-coding`, `lean-verify`, `concise-docs`, `code-style`, `docs-style`, `code-review`, `docs-review`, `fast-tests`, `faithful-reading`). They are planted once when a project is first opened and can be read or removed in the legend. A removed default skill is not planted again.
+이 원칙은 역할 지침과 함께 **역할별 기본 스킬**로 배정됩니다(`groove-triage`, `roster-hygiene`, `groove-coding`,
+`lean-verify`, `concise-docs`, `code-style`, `docs-style`, `code-review`, `docs-review`, `fast-tests`,
+`faithful-reading`). 프로젝트를 처음 열 때 한 번 심고, 범례에서 내용을 보거나 해제할 수 있습니다. 해제한 기본
+스킬은 다시 심지 않습니다.
 
-### Composer and queue
+### 대화 입력과 대기열
 
-Write in the composer and press **Enter** and the message goes to the assistant at once. When the assistant is still answering, that answer is cut right there and the new message is answered first. The answer made up to the cut is not discarded: it stays as "stopped", and the next answer carries on from it and closes what is needed.
+입력창에 쓰고 **Enter**를 누르면 비서에게 바로 갑니다. 비서가 아직 답하는 중이면 그 답변을 그 자리에서
+끊고 새 메시지를 먼저 답합니다. 끊긴 지점까지 만든 답변은 버리지 않고 "응답 중단"으로 남고, 다음
+답변은 그 앞부분을 이어받아 필요한 부분을 마무리합니다.
 
-- **Ctrl+Enter** (**Cmd+Enter** on macOS) queues without cutting. When the earlier answer ends, the queued messages are answered in the order they were added. Waiting messages show as numbered chips above the composer, and the ✕ on a chip removes one.
-- **Shift+Enter** breaks the line.
-- Enter pressed while a Hangul syllable is being composed does not send (it only finishes the composition).
-- A line under the composer always lists these shortcuts, and a narrow window hides only the approval mode's text label while keeping the shield and folder icons.
+- **Ctrl+Enter**(macOS는 **Cmd+Enter**): 끊지 않고 대기열에 넣습니다. 앞선 답변이 끝나면 넣은 순서대로
+  답합니다. 기다리는 메시지는 입력창 위에 번호가 붙은 칩으로 보이고, 칩의 ✕로 하나씩 뺄 수 있습니다.
+- **Shift+Enter**: 줄바꿈입니다.
+- 한글을 조합하는 중에 누른 Enter는 전송하지 않습니다(조합 확정만 합니다).
+- 입력창 아래 한 줄에 이 단축키가 늘 적혀 있고, 좁은 창에서는 승인 모드의 글자 라벨만 숨기고
+  방패·폴더 아이콘은 남깁니다.
 
-### Attaching pictures (picker, paste, drop)
+### 그림 붙이기(첨부·붙여넣기·끌어다 놓기)
 
-The **picture icon** on the left of the composer's control bar opens a file picker. The same thing can be done three ways.
+입력창 왼쪽 컨트롤 바의 **그림 아이콘**을 누르면 파일 선택기가 열립니다. 같은 일을 세 가지 길로
+할 수 있습니다.
 
-- **The picture icon** picks png, jpeg, webp or gif files (several at once, up to 6 files, 8MB each).
-- **Ctrl+V** (**Cmd+V** on a mac): capturing the screen and pasting into the composer attaches it as a picture. Pasting text works as usual.
-- **Drag and drop**: dragging a picture file over the composer shows where the card will take it, and dropping attaches it.
+- **그림 아이콘**으로 png·jpeg·webp·gif 파일을 고릅니다(여러 장, 한 번에 6장까지·장당 8MB까지).
+- **Ctrl+V(맥은 Cmd+V)**: 화면을 캡처해 입력창에 그대로 붙여넣으면 그림으로 붙습니다. 글 붙여넣기는
+  평소처럼 동작합니다.
+- **끌어다 놓기**: 그림 파일을 입력창 위로 끌어오면 입력 카드가 받을 자리를 보여 주고, 놓으면 붙습니다.
 
-Attached pictures show just above the composer as a **small thumbnail, file name and size**, and ✕ removes one. With a picture attached, send is enabled even without text. A sent picture stays as a thumbnail inside the user's bubble, and the assistant answers from the description the vision role read. Picture files are stored per message in `attachments/` of the app data folder, not in the project folder.
+붙인 그림은 입력창 바로 위에 **작은 썸네일·파일 이름·크기**로 보이고 `✕`로 하나씩 뺄 수 있습니다.
+그림이 붙어 있으면 글을 쓰지 않아도 보내기가 열립니다. 보낸 그림은 사용자 말풍선 안에 썸네일로
+남고, 비서는 비전(수아)이 읽은 설명을 근거로 답합니다. 그림 파일은 프로젝트 폴더가 아니라 앱 데이터
+폴더의 `attachments/`에 메시지별로 저장됩니다.
 
-> The model that reads pictures is marked separately in **model connections** (legend → settings → model connections → **as vision**). Without a marked connection the assistant cannot read the picture and gets only the file information (name, type, size). In that case it says plainly that it could not read the picture and that a vision model connection is needed.
+> 그림을 읽는 모델은 **모델 연결**에서 따로 표시합니다(범례 → 설정 → 모델 연결 → **비전으로**).
+> 표시한 연결이 없으면 비서는 그림 내용을 읽지 못한 채 파일 정보(이름·종류·크기)만 받습니다.
+> 이때는 지어내지 않고 "그림을 읽지 못했고 비전 모델 연결이 필요하다"고 알립니다.
 
-## 4. Hiring and firing crew
+## 4. 크루 뽑기·해고
 
-In the crew legend:
+크루 범례에서:
 
-- The **hired / not hired** button on each row changes the hire state right there.
-- Pressing the **name** edits it, and the selector beside it sets the **model (local LLM or Codex)**.
-- **＋ member** adds another member with the same role (the assistant role is not added).
-- **Settings** shows that member's role definition, assigned skill MD, MCP tool permissions and memory.
-- Only the development role has a **write allowed / write revoked** button. Revoked, that member cannot write files.
+- 각 줄의 **고용/미고용** 버튼을 누르면 그 자리에서 고용 상태가 바뀝니다.
+- **별명**을 누르면 이름을 고치고, 옆 선택으로 **모델(로컬 LLM / Codex)** 을 정합니다.
+- **＋ 팀원**으로 같은 역할의 팀원을 더 뽑을 수 있습니다(비서 역할은 추가하지 않습니다).
+- **설정**에서 그 크루의 역할 정의, 배정한 스킬 MD, MCP 도구 권한, 기억을 봅니다.
+- 개발 역할에만 **쓰기 허용/쓰기 회수됨** 버튼이 있습니다. 회수하면 그 담당은 파일을 쓰지 못합니다.
 
-Told in words through the assistant, the HR role runs two actions.
+비서에게 말로 시킬 때는 인사 역할이 두 동작을 씁니다.
 
-- `crew.hire`: `{ projectId, roleId, name?, provider? }`. Hires a fired role again and sets the name and model.
-- `crew.fire`: `{ projectId, memberId }`. Removes that member from the roster.
+- `crew.hire` — `{ projectId, roleId, name?, provider? }`. 해고했던 역할을 다시 뽑고 별명·모델을 정합니다.
+- `crew.fire` — `{ projectId, memberId }`. 그 크루를 로스터에서 내보냅니다.
 
-**The nine starting roles are a roster you start with, not an unremovable crew.** A fired member leaves the camp and stays as "not hired", and comes back when hired again. A firing or hiring stays in the log and in the **audit record** (`crew.roster`). Work assigned at the time is tidied by the existing procedure.
+**기본 9역할은 지워지지 않는 고정 크루가 아니라 처음 받는 로스터입니다.** 해고하면 캠프에서
+빠지고 "미고용"으로 남으며, 다시 뽑으면 돌아옵니다. 해고·채용은 로그와 **감사 기록**(`crew.roster`)에
+남습니다. 진행 중이던 배정은 기존 절차대로 정리됩니다.
 
-> Firing the assistant leaves nobody to talk to. Sending a message then says "hire the assistant back in the crew", and the assistant must be hired again from the legend.
+> 비서를 해고하면 대화할 상대가 없어집니다. 메시지를 보내면 "크루에서 비서를 재고용해 주세요."가
+> 나오고, 범례에서 비서를 다시 고용해야 합니다.
 
-## 5. The style watcher and the reviewer's two skills
+## 5. 스타일 감시자와 리뷰어의 두 스킬
 
-`style` and `review` each have a **code** skill and a **document** skill.
+`style`과 `review`는 각각 **코드**와 **문서** 두 스킬을 가집니다.
 
-| | Code skill | Document skill | When |
+| | 코드 스킬 | 문서 스킬 | 언제 |
 |---|---|---|---|
-| Style watcher (`style`) | Folder and file structure, file and folder naming rules, comments | Whether a document's sentences and structure follow the project rules | Without a command, **every time a file is saved**. Not at commit time |
-| Reviewer (`review`) | Whether the saved change does what was asked | Whether a document matches the real behavior | At a job's review stage, reading the same change version |
+| 스타일 감시자(`style`) | 폴더·파일 구조, 파일명·폴더명 규칙, 주석 처리 | 문서의 문장·구조가 프로젝트 규칙과 맞는지 | 명령을 받지 않고 **파일이 저장될 때마다**. 커밋 시점이 아님 |
+| 리뷰어(`review`) | 저장된 변경이 요청한 동작을 만족하는지 | 문서가 실제 동작과 맞는지 | 업무의 검토 단계에서, 같은 변경 버전을 읽고 |
 
-The style watcher's result is **a report to the assistant, not a user bubble**. When a file change arrives, the log records `스타일 → 비서 · 파일 변경 감지 · <path>`, and the report is delivered once the next time the assistant reads and is not delivered again. The assistant tells the user briefly and offers a check by the style role when it matters.
+스타일 감시자의 결과는 **사용자 말풍선이 아니라 비서에게 가는 보고**입니다. 파일 변경이 들어오면
+로그에 `스타일 → 비서 · 파일 변경 감지 · <경로>`가 남고, 보고는 비서가 다음에 읽을 때 한 번 전달된
+뒤 다시 전달되지 않습니다. 비서는 그 내용을 사용자에게 짧게 알리고 필요하면 스타일 역할의 확인을
+제안합니다.
 
-> A file-change notice is attached today at the moment **applying a job (`job.apply`) finishes**. The operating system file watcher is not turned on yet; only the entry point where code that changes a file calls `noteFileChange` exists.
+> 지금 파일 변경 알림이 붙는 곳은 **업무 반영(`job.apply`)이 끝난 순간**입니다. 운영체제 파일
+> 워처는 아직 켜지 않았고, 파일을 바꾸는 코드가 `noteFileChange`를 부르면 되는 입구만 만들어 두었습니다.
 
-## 6. The tester
+## 6. 테스터
 
-At a verification stage the test role **runs the tests** and also **fills test cases** a request needs but lacks. It leaves the command and its result (pass or the failure reason) as evidence, and reports the cause to the assistant when a test fails. When a check cannot run in this environment it marks it "unavailable" and never counts it as a pass. In the log's change record the review, style and test results are read side by side.
+테스트 역할은 검증 단계에서 **테스트를 대신 실행**하고, 요청에 필요한데 빠진 **테스트 케이스도
+채웁니다**. 실행한 명령과 결과(통과·실패 사유)를 근거로 남기고, 실패하면 원인을 비서에게 보고합니다.
+이 환경에서 검사를 돌릴 수 없으면 "사용할 수 없음"으로 표시하고 통과로 치지 않습니다.
+로그의 변경 기록에서 리뷰·스타일·테스트 세 갈래 결과를 나란히 볼 수 있습니다.
 
-## 7. Vision (reading pictures)
+## 7. 비전(그림 읽기)
 
-Vision **only reads pictures**. For a text-only local LLM it writes down what is visible in an image or a screenshot, what state the screen is in and what words an error window holds. It does not create pictures.
+비전은 **그림만 읽는 역할**입니다. 텍스트만 보는 로컬 LLM을 대신해 이미지나 스크린샷에 무엇이
+보이는지, 화면 상태가 어떤지, 오류 창에 무슨 글자가 있는지 옮겨 적습니다. 그림을 만들어 내는
+역할은 아닙니다.
 
-**Today it really reads a picture attached to the chat.** When the user sends a picture by attaching, pasting or dropping it into the composer, vision reads that picture before the assistant answers and makes a description, and the description goes into the assistant model right after the user message. The description stays on the picture, so the next turn does not ask again.
+**지금은 채팅에 붙인 그림을 실제로 읽습니다.** 사용자가 입력창에 그림을 첨부·붙여넣기·끌어다 놓기로
+보내면, 비서가 답하기 전에 비전이 그 그림을 읽어 설명을 만들고, 그 설명이 사용자 메시지 바로 뒤에
+붙어 비서 모델로 들어갑니다. 읽은 설명은 그림에 남아 다음 턴에 다시 묻지 않습니다.
 
-- The reading model is the endpoint **marked as vision in model connections** (OpenAI-compatible). With several marked connections the first one is used. `AI_CREW_VISION_URL` and `AI_CREW_VISION_MODEL` can set it as well.
-- When there is no vision model, or it does not answer, **only the file information stays and it says plainly that it could not read it.** The assistant does not invent the content and briefly says what is missing (a vision model connection).
-- A failed read is not stored on the picture, so after the connection is fixed the same picture is read again by a new message.
-- An assistant running on Codex receives the same description text (the picture bytes themselves are not passed to Codex).
+- 읽는 모델은 **모델 연결에서 비전으로 표시한 엔드포인트**입니다(OpenAI 호환). 여러 개면 처음
+  표시한 연결 하나를 씁니다. `AI_CREW_VISION_URL`·`AI_CREW_VISION_MODEL` 환경 변수로도 지정할 수 있습니다.
+- 비전 모델이 없거나 응답하지 않으면 **파일 정보만 남기고 읽지 못했다고 솔직히 적습니다.** 비서는
+  그림 내용을 지어내지 않고, 무엇이 필요한지(비전 모델 연결)를 짧게 알립니다.
+- 읽기 실패는 그림에 남기지 않으므로, 연결을 고친 뒤 새 메시지를 보내면 같은 그림을 다시 읽습니다.
+- Codex로 도는 비서도 같은 설명 글을 받습니다(Codex에 그림 바이트 자체를 넘기지는 않습니다).
 
-## 8. Environment diagnostics (`diagnostics.run`)
+## 8. 사전 진단 (`diagnostics.run`)
 
-Pressing the **pulse icon** (environment diagnostics) in the toolbar checks in one pass the conditions this run needs. Telling the assistant "run environment diagnostics" runs the same action (`diagnostics.run`).
+툴바의 **맥박 아이콘**(환경 진단)을 누르면 지금 실행에 필요한 조건을 한 번에 확인합니다. 비서에게
+"환경 진단해 줘"라고 해도 같은 동작(`diagnostics.run`)을 실행합니다.
 
-| Check | What it looks at |
+| 점검 | 보는 것 |
 |---|---|
-| Git repository | Whether the project folder is a Git repository, and its current state |
-| Codex CLI | Whether it is installed and can run |
-| Local model | Whether the configured address (default `http://127.0.0.1:8082/v1`) answers |
-| MCP server | Whether a connected server answers |
+| Git 저장소 | 프로젝트 폴더가 Git 저장소인지, 지금 상태 |
+| Codex CLI | 설치와 실행 가능 여부 |
+| 로컬 모델 | 설정한 주소(기본 `http://127.0.0.1:8082/v1`)에 답이 오는지 |
+| MCP 서버 | 연결한 서버가 응답하는지 |
 
-The result shows as a green or red dot for each check in a one-line banner over the camp, and hovering shows the detailed reason. Diagnostics change no state.
+결과는 캠프 위 한 줄 배너에 점검마다 초록·빨강 점으로 표시되고, 마우스를 올리면 자세한 이유가
+나옵니다. 진단은 상태를 바꾸지 않습니다.
 
-## 9. Approval flow and audit log
+## 9. 승인 흐름과 감사 로그
 
-**Approval mode** (the selector above the composer) has three settings.
+**승인 모드**(입력창 위 선택)는 세 가지입니다.
 
-- **Manual**: the user allows a file change or tool call directly.
-- **Auto**: the assistant decides and allows.
-- **Always**: a request inside the current role's permission is allowed automatically.
+- **수동**: 파일 변경·도구 호출을 사용자가 직접 허용합니다.
+- **자동**: 비서가 판단해 허용합니다.
+- **항상**: 지금 역할의 권한 안에 있는 요청을 자동으로 허용합니다.
 
-A job that changes files first shows its plan (target paths and completion criteria) and takes **allow or refuse** on the card above the composer. With several waiting, the card head shows "waiting +N" and "next", and an answer applies only to that card's request ID. A change tool on an MCP server is approved separately too.
+파일을 바꾸는 업무는 계획(대상 경로·완료 조건)을 먼저 보여 주고, 입력창 위 카드에서 **허용/거절**을
+받습니다. 여러 건이 대기하면 카드 머리에 "대기 +N건"과 "다음"이 붙고, 답은 그 카드의 요청 ID에만
+적용됩니다. MCP 서버의 변경 도구도 따로 승인을 받습니다.
 
-A decision that touches the user's resources — an approval, a refusal, a model connection change, applying a worktree, hiring or firing crew — goes into the **audit record** (`audit_logs`). The text is scrubbed of secrets before it is stored. The job log (activity) and the audit record are different: activity is the chronological record of what happened, and the audit record is who decided what.
+승인·거절·모델 연결 변경·워크트리 반영·크루 채용/해고처럼 사용자 자원에 닿는 결정은 **감사
+기록**(`audit_logs`)에 남습니다. 남기는 문구는 저장 전에 비밀값을 지웁니다. 업무 로그(활동)와 감사
+기록은 다릅니다. 활동은 "무슨 일이 있었나"의 시간순 기록이고, 감사 기록은 "누가 어떤 결정을
+했나"입니다.
 
-## 10. Attaching from another program (local HTTP and SSE)
+## 10. 다른 프로그램에서 붙이기 (로컬 HTTP/SSE)
 
-The code holds a small HTTP server that uses the app's state, actions and events directly (`createCrewHttpServer` in `src/server/chat/http-server.ts`). It opens only on `127.0.0.1` and requires the token made at startup.
+앱의 상태·동작·이벤트를 그대로 쓰는 작은 HTTP 서버가 코드에 있습니다(`src/server/http-server.ts`의
+`createCrewHttpServer`). `127.0.0.1`에만 열고, 시작할 때 만든 토큰을 요구합니다.
 
-| Request | What it does |
+| 요청 | 하는 일 |
 |---|---|
-| `GET /health` | Checks that it is alive (no token) |
-| `GET /api/snapshot` | The current screen state (JSON) |
-| `POST /api/action` | Runs an action with the same runner as the screen (the body is the action JSON itself) |
-| `GET /api/events` | SSE. Stream chunks and state changes, with a periodic `: ping` |
+| `GET /health` | 살아 있는지 확인(토큰 없이) |
+| `GET /api/snapshot` | 현재 화면 상태(JSON) |
+| `POST /api/action` | 화면과 같은 실행기로 동작 실행(본문이 동작 JSON 자체) |
+| `GET /api/events` | SSE. 스트림 청크와 상태 변경, 주기적 `: ping` |
 
 ```sh
 curl -H "authorization: Bearer $TOKEN" http://127.0.0.1:PORT/api/snapshot
@@ -152,21 +208,31 @@ curl -X POST -H "authorization: Bearer $TOKEN" -H "content-type: application/jso
 curl -N "http://127.0.0.1:PORT/api/events?token=$TOKEN"
 ```
 
-EventSource cannot send a header, so only the stream accepts `?token=`. The same request ID with the same arguments returns the first result again.
+EventSource는 헤더를 넣을 수 없어서 스트림에 한해 `?token=`을 받습니다. 같은 요청 ID와 같은 인자로
+다시 오면 처음 결과를 그대로 돌려줍니다.
 
-> This server is not started automatically when the app opens yet. Only the module and its test (`src/server/chat/http-server.test.ts`) are ready, so attaching it means calling `createCrewHttpServer` from the app's startup code. Do not answer that it "opens automatically when the app starts".
+> 이 서버는 아직 앱이 켜질 때 자동으로 뜨지 않습니다. 모듈과 시험(`src/server/http-server.test.ts`)만
+> 준비되어 있어서, 붙이려면 앱 실행 코드에서 `createCrewHttpServer`를 호출해야 합니다. "앱을 켜면
+> 자동으로 열린다"고 답하면 안 됩니다.
 
-## 11. Common mistakes and cautions
+## 11. 자주 하는 실수와 주의점
 
-- **There is no way to pick a role and talk to it.** Input always goes to the assistant, and the other roles move through the assistant.
-- **The style watcher looks when a file is saved**, not when it is committed. A comment can appear without a commit.
-- **Revoking the development role's write permission** stops a file-change job. It must be allowed again in the legend.
-- **Approval "always" is not unlimited.** It auto-approves only inside the current role's permission.
-- **A message sent while the assistant answers** is not lost; it is answered after the earlier answer ends. Pressing stop folds the waiting message too.
-- **`/clear`** opens an empty conversation that inherits the same project settings (team, model, workflow). It is not a command that builds a new team.
-- **"Do that again"** and similar words pointing at an earlier job go through a step that picks the target job. When the target is ambiguous the assistant asks.
-- **On a model limit** the job stops and reports what was saved so far and what remains. A transient dropped connection is retried up to three times in the same stage.
-- Projects and conversations are stored in the app data folder's SQLite (`crew.sqlite`). `AI_CREW_DATA_DIR` moves it. Files in the source folder change only when the app applies a change it made.
-- The local model address defaults to `http://127.0.0.1:8082/v1` and is changed with `AI_CREW_LOCAL_URL` and `AI_CREW_LOCAL_MODEL`.
-- **Reading pictures (vision)** reads only a picture attached to the chat. Without an endpoint **marked as vision** in model connections it cannot read the content and keeps only the file information.
-- **The local HTTP server** does not start automatically yet.
+- **역할을 골라 대화하는 기능은 없습니다.** 입력은 항상 비서에게 가고, 다른 역할은 비서를 통해 움직입니다.
+- **스타일 감시자는 커밋할 때가 아니라 파일이 저장될 때** 봅니다. 커밋을 안 해도 지적이 나올 수 있습니다.
+- **개발 역할의 쓰기 권한을 회수하면** 파일 변경 업무가 진행되지 않습니다. 범례에서 다시 허용해야 합니다.
+- **승인 "항상"은 무제한 허용이 아닙니다.** 지금 역할 권한 안에서만 자동 승인합니다.
+- **비서가 답하는 중에 보낸 메시지**는 사라지지 않고 앞 답변이 끝난 뒤 이어서 답합니다. 멈춤을 누르면
+  기다리던 메시지도 함께 접힙니다.
+- **`/clear`** 는 같은 프로젝트 설정(팀·모델·워크플로우)을 이어받은 빈 대화를 엽니다. 팀을 새로
+  구성하는 명령이 아닙니다.
+- **"그거 다시 해줘"** 처럼 앞 업무를 가리키는 말은 대상 업무를 고르는 단계를 거칩니다. 대상이
+  모호하면 비서가 되묻습니다.
+- **모델 한도에 닿으면** 업무를 멈추고 지금까지 저장한 것과 남은 일을 알립니다. 일시적인 연결
+  끊김은 같은 단계에서 최대 세 번 다시 시도합니다.
+- 프로젝트와 대화는 앱 데이터 폴더의 SQLite(`crew.sqlite`)에 저장됩니다. `AI_CREW_DATA_DIR`로 위치를
+  바꿀 수 있습니다. 원본 폴더의 파일은 앱이 만든 변경을 반영할 때만 바뀝니다.
+- 로컬 모델 주소는 기본 `http://127.0.0.1:8082/v1`이고 `AI_CREW_LOCAL_URL`·`AI_CREW_LOCAL_MODEL`로
+  바꿉니다.
+- **그림 읽기(비전)** 는 채팅에 붙인 그림만 읽습니다. 모델 연결에서 **비전으로** 표시한 엔드포인트가
+  없으면 그림 내용을 읽지 못하고 파일 정보만 남습니다.
+- **로컬 HTTP 서버**는 아직 자동으로 뜨지 않습니다.

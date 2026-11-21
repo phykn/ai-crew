@@ -12,9 +12,9 @@ export function createAppMcpServer(runner: ActionRunner) {
   server.registerTool(
     "app_find_actions",
     {
-      title: "Find actions",
+      title: "동작 찾기",
       description:
-        "Find the ID, description and input schema of an action the screen can run. Narrow it by feature area: screen, project, session, job, log, crew, model, wiki, memory or workflow.",
+        "화면에서 할 수 있는 동작의 ID, 설명, 입력 스키마를 찾는다. 기능 영역(화면, 프로젝트, 세션, 업무, 로그, 크루, 모델, 위키, 기억, 워크플로우)으로 좁힐 수 있다.",
       inputSchema: {
         query: z.string().max(200).optional(),
         area: z.string().max(60).optional(),
@@ -33,9 +33,9 @@ export function createAppMcpServer(runner: ActionRunner) {
   server.registerTool(
     "app_read",
     {
-      title: "Read state",
+      title: "상태 읽기",
       description:
-        "Read the current project, session, tab, jobs, waiting approvals, crew, skill states, workflow and usage. A file scope or an approval record is found in the job log of an action result.",
+        "현재 프로젝트·세션·탭·업무·대기 중 승인·크루·스킬 상태·워크플로우·사용량을 읽는다. 파일 범위나 승인 기록은 동작 결과의 업무 로그에서 확인한다.",
       inputSchema: {},
     },
     async () => ({
@@ -48,9 +48,9 @@ export function createAppMcpServer(runner: ActionRunner) {
   server.registerTool(
     "app_act",
     {
-      title: "Run action",
+      title: "동작 실행",
       description:
-        "Run an action found with app_find_actions through the same runner as the screen. A change or a send carries a requestId, and an action that needs user input returns a waiting-for-input result.",
+        "app_find_actions에서 찾은 동작을 화면과 같은 실행기로 실행한다. 변경·전송에는 requestId를 붙이고, 사용자 입력이 필요한 동작은 '입력 대기'를 돌려준다.",
       inputSchema: {
         action: z.record(z.string(), z.unknown()),
         requestId: z.string().max(100).optional(),

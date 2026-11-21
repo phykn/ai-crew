@@ -44,7 +44,7 @@ test("새 프로젝트에 기본 스킬이 배정되어 준비 상태로 뜨고,
     const development = store.readMembers(projectId, "development")[0];
     expect(
       crewInstructions(development, store.listSkills(projectId)),
-    ).toContain("Inline a value, function or wrapper used in one place");
+    ).toContain("한 곳에서만 쓰는 값·함수·래퍼는 그 자리에 인라인한다");
     const coding = store
       .listSkills(projectId)
       .find(({ id }) => id === projectId + ":groove-coding")!;

@@ -1,49 +1,44 @@
-# AI Crew agent instructions
+# AI Crew 에이전트 지침
 
-One assistant talks with the user, and the other eight roles work on the assistant's instruction. A role's data — its name, skills, trigger and prompt — has one source in `roles` in `src/shared/actions.ts`, and the default skills assigned to every role when a project is first opened have one source in `defaultSkills` in `src/store/skills.ts`. This document is a summary of both; when they differ, the code wins.
+비서 하나가 사용자와 대화하고, 나머지 여덟 역할이 비서의 지시를 받아 일한다. 역할의 데이터(이름·스킬·트리거·프롬프트)는 `src/shared/actions.ts`의 `roles`, 프로젝트를 처음 열 때 역할마다 배정되는 기본 스킬은 `src/store/skills.ts`의 `defaultSkills`가 원본이다. 이 문서는 둘을 한눈에 보는 요약이며, 어긋나면 코드를 따른다.
 
-## Roles
+## 역할
 
-| Role | Name | What it does | Skills | When it runs |
+| 역할 | 이름 | 하는 일 | 스킬 | 도는 때 |
 |---|---|---|---|---|
-| Assistant `assistant` | 하나 | The only channel to the user. Splits a request into instructions and gives the returned reports back in the user's words | Chat, app control, delegation | Every message the user sends |
-| HR `hr` | 지민 | Hires and fires crew members (`crew.hire`, `crew.fire`) | Hire, fire | A hire or fire instruction |
-| Development `development` | 태오 | Writes code inside the approved plan | Code | The code-change stage of an approved plan |
-| Build `build` | 도윤 | Builds, packages, publishes, releases and cleans up artifacts | Build, release | A build, package or release stage |
-| Docs `docs` | 서연 | Writes README, release notes and guides | Documents | A request to write a document |
-| Style `style` | 유진 | Checks code and document style on every saved file and reports to the assistant | Code, documents | Whenever a file is saved, without a command |
-| Review `review` | 현우 | Checks that a change and its documents match the requested behavior | Code, documents | A code or document review stage |
-| Test `test` | 민재 | Runs and strengthens tests and reports the cause of a failure | Tests | A test run stage |
-| Vision `vision` | 수아 | Reads pictures and screenshots and describes only what is visible | Reading images | When an image must be read |
+| 비서 `assistant` | 하나 | 사용자와 대화하는 유일한 창구. 요청을 쪼개 지시하고 돌아온 보고를 사용자 말로 전한다 | 대화·앱 제어·업무 분배 | 사용자가 보내는 모든 메시지 |
+| 인사 `hr` | 지민 | 크루를 뽑고 내보낸다(`crew.hire`·`crew.fire`) | 채용·해고 | 채용·해고 지시 |
+| 개발 `development` | 태오 | 승인된 계획 범위에서 코드를 쓴다 | 코드 | 승인된 계획의 코드 변경 단계 |
+| 빌드 `build` | 도윤 | 빌드·패키징·배포·릴리스와 산출물 정리 | 빌드·배포 | 빌드·패키징·배포 단계 |
+| 문서 `docs` | 서연 | README·릴리스 노트·가이드 작성 | 문서 | 문서 작성 요청 |
+| 스타일 `style` | 유진 | 저장된 파일의 코드·문서 스타일을 상시 확인해 비서에게 보고 | 코드·문서 | 파일이 저장될 때마다(명령 없이) |
+| 리뷰 `review` | 현우 | 변경과 문서가 요청한 동작에 맞는지 검토 | 코드·문서 | 코드·문서 검토 단계 |
+| 테스트 `test` | 민재 | 테스트 실행과 보강, 실패 원인 보고 | 테스트 | 테스트 실행·보강 단계 |
+| 비전 `vision` | 수아 | 그림·스크린샷을 읽어 보이는 것만 설명 | 그림 읽기 | 이미지를 읽어야 할 때 |
 
-The nine starting roles are a starting roster, not a fixed crew. Every role can be fired and hired again, and another member with the same role can be added.
+처음 받는 아홉 역할은 고정 크루가 아니라 초기 로스터다. 해고와 재고용이 모두 가능하고, 같은 역할의 팀원을 더 뽑을 수도 있다.
 
-## Default skills
+## 기본 스킬
 
-Each sentence turns the user's code and document principles and their way of finishing work (groove) into a rule, and each skill's Markdown body is appended to its role's prompt.
+문장은 사용자의 코드·문서 작성 원칙과 작업 진행 방식(groove)을 옮긴 것이며, 스킬마다 Markdown 본문이 역할 프롬프트에 붙는다.
 
-| Role | Skill | What it holds |
+| 역할 | 스킬 | 지키는 것 |
 |---|---|---|
-| Assistant | Groove 작업 조율 | Decides what has to be finished first and calls only the roles it needs. Decides a reversible thing instead of asking and names the assumption. Hands work back only for plan approval, the same check failing twice, work only a person can do, and an irreversible action. Opens a report with what finished and the evidence. |
-| HR | 로스터 정리 | Keeps only the requested roles and never grows the roster without evidence. Reports a changed roster as it happened and only proposes removing a role nothing uses. |
-| Development | Groove 구현 & 정리 | The smallest change, only code that has a caller, functions in execution order, a one-line why, a fix at the cause, and callers, tests, documents and settings changed with a name. |
-| Build | 단계별 검증·정리 | The cheapest check first, the whole verification once at the end. Reports only the commands run and their output, and deletes artifacts and temporary folders. |
-| Docs | 간결한 문서 작성 | The conclusion first. Deletes what the file name or the title already said, fixes the order before adding a sentence, and uses only real file names and commands actually run. |
-| Style | 코드 스타일 | Folder and file boundaries, execution order, verb-first names, the comment rule, and no uncalled code, one-use wrapper or repeated check. |
-| Style | 문서 스타일 | Conclusion first, text that repeats the title, order that confuses, real file names and commands, and nothing outside the requested part changed. |
-| Review | 코드 리뷰 | Only the scoped change. For every function its caller, whether it merges or deletes, and whether its name fits. Points are split into facts and suggestions. |
-| Review | 문서 리뷰 | Whether the document matches the real code and screen, and no file name that does not exist and no command never run. |
-| Test | 빠른 회귀 테스트 | A small double for a heavy model, one test file per module, one strong test, and one regression test whenever a bug is fixed. |
-| Vision | 보이는 것만 읽기 | Copies only the visible text, state and error, and never guesses what is not visible. |
+| 비서 | Groove 작업 조율 | 끝나야 하는 일을 먼저 정하고 필요한 역할만 부른다. 되돌릴 수 있는 일은 묻지 않고 정해 가정으로 밝힌다. 사용자에게 넘기는 때는 계획 승인·같은 검증 두 번 실패·사람만 할 수 있는 일·되돌릴 수 없는 동작 네 가지뿐이다. 보고는 끝난 일과 확인 근거부터 쓴다 |
+| 인사 | 로스터 정리 | 요청한 역할만 남기고 근거 없이 늘리지 않는다. 바뀐 로스터는 사실대로 보고하고, 쓰이지 않는 역할은 지우자고 제안만 한다 |
+| 개발 | Groove 구현 & 정리 | 가장 작은 변경, 부르는 곳이 있는 코드만, 실행 순서대로 놓인 함수, '왜' 한 줄 주석, 원인 지점에서 수정, 이름을 바꾸면 호출자·테스트·문서·설정을 함께 수정 |
+| 빌드 | 단계별 검증·정리 | 싼 검사부터, 전체 검증은 마지막에 한 번. 실행한 명령과 출력만 보고하고 산출물·임시 폴더를 지운다 |
+| 문서 | 간결한 문서 작성 | 결론을 맨 앞에. 파일명·제목이 이미 말한 것을 지우고, 헷갈리면 순서를 먼저 고친다. 실제 파일명과 실행해 본 명령만 쓴다 |
+| 스타일 | 코드 스타일 | 폴더·파일 경계, 실행 순서, 동사로 시작하는 함수명, 주석 규칙, 부르는 곳 없는 코드·1회용 래퍼·중복 검증 |
+| 스타일 | 문서 스타일 | 결론 우선, 제목과 겹치는 말, 순서 교정, 실제 파일명·명령, 범위 밖 문장 불변 |
+| 리뷰 | 코드 리뷰 | 범위 안만 보고, 함수마다 부르는 곳·병합·삭제 가능성·이름 적합성을 확인한다. 지적은 사실(Fact)과 제안(Suggestion)으로 나눈다 |
+| 리뷰 | 문서 리뷰 | 문서가 실제 코드·화면과 맞는지 확인하고, 없는 파일명이나 실행해 보지 않은 명령을 잡아낸다 |
+| 테스트 | 빠른 회귀 테스트 | 무거운 모델은 작은 대역으로, 모듈마다 테스트 파일 하나, 강한 테스트 하나, 버그를 고치면 회귀 테스트 하나 |
+| 비전 | 보이는 것만 읽기 | 그림에 보이는 글자·상태·오류만 옮겨 적고, 보이지 않는 것은 추측하지 않는다 |
 
-Two user preferences are written into the instructions themselves, not only into this document:
+## 함께 읽는 문서
 
-- **Interfaces** (assistant, development, review, docs): build UI/UX that is immediately usable without reading a manual — direct manipulation over modal forms, a clear flat pastel visual hierarchy without heavy gradients or decorative clutter, and concise labels.
-- **Architecture and code** (development, review, style, and the coding skill): clear multi-level folder boundaries with non-redundant file names, linear control flow, verb-first function names, single-line why-only comments, no dead code or one-use wrappers, a fix at the root contract and data rather than a symptom patch, and fast tests plus cheap checks before the full suite.
-
-## Documents read together
-
-- `agents/APP_MANUAL.md`: the app manual. Only the assistant gets it in its prompt, and it is read again from the file whenever a conversation starts.
-- `agents/app-mcp.md`: what the app helper and the app MCP may operate, and how they run it.
-- `agents/execution.md`: job state changes, user decisions, permission and approval rules.
-- `agents/interaction.md`: the screen and behavior spec.
+- `agents/APP_MANUAL.md` — 앱 사용법 매뉴얼. 비서만 프롬프트로 받고, 대화를 시작할 때마다 파일을 다시 읽는다.
+- `agents/app-mcp.md` — 앱 도우미와 앱 MCP의 조작 범위와 실행 규칙.
+- `agents/execution.md` — 업무 상태 전이, 사용자 결정, 권한과 승인 규칙.
+- `agents/interaction.md` — 화면과 동작 명세.

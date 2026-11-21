@@ -1,6 +1,5 @@
-// Default skills: the working rules assigned once to each role when a project is
-// created. The text translates the user's code and document principles
-// (user-wiki) and their way of finishing work (groove) into instructions.
+// 기본 스킬: 역할마다 프로젝트를 만들 때 한 번 배정되는 작업 규칙. 문장은
+// 사용자의 코드·문서 작성 원칙(user-wiki)과 작업 진행 방식(groove)을 옮긴 것이다.
 
 import type { DatabaseSync } from "node:sqlite";
 import type { RoleId } from "../shared/actions";
@@ -18,142 +17,138 @@ export const defaultSkills: DefaultSkill[] = [
     roleId: "assistant",
     name: "Groove 작업 조율",
     markdown:
-      "Decide in one sentence what has to be finished, then call only the roles that sentence needs.\n" +
-      "- When the answer is in a file and a wrong guess is reversible, decide it and name the assumption instead of asking.\n" +
-      "- Hand work back to the user for four things only: approving a plan, the same check failing after two fixes, work only a person can do, and an irreversible action.\n" +
-      "- Ask collected questions once, with the options in a few short lines, and add a recommendation only when the user asks.\n" +
-      "- Suggest the next step after the request is closed, and never more than one line for a suggestion nobody asked for.\n" +
-      "- Open a report with whether it finished and what proves it, then the counts of changed lines, functions and files, the test result, the assumptions, and what could not be verified.",
+      "무엇이 끝나야 하는지 한 문장으로 정하고, 그 일에 필요한 역할만 부른다.\n" +
+      "- 파일에서 답을 찾을 수 있고 잘못 짚어도 되돌릴 수 있는 것은 묻지 않고 정해, 가정으로 밝힌다.\n" +
+      "- 사용자에게 넘기는 때는 계획 승인, 같은 검증이 두 번 고친 뒤에도 실패, 사람만 할 수 있는 일, 되돌릴 수 없는 동작 네 가지뿐이다.\n" +
+      "- 물어야 할 것은 한 번에 모아 보내고 선택지를 짧게 나열한다. 추천은 사용자가 물을 때만 붙인다.\n" +
+      "- 요청을 끝낸 뒤에 다음을 제안하고, 묻지 않은 제안은 한 줄을 넘기지 않는다.\n" +
+      "- 보고는 끝났는지와 무엇으로 확인했는지부터 쓰고, 바뀐 줄·함수·파일 수, 테스트 결과, 가정, 확인하지 못한 것을 덧붙인다.",
   },
   {
     id: "roster-hygiene",
     roleId: "hr",
     name: "로스터 정리",
     markdown:
-      "- Keep only the roles the user asked for, and never add a specialist or teammate without evidence that the work needs one.\n" +
-      "- After a hire or a fire, report who changed what as it happened.\n" +
-      "- Propose removing a role that is no longer used, and leave the decision to the user.",
+      "- 사용자가 요청한 역할만 남기고, 필요하다는 근거 없이 전문가나 팀원을 늘리지 않는다.\n" +
+      "- 뽑거나 내보낸 뒤에는 누가 무엇을 바꿨는지 사실대로 보고한다.\n" +
+      "- 쓰이지 않는 역할은 지우자고 제안하되, 판단은 사용자에게 남긴다.",
   },
   {
     id: "groove-coding",
     roleId: "development",
     name: "Groove 구현 & 정리",
     markdown:
-      "Finish the approved scope with the smallest change.\n" +
-      "- Before adding a function, option or file, name its callers; when nothing calls it, do not create it. Inline a value, function or wrapper used in one place.\n" +
-      "- Separate folders by role so every level says what it holds, and leave file names free of a prefix the folder already carries.\n" +
-      "- Keep functions in execution order so the main flow reads straight down; start names with a verb and agree in pair, family and number.\n" +
-      "- Comment only a one-line why the code cannot show. Leave no comment that restates the code, no TODO and no commented-out code.\n" +
-      "- Fix the cause at its source contract rather than where the symptom shows, and verify each value once.\n" +
-      "- When a name or a settings key changes, change its callers, tests, documents and settings in the same job, and delete the old form you replaced together with its tests.\n" +
-      "- Build interfaces that work without reading a manual: direct manipulation over modal forms, a flat pastel hierarchy without heavy gradients or decorative clutter, and concise labels.\n" +
-      "- Run the cheapest check that would catch the failure first, pass the whole suite once at the end, and delete temporary files.",
+      "승인된 범위를 가장 작은 변경으로 끝낸다.\n" +
+      "- 새 함수·옵션·파일을 쓰기 전에 부르는 곳을 대고, 부르는 곳이 없으면 만들지 않는다. 한 곳에서만 쓰는 값·함수·래퍼는 그 자리에 인라인한다.\n" +
+      "- 함수는 실행 순서대로 놓고 주 진입 흐름이 한눈에 보이게 유지한다. 이름은 동작을 말하는 동사로 시작하고 짝·계열·단복수를 맞춘다.\n" +
+      "- 주석은 코드로 드러나지 않는 '왜' 한 줄만 쓴다. 코드를 다시 말하는 주석, TODO, 주석 처리한 코드는 남기지 않는다.\n" +
+      "- 증상이 보이는 곳이 아니라 원인이 생긴 곳과 원본 계약에서 고치고, 같은 값은 한 번만 검증한다.\n" +
+      "- 이름이나 설정 키를 바꾸면 그 이름을 쓰는 호출자·테스트·문서·설정을 함께 고친다. 대체한 옛 형태와 그 테스트는 지운다.\n" +
+      "- 실패를 가장 싸게 잡는 검사부터 돌리고, 마지막에 전체 테스트를 한 번 통과시킨 뒤 임시 파일을 지운다.",
   },
   {
     id: "lean-verify",
     roleId: "build",
     name: "단계별 검증·정리",
     markdown:
-      "- Run the cheapest check that would catch the failure first and the whole verification once at the end.\n" +
-      "- Report only the commands you actually ran and their output. Never write that a check you did not run passed.\n" +
-      "- Delete artifacts and temporary folders once they are checked, and say what you deleted.\n" +
-      "- Publishing that cannot be undone waits for the user's confirmation through the assistant.\n" +
-      "- Say the expected duration before a run that takes minutes.",
+      "- 실패를 가장 싸게 잡는 검사부터 돌리고, 전체 검증은 마지막에 한 번만 돌린다.\n" +
+      "- 실제로 실행한 명령과 그 출력만 보고한다. 돌리지 않은 검사는 통과했다고 쓰지 않는다.\n" +
+      "- 산출물과 임시 폴더는 확인이 끝나면 지우고, 지운 것을 보고에 남긴다.\n" +
+      "- 되돌릴 수 없는 배포는 비서를 거쳐 사용자 확인을 받는다.\n" +
+      "- 몇 분 넘게 걸리는 실행은 예상 시간을 먼저 말한다.",
   },
   {
     id: "concise-docs",
     roleId: "docs",
     name: "간결한 문서 작성",
     markdown:
-      "- Put the most important conclusion first.\n" +
-      "- Delete sentences that do not change the meaning or what the reader has to do, and anything the file name, the title or the previous sentence already said.\n" +
-      "- When an explanation is confusing, fix the order before adding a sentence.\n" +
-      "- Use only file names that exist and commands you actually ran.\n" +
-      "- When asked to change one part, change that part and what hangs off it, and leave the rest as a suggestion.\n" +
-      "- Correct a wrong sentence in place instead of appending a correction beside it.\n" +
-      "- Write a README short, in install-and-use order, without anything the project does not need to run.",
+      "- 가장 중요한 결론을 맨 앞에 둔다.\n" +
+      "- 뜻이나 독자가 할 일을 바꾸지 않는 문장, 파일명·제목·앞 문장이 이미 말한 것을 지운다.\n" +
+      "- 설명이 헷갈리면 문장을 더하기 전에 순서를 먼저 고친다.\n" +
+      "- 예시와 명령은 실제로 있는 파일명과 실행해 본 명령만 쓴다.\n" +
+      "- 한 부분만 고치라는 요청에는 그 부분과 거기 딸린 것만 바꾸고, 나머지는 제안으로 남긴다.\n" +
+      "- 어긋난 문장은 옆에 정정을 덧붙이지 말고 그 자리에서 바꿔 쓴다.\n" +
+      "- README는 설치와 사용 순서대로 짧게 쓰고, 프로젝트를 돌리는 데 필요 없는 설명은 넣지 않는다.",
   },
   {
     id: "code-style",
     roleId: "style",
     name: "코드 스타일",
     markdown:
-      "On every file change, check the points below and report what is off to the assistant with the file and the line, without fixing it.\n" +
-      "- Do folders and files separate by role at every level, and does a file name avoid a prefix its folder already says?\n" +
-      "- Do functions stand in execution order so the main flow reads straight down?\n" +
-      "- Do names start with a verb and agree in pair, family, prefix and number?\n" +
-      "- Does each comment keep only a one-line why the code cannot show, with no restating comment, TODO or commented-out code?\n" +
-      "- Is there code nothing calls, a wrapper used once, or the same value verified twice?",
+      "파일이 바뀔 때마다 아래를 보고, 어긋난 곳은 고치지 말고 파일·줄과 함께 비서에게 보고한다.\n" +
+      "- 폴더·파일 경계가 역할을 드러내고, 주 프로그램이 쓰지 않는 일회용 코드는 scripts 폴더에 있는가.\n" +
+      "- 함수가 실행 순서대로 놓여 주 흐름이 한눈에 보이는가.\n" +
+      "- 함수명이 동사로 시작하고 짝 이름·계열 접두사·단복수가 맞는가.\n" +
+      "- 주석이 코드로 드러나지 않는 '왜' 한 줄인가. 코드를 다시 말하는 주석, TODO, 주석 처리한 코드는 없는가.\n" +
+      "- 부르는 곳 없는 코드, 한 곳에서만 쓰는 래퍼, 같은 값을 두 번 검증하는 코드가 없는가.",
   },
   {
     id: "docs-style",
     roleId: "style",
     name: "문서 스타일",
     markdown:
-      "On every file change, check the points below and report what is off to the assistant with the sentence, without fixing it.\n" +
-      "- Does the conclusion come first?\n" +
-      "- Does anything repeat the file name, the title or the previous sentence?\n" +
-      "- Was a confusing order fixed instead of covered by one more sentence?\n" +
-      "- Are the file names real and the commands ones you could run?\n" +
-      "- When one part was meant to change, did the change stay out of the rest of the text?",
+      "파일이 바뀔 때마다 아래를 보고, 어긋난 곳은 고치지 말고 문장과 함께 비서에게 보고한다.\n" +
+      "- 결론이 맨 앞에 있는가.\n" +
+      "- 파일명·제목·앞 문장과 겹치는 말이 없는가.\n" +
+      "- 순서 때문에 헷갈리는 문장을 문장을 더해 덮지 않고 순서를 고쳤는가.\n" +
+      "- 실제로 있는 파일명과 실행해 본 명령만 쓰는가.\n" +
+      "- 한 부분만 고치라는 요청에서 범위 밖 문장을 건드리지 않았는가.",
   },
   {
     id: "code-review",
     roleId: "review",
     name: "코드 리뷰",
     markdown:
-      "- Look only at the scope the user set. Report what catches your eye outside it in one line without fixing it.\n" +
-      "- For every function, check that it has a caller, that it could be merged or deleted, and that its name fits what it does.\n" +
-      "- Check that the fix landed at the cause and the source contract, and that no value is verified twice.\n" +
-      "- Check that folders still separate by role, that file names carry no prefix the folder already says, and that the old code and tests of a replaced behavior are gone.\n" +
-      "- Treat anything the user sees on screen as usable without a manual: direct manipulation over modal forms, a flat pastel hierarchy without heavy gradients or decorative clutter, and concise labels.\n" +
-      "- Leave each point with the file, the line and the evidence, and label it a fact you confirmed or a suggestion you recommend.\n" +
-      "- Reject scope beyond the request.",
+      "- 사용자가 정한 범위만 본다. 범위 밖에서 눈에 띈 것은 고치지 말고 한 줄로 알린다.\n" +
+      "- 함수마다 부르는 곳이 있는지, 합치거나 지울 수 있는지, 이름이 하는 일과 맞는지 확인한다.\n" +
+      "- 증상이 아니라 원인 지점과 원본 계약에서 고쳤는지, 같은 값을 두 번 검증하지 않는지 본다.\n" +
+      "- 대체한 동작의 옛 코드와 그 테스트가 남아 있지 않은지 본다.\n" +
+      "- 지적은 파일·줄·근거와 함께 남기고, 확인한 사실(Fact)과 고칠 것을 권하는 제안(Suggestion)을 구분한다.\n" +
+      "- 요청 밖 범위 확장은 통과시키지 않는다.",
   },
   {
     id: "docs-review",
     roleId: "review",
     name: "문서 리뷰",
     markdown:
-      "- Check that the document matches the code and the screen as they actually work, and do not accept an unconfirmed feature as fact.\n" +
-      "- Check that the conclusion comes first and that nothing repeats the file name or the title.\n" +
-      "- Check that no file name is made up and no command is written that was never run.\n" +
-      "- Separate each point into a fact and a suggestion, and write the sentence you would change.",
+      "- 문서가 실제 코드와 화면 동작에 맞는지 확인하고, 확인하지 못한 기능은 사실로 인정하지 않는다.\n" +
+      "- 결론이 앞에 있는지, 파일명·제목과 겹치는 말이 있는지 본다.\n" +
+      "- 실제로 없는 파일명이나 실행해 보지 않은 명령이 적혀 있지 않은지 본다.\n" +
+      "- 지적은 사실(Fact)과 제안(Suggestion)을 구분하고, 고칠 문장을 함께 적는다.",
   },
   {
     id: "fast-tests",
     roleId: "test",
     name: "빠른 회귀 테스트",
     markdown:
-      "- Replace a heavy model with a small double that runs the same flow, and call main inside the process instead of spawning a subprocess for a script.\n" +
-      "- Use the real model once only for what a double cannot show.\n" +
-      "- Keep one strong test instead of several weak ones, and delete tests that overlap or no longer guard anything.\n" +
-      "- One test file per source module, shared helpers in one file.\n" +
-      "- When you fix a bug, leave one regression test that fails on the code before the fix.\n" +
-      "- Keep the whole suite finishing in seconds, and when it slows down, start by shrinking the tests you just wrote.\n" +
-      "- Report the command you ran and its result as they are, and never count a check you cannot run as a pass.",
+      "- 무거운 모델은 같은 흐름을 도는 작은 대역으로 바꾸고, 스크립트는 서브프로세스 대신 프로세스 안에서 main을 부른다.\n" +
+      "- 대역으로는 보여 줄 수 없는 것만 실제 모델로 한 번 확인한다.\n" +
+      "- 약한 테스트 여럿보다 강한 테스트 하나를 남기고, 겹치거나 더는 지키는 것이 없는 테스트는 지운다.\n" +
+      "- 소스 모듈마다 테스트 파일 하나, 공용 도우미는 한 파일에 모은다.\n" +
+      "- 버그를 고쳤으면 고치기 전 코드가 실패하는 회귀 테스트를 하나 남긴다.\n" +
+      "- 전체 스위트는 몇 초 안에 끝나게 두고, 느려지면 새로 쓴 테스트부터 줄인다.\n" +
+      "- 실행한 명령과 결과를 그대로 보고하고, 돌릴 수 없는 검사는 통과로 치지 않는다.",
   },
   {
     id: "faithful-reading",
     roleId: "vision",
     name: "보이는 것만 읽기",
     markdown:
-      "- Copy the text, the state and the error message that are actually visible in the picture.\n" +
-      "- Do not fill in what is not visible, and say so when a part is too blurry or cut off to read.\n" +
-      "- Do not create images.",
+      "- 그림에 실제로 보이는 글자·상태·오류 문구를 그대로 옮겨 적는다.\n" +
+      "- 보이지 않는 것은 추측해 채우지 않고, 흐리거나 잘려 읽지 못한 부분은 그렇다고 밝힌다.\n" +
+      "- 그림을 만들어 내지 않는다.",
   },
 ];
 
 /**
- * Assign the default skills to one project. Only called when a project is first
- * created or a saved database is upgraded, so a skill the user removed never
- * comes back.
+ * 프로젝트 하나에 기본 스킬을 배정한다. 프로젝트를 처음 만들 때와 저장본을
+ * 판올림할 때만 부르므로, 사용자가 해제한 스킬이 다시 살아나지 않는다.
  */
 export function seedDefaultSkills(db: DatabaseSync, projectId: string) {
   const insert = db.prepare(
     "INSERT OR IGNORE INTO crew_skills VALUES (?, ?, ?, ?, ?)",
   );
-  // crew_skills.id is unique across the whole database, so the project id leads.
+  // crew_skills.id는 저장본 전체에서 하나뿐이라 프로젝트 id를 앞에 붙인다.
   for (const { id, roleId, name, markdown } of defaultSkills)
     insert.run(projectId + ":" + id, projectId, roleId, name, markdown);
 }

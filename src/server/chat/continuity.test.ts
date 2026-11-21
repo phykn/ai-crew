@@ -56,8 +56,8 @@ test("stores a cut-off answer with its reason instead of dropping it", () => {
     expect(history[1].content).toContain("먼저 이렇게 답하다가");
     expect(history[1].content).toContain(cutMark);
     const notice = continuationNotice(messages, { excludeId: second });
-    expect(notice).toContain("앞선 응답이 중단되었습니다");
-    expect(notice).toContain("사용자가 멈춰서");
+    expect(notice).toContain("The previous answer was interrupted");
+    expect(notice).toContain("the user stopped it");
   } finally {
     store.close();
     rmSync(directory, { recursive: true, force: true });
@@ -78,7 +78,7 @@ test("tells the model the new message itself cut the earlier answer", () => {
     message({ id: "u2", role: "user", text: "잠깐, 이것부터" }),
   ];
   const notice = continuationNotice(messages, { excludeId: "a2" });
-  expect(notice).toContain("새 메시지가 앞 응답을 끊은 이유");
+  expect(notice).toContain("why the earlier answer stopped");
   expect(lastInterruption(messages, { excludeId: "a2" })?.id).toBe("a1");
 });
 
@@ -110,7 +110,7 @@ test("keeps both pieces when two answers are cut in a row", () => {
   expect(answers[0].content).toContain("첫 조각");
   expect(answers[0].content).toContain(cutMark);
   expect(answers[1].content).toContain("둘째 조각");
-  expect(answers[1].content).toContain("오류가 나서");
+  expect(answers[1].content).toContain("An error occurred");
 });
 
 test("keeps both pieces in the store when two answers are cut in a row", () => {
@@ -191,7 +191,7 @@ test("can carry the cut-off tail itself for a thread that lost it", () => {
     excerpt: true,
   });
   expect(notice).toContain("여기까지 만들었어요");
-  expect(notice).toContain("앱을 닫아서");
+  expect(notice).toContain("the app closed");
 });
 
 test("a picture-only message reaches the prompt with what the vision model saw", () => {
@@ -203,13 +203,13 @@ test("a picture-only message reaches the prompt with what the vision model saw",
   const notes = new Map([
     [
       "u1",
-      "[첨부 이미지 1 · shot.png · image/png · 184KB]\n'저장 실패' 오류 창이 보입니다.",
+      "[attached image 1 · shot.png · image/png · 184KB]\n'저장 실패' 오류 창이 보입니다.",
     ],
   ]);
   expect(conversationHistory(messages, { imageNotes: notes })).toEqual([
     {
       role: "user",
-      content: "[첨부 이미지 1 · shot.png · image/png · 184KB]\n'저장 실패' 오류 창이 보입니다.",
+      content: "[attached image 1 · shot.png · image/png · 184KB]\n'저장 실패' 오류 창이 보입니다.",
     },
     { role: "assistant", content: "무엇을 도와드릴까요?" },
     { role: "user", content: "이 오류 뭐야?" },

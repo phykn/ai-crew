@@ -1,21 +1,22 @@
 # AI Crew
 
-일렉트론 데스크톱 앱. 모델·도구 호출과 SQLite는 메인 프로세스에 두고, 화면은 Vite로 빌드하는 React 렌더러가 맡는다. 구현은 Groove를 적용해 첫 미완료 작업부터 진행한다.
+An Electron desktop app. Model and tool calls and SQLite live in the main process, and the screen is a React renderer built by Vite. Work follows Groove: start from the first unfinished task.
 
-## 모듈
+## Modules
 
-- `src/main.ts` · `src/preload.ts` · `src/renderer.tsx` — 진입점. `main.ts`가 저장소·모델·MCP·워크플로우를 잇고, `renderer.tsx`가 창의 상태를 가진다.
-- `src/shared/` — 메인과 화면이 함께 읽는 계약: 액션 스키마와 크루 역할(`actions.ts`), 역할 지침, 스킬 상태, 채팅 대기열과 채팅 명령.
-- `src/store/` — SQLite: 스키마와 마이그레이션, 도메인별 저장소, 스냅샷, 감사 로그, 기본 스킬 배정, 캠프 상태 계산.
-- `src/workflow/` — 업무 엔진: 계획·개발·검증·복구 단계, 프롬프트, 워크플로우 그래프, git 워크트리, 중단 펜스, 스타일 감시, 작업 공간 파일 읽기·쓰기.
-- `src/server/` — 메인 프로세스 런타임: 액션 실행기, HTTP 앱 API, MCP 클라이언트와 앱 MCP 서버, Codex 연결과 생성된 프로토콜 타입, 모델 호출·비용·오류, 진단, 앱 매뉴얼 로더.
-- `src/ui/` — 렌더러: 캠프(PixiJS·GSAP), 대화, 업무 로그, 워크플로우 그래프, 위키, 메모리, 툴바와 공용 UI 도우미.
-- `agents/` — 에이전트가 읽는 문서: 비서가 사용법을 답할 때 쓰는 앱 매뉴얼, 앱 MCP·업무 실행·화면 동작 명세.
-- `scripts/` — 일회용 도구: Codex 타입 생성과 패키징한 앱 점검.
-- `demo/` — 브라우저 목업.
+- `src/main.ts` · `src/preload.ts` · `src/renderer.tsx` — entry points. `main.ts` joins the store, models, MCP and workflow; `renderer.tsx` holds the window state.
+- `src/shared/` — the contracts the main process and the screen read together: action schemas and crew roles (`actions.ts`), role definitions (`crew-definition.ts`), the prompt budget for the project wiki (`wiki-reference.ts`), skill state, the chat queue and chat commands.
+- `src/store/` — SQLite. `store.ts` is the class the app constructs; `base.ts` opens the connection and `migrations.ts` owns the schema, one file per subject holds its reads and writes (`jobs.ts`, `crew.ts`, `members.ts`, `memory.ts`, `workflow.ts`, `workspace.ts`, `changes.ts`, `run.ts`, `style.ts`, `audit.ts`), `snapshot.ts` builds the screen state, `skills.ts` holds the default skills and `camp.ts` the camp state.
+- `src/workflow/` — the job engine. `workflow.ts` runs one job; `base.ts` → `tools.ts` → `checks.ts` → `verification.ts` → `planning.ts` → `development.ts` stack the stages, `recovery.ts` resumes a stopped job, `graph.ts` holds the default flow and its validation, `prompts.ts` the reply schemas and stage prompts, `support.ts` the retry and ending rules, `engine-fence.ts` the stop and directory fences, `git-workspace.ts` the worktrees, `style-watch.ts` the file watcher and `workspace-files.ts` the reads and writes inside a project.
+- `src/server/` — the main-process runtime. `app/` holds the action runner, the app MCP server, the assistant's app tools and the manual loader; `chat/` the local model turn, conversation continuity, the HTTP/SSE server, model cost and errors and the wiki tools; `codex/` the Codex connection, its per-thread MCP config and the generated protocol types; `diagnostics/` the environment check and the secret sanitizer; `mcp/` the external MCP client and tool approval.
+- `src/ui/` — the renderer. `camp/` draws the camp with PixiJS and GSAP, `chat/` the conversation with its composer keys, search, decision cards and status, `panels/` the workflow, wiki, worklog and memory panels with crew settings, toolbar, notifications and the diagnostics banner, and `common/` markdown, clipboard, text diff and the presentational parts every panel shares.
+- `agents/` — the documents agents read: the app manual the assistant answers usage questions from, and the app MCP, job execution and screen behavior specs.
+- `scripts/` — one-off tools: Codex type generation and the packaged-app smoke check.
+- `demo/` — the browser mockup.
 
-## 기준
+## Rules
 
-- 제품 흐름은 `agents/interaction.md`, 구현 순서는 `docs/groove/PLAN.md`를 따른다. `docs/`는 저장소 밖으로 나갈 임시 노트이고, 에이전트가 읽는 문서는 `agents/`에 둔다.
-- 화면과 앱 MCP는 메인 프로세스의 같은 동작을 쓴다.
-- 값·함수·설정 키·파일 이름을 바꾸면 그 이름을 쓰는 호출자·테스트·문서·설정을 같은 작업에서 고친다.
+- Product flow follows `agents/interaction.md`, and implementation order follows `docs/groove/PLAN.md`. `docs/` is a temporary note that leaves the repository; documents agents read live in `agents/`.
+- The screen and the app MCP call the same behavior in the main process.
+- When a value, function, settings key or file name changes, change its callers, tests, documents and settings in the same job.
+- Agent instructions are English. Text the user sees or hears — labels, logs, errors — stays in the user's language, Korean.

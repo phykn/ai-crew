@@ -1,107 +1,107 @@
-# AI Crew 화면과 동작 명세
+# AI Crew screens and behavior
 
-캠프에서 누가 일하는지 보고, 비서와의 대화에서 다음 행동을 정하고, 로그에서 근거를 찾는다. 상태 전이와 권한은 [업무 실행과 복구](execution.md)를 따른다.
+The camp shows who is working, the conversation with the assistant decides the next action, and the log holds the evidence. State changes and permissions follow [running and recovering work](execution.md).
 
-## 작업 공간
+## Work space
 
-| 위치 | 기본 화면 | 조작 |
+| Place | Default screen | What you do there |
 |---|---|---|
-| 왼쪽 캠프 | 모닥불, 캐릭터, 역할색 별명, 접힌 크루 범례 | 크루를 열어 고용 상태·모델·스킬을 확인하고 관리한다. 일하는 캐릭터를 누르면 해당 업무의 상세 또는 승인 질문으로 이동한다. |
-| 오른쪽 헤더 | 왼쪽의 현재 프로젝트 전환 버튼과 오른쪽의 대화·로그·메모리·워크플로우 아이콘, 세션 목록 | 포인터나 키보드 포커스로 아이콘 이름을 확인한다. 탭은 같은 패널을 쓴다. 프로젝트 버튼에서 최근 폴더를 고르거나 운영체제 선택기를 열어 프로젝트를 바꾸고, 세션 목록은 버튼 아래에서 바로 열리며 현재 프로젝트의 대화만 보여준다. 열린 메뉴는 바깥 클릭이나 Escape로 닫힌다. |
-| 대화 상단 | 진행 중인 업무의 크루·현재 단계·목표를 한 줄로 보여 주는 상태 배너와, 업무가 둘 이상일 때만 펴는 진행 중인 업무 목록 | 배너는 대기 중인 승인·질문 건수도 알리고, 누르면 해당 업무 로그를 열며 옆의 ‘캠프’로 캠프 보기를 전환한다. 업무가 한 건이면 배너 오른쪽에 그 업무의 멈춤 또는 이어가기를 붙여 한 줄로 끝낸다. 업무마다 제목과 현재 단계를 한 줄로 두고, 제목으로 인계·상태·추가 지시·멈춤·로그를 연다. 지금 열어 둔 승인 요청은 입력창 위에 놓는다. 나머지 승인 대기는 상단에서 답할 대상을 고른다. |
-| 대화 본문 | 왼쪽 비서 말풍선, 오른쪽 사용자 말풍선 | 비서 말풍선은 제목·목록·인라인 코드·링크와, 언어 라벨과 복사 버튼을 갖춘 코드 블록으로 읽는다. 말풍선 위에 포커스하거나 올리면 말풍선 안쪽 우측 상단에 메시지 복사 버튼이 나타나고, 본문은 그 자리를 비워 둔다. 위로 올려 읽는 동안에는 우하단 ‘맨 아래로’로 최신 메시지로 돌아간다. 보고에서 업무 로그를 열고, 중단 보고에서 이어간다. |
-| 대화 하단 | 항상 같은 위치의 입력창 카드와 그 아래 컨트롤 바 | 입력창은 떠 있는 카드 하나로, 위는 쓴 만큼 두 줄에서 160px까지 늘어나는 글이고 아래는 얇은 구분선 뒤 컨트롤 바다. 바 왼쪽에 프로젝트 폴더 팻말과 승인 모드 알약(방패 아이콘 + 짧은 라벨, 좁은 창에서는 라벨을 감추고 아이콘만 남김)을, 오른쪽에 주 버튼인 보내기(응답 중에는 멈춤이 옆에 선다)를 둔다. 대기열에 기다리는 메시지는 카드 위에 번호가 붙은 칩으로 보이고 칩마다 ✕로 뺀다. 카드 아래 한 줄에 단축키를 적는다. 권한 요청은 입력창 바로 위 카드 한 장에서 허용·거절한다. |
+| Left **camp** | A flat yard with a campfire, a tent, a wagon, three log benches and a supply crate, the characters, role-colored name tags, collapsed crew legend | Open a crew member to check hired state, model and skills and to manage them. Press a working character to go to that job's detail or approval question. |
+| Right header | Project switch on the left; chat, log, memory and workflow icons on the right; session list | Read an icon's name with the pointer or keyboard focus. Tabs swap the same panel. The project button picks a recent folder or opens the operating system picker; the session list opens right under the button and shows only this project's conversations. An open menu closes on an outside click or Escape. |
+| Chat header | One-line status banner with the crew member, current stage and goal of the running job, and the list of running jobs, unfolded only when there is more than one | The banner also reports waiting approvals and questions; pressing it opens that job's log, and the `camp` control beside it switches to the camp view. With a single job, that job's stop or continue sits at the end of the same line. Every job keeps its title and current stage on one line; the title opens handoff, state, follow-up, stop and log. The approval request you have open sits above the composer. The rest of the waiting approvals are chosen from the top. |
+| Chat body | Assistant bubbles on the left, user bubbles on the right | An assistant bubble reads as headings, lists, inline code, links and code blocks with a language label and a copy button. Focusing or hovering a bubble shows a message copy button at its top right inside the bubble, and the text leaves that place free. While reading up, `jump to latest` at the bottom right returns to the newest message. A report opens the job log; an interrupted report lets you continue. |
+| Chat footer | Composer card at one fixed place, with the control bar under it | The composer is a single floating card: the top grows from two lines to 160px as you write, and a thin rule separates the control bar below. On the left of the bar sit the project folder tag and the approval-mode pill (shield icon plus a short label; a narrow window keeps only the icon), and on the right is the primary send button (stop stands beside it while answering). Queued messages show as numbered chips above the card, each removed with ✕. A line under the card always lists the shortcuts. A permission request is answered on one card just above the composer. |
 
-넓은 화면에서 캠프는 창 왼쪽 끝까지 채우고 작업 패널과 경계 한 줄을 공유한다. 좁은 화면에서는 캠프 보기와 작업 보기로 전환하며 같은 세션을 읽는다. 오른쪽 패널의 공통 폭·간격·타이포그래피는 [디자인 토큰](../demo/tokens.css)을 따른다. 화면에 보이는 제목은 현재 문서·업무·선택지를 식별하는 데 쓴다. 아이콘은 접근성 이름과 포커스 표시를 갖는다. 화면의 강조색은 현재 탭, 기본 동작과 사용자 결정에 쓴다. 역할색은 별명과 작업 연출에 쓴다. 캐릭터의 별명과 대사는 한 줄로 묶어 몸의 가로 중심 위에 배치한다.
+On a wide screen the camp fills the left edge of the window and shares one boundary line with the work panel. On a narrow screen the camp view and the work view are switched and read the same session. Width, spacing and typography of the right panel follow the [design tokens](../demo/tokens.css). A title on screen identifies the document, job or option being used. Icons carry an accessible name and a focus mark. The accent color marks the current tab, the primary action and the user's decision. A role color marks the name tag and the work animation. A character's tag and line sit on one line over the horizontal center of the body.
 
-## 요청에서 보고까지
+## From request to report
 
-| 상태 | 사용자가 할 수 있는 일 | 화면과 결과 |
+| State | What the user can do | Screen and result |
 |---|---|---|
-| 새 대화·초안 | Enter 전송, Ctrl+Enter(맥은 Cmd+Enter) 대기열 추가, Shift+Enter 줄바꿈 | 한글 조합 확정에 쓴 Enter는 전송도 대기열 추가도 하지 않는다. 입력창 위치는 전송 전후 동일하다. 비서가 직접 답할 수 있는 질문은 말풍선만 두 개 생긴다. |
-| 협업 요청 | 업무 제목을 눌러 상세 열기 | 요청과 업무 ID를 연결한다. 단계가 바뀌면 상단 한 줄만 갱신하고 캠프는 같은 상태를 반영한다. |
-| 사용자 결정 필요 | 입력창 위 카드 한 장에서 권한 범위·요청자 확인, 허용 또는 거절 | 여러 결정이 쌓이면 우선순위가 높은 한 건만 보여 주고 카드 머리에 ‘대기 +N건’과 ‘다음’을 둔다. 카드에 표시한 요청 ID에만 답변을 한 번 적용한다. 승인 범위가 넓어지면 입력창 위에서 바뀐 범위를 보여준다. 질문 교체 뒤 이전 카드에서 들어온 클릭에는 현재 질문을 다시 표시한다. 답한 질문은 닫히고 결정은 로그에 남는다. 허용으로 시작하거나 거절로 종료한 결과를 표시한다. 다른 결론이 필요한 일반 질문은 해당 비서 말풍선에 표시한다. |
-| 응답 생성 또는 업무 실행 | 멈춤 선택. 초안을 쓰면 보내기(Enter)나 대기열 추가(Ctrl+Enter)도 사용 | 멈춤은 버튼에 연결된 응답 또는 업무 한 건에 적용하고, 기다리던 메시지도 함께 접는다. 보내기를 누르면 지금 답변을 그 자리에서 끊고 새 메시지를 먼저 답한다. 끊긴 지점까지 만든 답변은 중단 사유와 함께 남아 다음 답변이 앞부분을 이어받고, 새 메시지가 끊은 까닭임을 안다. 대기열 추가는 끊지 않고 넣어 앞선 답변이 끝난 뒤 차례로 답한다. 실행이 여러 건이면 대상 업무명을 입력창에서 읽는다. 업무 상세의 멈춤은 해당 업무에 적용한다. 더블클릭이나 키 자동 반복으로 뒤이어 나타난 다른 동작을 실행하지 않는다. |
-| 추가 지시 | 업무 상세에서 ‘추가 지시’를 고른 뒤 작성 | 입력창에 대상이 표시된다. 다른 카드를 읽어도 초안의 수신 대상은 유지한다. 대상이 끝나면 초안을 보존하고 전송을 보류한다. 연결을 해제하거나 새 업무라고 명시하면 별도 요청으로 보낼 수 있다. “그거 다시 해줘”처럼 여러 해석이 가능하면 비서가 대상을 묻는다. |
-| 멈춤·이어서 실행 | 중단 보고에서 ‘이어가기’ | 먼저 저장된 상태에 따라 ‘완료’ 또는 ‘중단 중’을 표시한다. 정지가 확인되면 ‘중단됨’으로 바뀌고 실제 변경과 초안을 보존한다. 외부 동작의 실행 여부를 확인할 수 없으면 비서의 질문을 표시한다. 이어가기는 마지막 확인 상태에서 필요한 단계만 시작한다. |
-| 완료·실패 | 보고에서 해당 업무 로그 열기 | 상단에서 종료된 업무가 빠진다. 보고에는 결과·막힌 항목·미확인 범위를 남긴다. 로그에 인계와 완료 조건, 변경 버전, 검토 의견과 테스트 결과를 묶어 둔다. |
+| New conversation or draft | Enter sends, Ctrl+Enter (Cmd+Enter on a mac) queues, Shift+Enter breaks the line | Enter pressed to finish a Hangul composition neither sends nor queues. The composer stays where it is before and after sending. A question the assistant can answer itself makes only two bubbles. |
+| Collaboration request | Press the job title to open its detail | The request is linked to a job ID. When a stage changes, only the top line is refreshed and the camp reflects the same state. |
+| A user decision is needed | On one card above the composer, read the permission scope and the requester, then allow or refuse | With several decisions waiting, only the highest-priority one is shown, with `waiting +N` and `next` at the head of the card. An answer applies once, to the request ID on the card. When the approval scope grows, the changed scope is shown above the composer. After the question is replaced, a click from the earlier card shows the current question again. An answered question closes and the decision stays in the log. A result that started with an allow or ended with a refuse is shown. A general question that needs another answer is shown in its own assistant bubble. |
+| Answer being generated, or a job running | Choose stop. With a draft written, send (Enter) or queue (Ctrl+Enter) also works | Stop applies to one response or one job attached to the button, and folds the messages that were waiting. Send cuts the current answer right there and answers the new message first; the part already made stays with the stop reason and the next answer takes the beginning over and knows that the new message is what cut it. Queue adds without cutting and answers in turn after the earlier answer finishes. With several runs, the target job name is read at the composer. Stop in a job detail applies to that job. A double click or key auto-repeat does not run a second action that appears behind the first. |
+| Follow-up instruction | In the job detail, choose `follow-up` and write | The composer shows the target. Reading another card keeps the draft's recipient. When the target ends, the draft is kept and sending waits. Clearing the link or saying it is a new job sends it as a separate request. When `do that again` could mean several things, the assistant asks which. |
+| Stop and continue | `continue` in the interrupted report | First show `complete` or `stopping` from the stored state. Once the stop is confirmed it becomes `stopped`, keeping the real change and the draft. When whether an external action ran cannot be checked, the assistant's question is shown. Continue starts only the stages that are needed from the last confirmed state. |
+| Complete or failed | Open that job's log from the report | The finished job leaves the top line. The report keeps the result, what blocked it and what is unconfirmed. The log ties together handoffs, completion criteria, change versions, review comments and test results. |
 
-업무 대기·재시도·해고·재개는 모두 사건을 업무 ID로 기록한다. 동료가 직접 요청할 때는 요청 범위, 기대 결과, 받는 역할과 산출물을 인계하고 받는 쪽 권한으로 실행한다. 수정 범위가 겹치거나 같은 담당자가 이미 실행 중이면 뒤 업무가 기다린다. 앞 업무가 끝나면 최신 변경과 완료 조건을 확인한다. 일시 오류와 수정·재검증은 각각 최대 3회 재시도하고, 모델 한도 도달 시 진행분을 보고한 뒤 멈춘다.
+A job waiting, retrying, firing a member or resuming all record their events under the job ID. When a peer asks directly, it hands over the request scope, the expected result, the receiving role and the artifacts, and runs with the receiver's permission. When change scopes overlap or the same assignee is already running, the later job waits. When the earlier job ends, it checks the latest change and completion criteria. A transient error and a fix-and-recheck each retry up to three times, and a model limit stops the job after reporting the progress so far.
 
-읽던 대화·로그 위치와 펼친 근거를 갱신 중에도 유지한다. 최신 메시지를 읽던 경우에만 새 메시지를 따라간다. 다른 세션의 승인 요청은 세션 목록 아이콘의 건수로 알리고, 그 세션을 열었을 때 답한다.
+The place you were reading in a conversation or a log, and the evidence you unfolded, are kept while state refreshes. New messages are followed only when you were reading the newest one. An approval request in another session is counted on the session list icon and answered once that session is open.
 
-## 반복해서 쓰는 조작
+## Repeated operations
 
-| 조작 | 결과 |
+| Operation | Result |
 |---|---|
-| 프로젝트 폴더 선택 | 입력창 위(승인 모드 옆)의 프로젝트 팻말에서 최근 폴더를 고르거나 운영체제 선택기를 연다. 좁은 창에서도 현재 프로젝트 이름을 줄임표로 줄여 보여 준다. 취소 후 기존 입력과 초점으로 돌아온다. 같은 프로젝트를 다시 열면 마지막 세션을 불러온다. 폴더가 이동했으면 기록을 보존하고 기준 파일과 접근 권한을 확인한 뒤 재개한다. |
-| 캠프 자율 이동 | 배정된 일이 있으면 작업대·모닥불·다리 쪽 작업 자리로 걸어가 일하고, 쉬는 크루는 6~12초마다 빈 통나무 의자나 산책 지점으로 옮겨 다닌다. 한 번에 한두 명만 걷고, 한 의자에는 한 명만 앉는다. 비서는 새 일을 맡은 담당자 옆으로 걸어가 "전달!" 말풍선을 띄우고, 스타일·리뷰는 개발·문서가 일하는 자리 옆에서 지켜본다. 개울·오두막·화덕·소나무는 걷지 않고 돌아간다. 통나무 의자·모닥불·작업대·등불은 마우스를 올리면 팻말이 뜨고 누르면 불씨·등불이 반응한다. |
-| 승인 모드 | 수동은 사용자, 자동은 비서가 결정한다. 항상은 현재 역할 권한 안의 요청을 자동 승인한다. 모드 변경은 다음 권한 요청부터 적용한다. 대기 중인 질문은 그 자리에서 답한다. 새 요청·회수된 권한·알바에 모두 같은 규칙을 적용한다. |
-| 세션 목록·슬래시 명령 | 첫 요청으로 대화 제목을 만들고 목록에서 제목과 최근 활동을 읽는다. 새 대화는 프로젝트 설정에서 시작한다. 이전 세션을 고르면 저장된 맥락과 초안이 이어진다. 입력창에 `/`를 쓸 때만 명령이 보이고 위아래 화살표로 고른 뒤 Tab이나 Enter로 채우며 Escape로 닫는다. `/clear`를 단독으로 보내면 팀·모델·워크플로우 선택을 이어받은 빈 세션을 연다. 신규 업무는 현재 권한과 최신 워크플로우를 쓰고 기존 업무는 원래 세션에서 계속된다. |
-| 세션 삭제·프로젝트 제거 | 목록에서 삭제할 기록 범위를 확인한다. 실행 중이면 먼저 멈춘 뒤 삭제한다. 원본 폴더와 파일은 그대로 두고, 살아 있는 위키가 삭제된 세션을 참조하면 출처를 ‘삭제된 세션’으로 표시한다. |
-| 로그 | 전체 기록은 사건을 시각·역할·결과로 읽는다. 업무명이나 보고의 링크로 들어오면 해당 업무만 보인다. 넓은 창에서는 대화 옆에 나란히 열리고 닫기 버튼으로 접으며, 좁은 화면에서는 로그 탭으로 연다. 다른 탭이나 캠프로 넘어가면 나란히 연 로그는 접고, 대화로 돌아와도 다시 펴지 않는다. 클릭으로 완료 조건과 근거를 펼친다. 비용 미제공은 ‘미제공’으로 표시한다. |
-| 메모리 | 프로젝트 위키와 에이전트 기억을 분리한다. 위키의 목록·노드는 같은 글을 열고 작성자·출처는 글 안에서 확인한다. 변경 이력에서는 작성자·시각·변경 내용을 읽는다. 담당자 기억은 각 담당자의 행에서 펼친다. |
-| 메모리 편집·삭제 | 위키 저장과 변경 이력은 한 트랜잭션으로 처리한다. 충돌 시 기존 내용과 초안을 보존한다. 기억 삭제 시 관련 규칙이 있으면 기억만 지울지 규칙도 해제할지 확인하고 진행 중인 실행의 버전은 유지한다. |
-| 워크플로우 | React Flow에서 위에서 아래로 읽는다. 노드 몸체를 끌면 그 자리가 곧 저장 좌표에 반영된다. 노드의 연결점을 다른 단계의 연결점이나 카드 위로 끌어 놓으면 실행 순서가 이어지고, 같은 연결과 자기 자신은 늘리지 않는다. 연결선을 누르면 선택 표시와 ✕가 뜨고, 그 ✕나 Delete·Backspace로 끊는다. 노드를 누르면 아래 속성 줄에서 이름·담당 역할·실행 조건·필수 여부를 고치고, '완료 조건과 인계 산출물'을 펼쳐 나머지를 고친다. 출발·도착 단계를 고르는 별도 연결 폼은 두지 않는다. 프로젝트마다 버전과 편집 초안을 보존한다. |
-| 워크플로우 저장 | 연결, 순환, 필수 합류와 완료 경로를 검사한다. 실패한 초안은 편집기 안에 남긴다. 기본은 다음 새 업무부터 적용한다. 사용자가 현재 업무에 적용할 때는 영향받는 단계만 재계산한다. 실행 조건으로 건너뛴 단계와 실패한 필수 단계는 각각 로그에 사유를 표시한다. |
+| Choosing the project folder | Pick a recent folder from the project tag above the composer (beside the approval mode) or open the operating system picker. A narrow window still shows the current project name, shortened with an ellipsis. Cancel returns to the earlier input and focus. Re-opening the same project loads its last session. When the folder moved, the record is kept, the base files and access are checked, and the job resumes. |
+| Camp moving on its own | A crew member with assigned work walks to a work spot — by the campfire, in front of the tent, the wagon or the crates, on the path, or in the east or west yard — and works there; a resting member moves every 6 to 12 seconds to one of the three log benches or to a walking point on the grass. Only one or two walk at a time, and one bench holds one member. The assistant walks to the assignee who just took new work and shows a `delivered!` bubble, and style and review watch beside the development or document worker. The tent, wagon, campfire, benches and crates are walked around, not through. Hovering one of them shows a tag, and pressing it reacts: sparks spread and the firelight pulses. |
+| Approval mode | Manual means the user decides, auto means the assistant decides, and always auto-approves a request inside the current role's permission. A mode change applies from the next permission request. A waiting question is answered where it stands. The same rule covers a new request, a revoked permission and a temp member. |
+| Session list and slash commands | The first request makes the conversation title, and the list shows title and latest activity. A new conversation starts from the project settings. Choosing an earlier session continues its stored context and draft. Commands appear only while you type `/` at the composer, are chosen with the up and down arrows, filled with Tab or Enter, and closed with Escape. Sending `/clear` alone opens an empty session that inherits the team, model and workflow. New jobs use the current permission and the latest workflow; an existing job continues in its original session. |
+| Deleting a session or removing a project | The list asks which records to delete. A running one is stopped first. Files in the source folder stay; when a live wiki page references a deleted session, its source reads `deleted session`. |
+| Log | The full record reads events by time, role and result. Entering from a job name or a report link shows only that job. On a wide window it opens beside the conversation and folds with the close button; on a narrow one it opens as the log tab. Moving to another tab or the camp folds a side-by-side log, and coming back does not unfold it again. Clicking unfolds completion criteria and evidence. A missing cost reads `not provided`. |
+| Memory | Project wiki and agent memory are kept apart. The wiki list and a node open the same page, and author and source are checked inside it. The history shows author, time and what changed. An assignee's memory unfolds in that member's row. |
+| Editing and deleting memory | A wiki save and its history are one transaction. On a conflict the existing text and the draft are kept. Deleting memory with a related rule asks whether to delete only the memory or drop the rule too, and keeps the version of any running execution. |
+| Workflow | React Flow reads top to bottom. Dragging a node body stores its place as the coordinates. Dragging a node's connection point onto another stage's connection point or onto its card links the running order, and a duplicate link or a link to itself is never made. Pressing a connection line shows a selection mark and a ✕; the ✕, Delete or Backspace cuts it. Pressing a node edits name, assignee role, run condition and required in the property line under the canvas, and unfolds `completion criteria and handoff artifact` for the rest. There is no separate form for picking a source and a destination stage. Versions and the editing draft are kept per project. |
+| Saving a workflow | Connections, cycles, required joins and a completion path are checked. A failed draft stays in the editor. By default the next new job uses it. When the user applies it to the current job, only the affected stages are recalculated. A stage skipped by its run condition and a failed required stage each show the reason in the log. |
 
-## 캠프 화면
+## Camp screen
 
-왼쪽 화면에는 모닥불을 중심으로 의자, 벤치, 천막, 나무가 있는 야영지가 보인다. 디아블로 2의 어두운 색감과 비스듬히 내려다보는 고전 2D 구도, 레드 데드 리뎀션 2에서 동료들이 모닥불 주변에 모이는 분위기를 참고해 AI Crew의 픽셀 아트 캠프를 구성한다. 각 캐릭터는 고유한 실루엣과 동작을 가지며 머리 위에는 범례에서 편집한 별명이 역할별 색으로 표시된다. 별명과 대사 또는 작업 상태를 한 줄로 묶고, 줄 전체의 가로 중심을 캐릭터 중심에 맞춘다. 별명만 보일 때도 같은 기준으로 정렬한다.
+The left screen shows a flat camp: grass and a dirt path with no sky, cliff or water, so the whole yard can be walked. A campfire burns at the center, with a tent at the upper left, a wagon at the upper right, three log benches around the fire and a supply crate at the lower left. Props are drawn at an isometric three-quarter view and characters face forward in HD-2D, and both are sorted by the point under their feet, so a character walking behind the tent, the wagon or a bench is really hidden and stands in front when it comes forward. The pixel-art camp takes Diablo 2's classic 2D view seen at an angle, Red Dead Redemption 2's mood of companions gathering around a fire, and Stardew Valley's warm, readable ground. Each character has its own silhouette and motion, and its name tag — edited in the legend — sits above it in its role color. The tag and the line or work state are joined on one line and the line's horizontal center is set on the character's center. The same rule holds when only the tag shows.
 
-화면에서는 실제 작업 상태가 캐릭터의 위치와 행동으로 드러난다. 긴 문장을 읽기 전에 누가 일하고 있고 누구의 답을 기다리는지 알아볼 수 있는 것이 목표다. 아래는 같은 개발 업무를 캠프에서 보여주는 예다.
+The screen shows the real work state through where each character is and what it does. The goal is that a person can tell who is working and whose answer is awaited before reading a long sentence. Below is the same development job shown in the camp.
 
-| 실제로 일어난 일 | 캠프에서 보이는 장면 |
+| What actually happened | What the camp shows |
 |---|---|
-| 플랜을 개발 담당에게 인계 | 비서가 개발 담당에게 걸어가 두루마리를 건넨다. |
-| 구현·테스트·리뷰 진행 | 캐릭터가 캠프 안에서 활동한다. 나루토의 인을 연상시키는 짧은 손동작에 맞춰 발밑에 마법진이 켜지고, 이름 옆에 `테스트 실행 중`처럼 실제 작업을 표시한다. |
-| 스타일 수정 의견 전달 | 스타일 담당이 구현 담당에게 다가가 메모를 건넨다. |
-| 사용자 답변 대기 | 비서가 모닥불 가까이 와서 질문 표시를 띄운다. |
-| 업무 실패 또는 중단 | 진행 연출이 멈추고 무엇이 막혔는지 보여준다. 선택하면 관련 로그를 연다. |
-| 검토 완료와 보고 | 비서가 결과를 들고 돌아오고 채팅에 보고가 도착한다. |
-| 고용·재고용과 해고 | 고용·재고용한 에이전트는 화면 밖에서 걸어 들어오고, 해고하면 화면 밖으로 걸어 나간다. |
-| 맡은 일이 없는 상태 | 캐릭터가 벤치에 앉거나 캠프를 돌아다닌다. 아침에는 “아침 잘 먹었어요?”, 저녁에는 “이제 좀 쉬어야지.”처럼 시간과 상황에 맞는 일상 대사가 간간이 뜬다. |
+| The plan is handed to the development assignee | The assistant walks to the development assignee and offers a scroll. |
+| Implementation, test and review run | Characters move about the camp. A short hand seal-like gesture lights a magic circle under their feet and the real work appears beside the name, such as `running tests`. |
+| A style comment is passed on | The style assignee comes over to the implementer and hands over a note. |
+| Waiting for the user's answer | The assistant comes near the campfire and raises a question mark. |
+| A job fails or stops | The motion stops and shows what blocked it. Choosing it opens the related log. |
+| Review done and reported | The assistant comes back with the result and the report arrives in the chat. |
+| Hiring, rehiring and firing | A hired or rehired agent walks in from off screen, and a fired one walks out. |
+| No assigned work | Characters sit on one of the three log benches or stroll across the yard. In the morning a line such as "did you have breakfast?" and in the evening "time to rest a little" appears now and then, fitting the time and situation. |
 
-캠프는 실제 진행을 재미있게 보여주는 곳이다. 캐릭터나 인계 장면을 누르면 관련 업무 카드나 로그를 연다. 일이 없을 때는 캐릭터가 캠프 길을 따라 스스로 산책하거나 모닥불 근처에 앉는다. 한가한 동료가 가까이 오면 시간대와 상황에 맞는 짧은 말을 건네고 상대가 답할 수 있다. 초기 연출은 정해 둔 동작과 대사로 구성한다. 실제 위임이나 업무가 시작되면 별명 옆에 작업 상태를 우선 표시한다. [AI Office](https://engchoon.github.io/ai-office/), [OpenClaw Office](https://github.com/wickedapp/openclaw-office), [Generative Agents 논문](https://arxiv.org/abs/2304.03442)
+The camp is where real progress is shown in a pleasant way. Pressing a character or a handoff scene opens the related job card or log. With no work, characters walk along camp paths by themselves or sit near the campfire. When an idle companion comes close it says a short line that fits the time and situation, and the other can answer. The initial staging uses fixed motions and lines. Once a real delegation or job starts, the work state beside the name takes priority. [AI Office](https://engchoon.github.io/ai-office/), [OpenClaw Office](https://github.com/wickedapp/openclaw-office), [Generative Agents paper](https://arxiv.org/abs/2304.03442)
 
-## 크루 범례
+## Crew legend
 
-접힌 버튼은 `크루 · 4명 고용 중`처럼 새 배정을 받을 수 있는 인원수를 보여준다. 펼치면 한 행에서 `고용` 또는 `미고용` 상태와 모델, 배정된 스킬을 확인한다. 역할과 별명은 붙여 두고, 좁은 창에서는 모델·정의 MD·스킬을 같은 행의 둘째 줄로 내린다. 상태가 바뀌어도 행 순서는 유지한다. 미고용 행은 톤을 낮추고 글자로 상태를 표시한다.
+The collapsed button shows how many members can take new work, such as `crew · 4 hired`. Unfolded, one row shows the `hired` or `not hired` state, the model and the assigned skills. Role and name tag stay together, and a narrow window moves model, definition MD and skills to a second line in the same row. Row order stays when a state changes. A not-hired row is toned down and states it in words.
 
-| 고용 | 역할·별명 | 현재 업무 | 모델·정의 MD | 배정 스킬 |
+| Hired | Role and name | Current job | Model and definition MD | Assigned skills |
 |---|---|---|---|---|
-| 고용 | 개발 · 태오 | 검색 개선 | Codex · MD | 코드 작성〔사용 중〕, 프로젝트 위키〔준비〕 |
-| 고용 | 리뷰 · 현우 | 대기 | 로컬 LLM · MD | 코드 리뷰〔준비〕, 변경 비교〔사용 불가〕 |
-| 미고용 | 테스트 · 민재 | — | 로컬 LLM · MD | 테스트 실행〔사용 불가〕 |
+| Hired | Development · 태오 | Search improvement | Codex · MD | Write code (in use), project wiki (ready) |
+| Hired | Review · 현우 | Waiting | Local LLM · MD | Code review (ready), change diff (unavailable) |
+| Not hired | Test · 민재 | — | Local LLM · MD | Run tests (unavailable) |
 
-행에서 스킬은 용도를 나타내는 아이콘으로 보인다. 위 예시의 괄호 안 상태는 아이콘의 표시와 미리보기에서 읽는다. 공간이 부족하면 `+N`으로 나머지를 연다. 실제 사용 중인 아이콘과 승인 대기·사용 불가 아이콘을 먼저 보여주고 같은 상태 안에서는 배정 순서를 유지한다. 키보드나 포인터로 아이콘에 초점을 두면 이름, 한 줄 용도, 지금 상태를 읽는다. 클릭하거나 터치하면 담당자 상세에서 그 스킬이 바로 열린다.
+A skill shows in the row as an icon for its purpose. The state in brackets in the example is read from the icon and its preview. When space runs short, `+N` opens the rest. Icons in use and icons waiting for approval or unavailable come first, and inside one state the assignment order holds. Focusing an icon with the keyboard or pointer reads its name, one-line purpose and current state. Clicking or touching it opens that skill in the member detail.
 
-| 조작 | 화면과 처리 |
+| Operation | Screen and handling |
 |---|---|
-| 고용 상태 | `고용`을 누르면 해고, `미고용`을 누르면 재고용을 선택할 수 있다. 해고가 확정되면 바로 `미고용`으로 바뀌고 새 배정을 닫는다. 정규 팀원은 설정과 함께 목록에 남고, 알바는 목록에서 빠진다. 정리 중인 일은 해당 업무의 상태와 로그에서 확인한다. 캐릭터는 결과나 중단 인계를 남긴 뒤 걸어서 퇴장한다. 후임은 인계 자료와 남은 일부터 이어받는다. |
-| 별명·업무 | 역할 옆 별명을 누르면 그 자리에서 편집한다. Enter는 저장, Esc는 취소다. 현재 업무명을 누르면 그 업무의 상세를 연다. 업무가 여러 개면 `검색 개선 외 2건`처럼 표시하고 제목 목록에서 고른다. |
-| 모델·정의 | 모델명을 누르면 모델 선택, MD를 누르면 역할 정의를 연다. 모델 연결이 끊기면 모델명 옆에 원인을 표시한다. 사용자가 고른 모델은 다음 실행부터 적용한다. |
-| 스킬 상세 | 어디에 쓰는지, 언제 호출하는지, 필요한 MCP 서버·도구·권한, 현재 사용할 수 있는지 읽는다. 사용 중이면 업무와 실행 로그, 승인 대기라면 해당 질문, 사용 불가라면 빠진 요건과 MCP 설정으로 연결한다. 상세에서 해당 역할의 스킬을 추가하거나 배정을 해제한다. |
+| Hired state | Pressing `hired` offers firing; pressing `not hired` offers rehiring. Once a firing is confirmed the row reads `not hired` right away and new assignments close. A regular member stays in the list with its settings, while a temp member leaves the list. Work being tidied is checked in that job's state and log. The character walks out after leaving a result or an interrupted handoff. A successor takes over the handoff material and what remains. |
+| Name tag and job | Pressing the name beside the role edits it in place. Enter saves, Escape cancels. Pressing the current job name opens that job's detail. With several jobs it reads `search improvement and 2 more`, and the title list picks one. |
+| Model and definition | Pressing the model name opens model selection, and MD opens the role definition. When a model connection is broken, the cause shows beside the model name. A model the user picks applies from the next run. |
+| Skill detail | Read what it is for, when it is called, the MCP server, tools and permissions it needs, and whether it can be used now. In use links to the job and run log, waiting for approval links to that question, and unavailable links to the missing requirement and MCP settings. The detail adds a skill to that role or removes an assignment. |
 
-### 스킬 상태
+### Skill states
 
-고용 상태와 스킬 상태를 따로 계산한다. 아래 상태 중 하나를 아이콘에 붙이고 미리보기와 접근성 이름에도 표시한다. 실행 중인 스킬의 우선순위가 가장 높고, 이어서 승인 대기, 사용 불가, 준비 순이다.
+Hired state and skill state are computed apart. One of the states below is attached to the icon and also stated in the preview and the accessible name. A running skill ranks first, then waiting for approval, unavailable, and ready.
 
-| 상태 | 표시와 판정 |
+| State | Mark and how it is decided |
 |---|---|
-| 준비 | 기본 아이콘. 스킬이 배정돼 있고 고용 상태와 필요한 모델 기능, MCP 연결과 도구 권한을 확인했다. |
-| 사용 중 | 아이콘에 실행 표시를 붙인다. 스킬 ID와 업무 ID가 연결된 실제 실행이 시작되면 켜고, 실행이 종료되면 끈다. 스킬 사용 이벤트가 제공되지 않는 실행 환경에서는 확인 가능한 준비·사용 불가 상태를 보여준다. |
-| 승인 대기 | 아이콘에 대기 표시를 붙인다. 그 스킬의 도구 호출에 연결된 현재 질문이 답을 기다리는 상태다. |
-| 사용 불가 | 아이콘에 잠금 표시를 붙인다. 미고용, 필수 모델 기능 미지원, MCP 연결 끊김, 필수 도구나 권한 부족을 구분해 이유를 표시한다. |
+| Ready | The default icon. The skill is assigned and the hired state, the required model features, the MCP connections and the tool permissions were confirmed. |
+| In use | A run mark on the icon. It turns on when a real run linked to the skill ID and a job ID starts and off when the run ends. A runtime that reports no skill-use event shows the ready and unavailable states it can confirm. |
+| Waiting for approval | A wait mark on the icon. The current question attached to that skill's tool call is waiting for an answer. |
+| Unavailable | A lock mark on the icon. The reason is stated apart: not hired, a required model feature missing, an MCP connection down, a required tool or permission missing. |
 
-고용, 모델, MCP 연결이나 권한이 바뀌면 관련 아이콘만 다시 계산한다. 실행 중에 권한이 회수되면 이미 시작된 동작은 정지 확인까지 실제 상태를 보여주고, 새 도구 호출은 현재 권한 검사에서 차단한다. 배정 해제한 스킬은 다음 배정에서 제외된다. 진행 중 표시가 남아 있다면 그 실행이 끝난 뒤 아이콘을 목록에서 뺀다.
+When hiring, the model, an MCP connection or a permission changes, only the related icons are recomputed. When a permission is revoked during a run, work already started shows its real state until the stop is confirmed, and a new tool call is blocked by the current permission check. A skill whose assignment was removed is left out of later assignments. When an in-use mark is left behind, the icon leaves the list once that run ends.
 
-## 비서에게 앱 조작 맡기기
+## Letting the assistant operate the app
 
-사용법을 물으면 비서가 지금 화면에서 할 일을 짧게 설명한다. 조작을 부탁하면 비서가 도우미를 호출하고, 도우미는 화면에서 직접 했을 때와 같은 탭·폼·승인 카드를 연다. 조작 중 막히면 현재 대상과 필요한 입력을 원래 채팅에서 알려준다. 업무나 설정이 실제로 변경되면 해당 화면과 로그가 함께 갱신된다. [도우미의 조작 범위와 실행 규칙](app-mcp.md)
+Asked how to do something, the assistant briefly explains what to do on the current screen. Asked to do it, the assistant calls the helper, and the helper opens the same tab, form or approval card as doing it directly. When it gets stuck, it tells the original chat the current target and the input it needs. Once a job or a setting really changes, that screen and the log refresh too. [The helper's scope and run rules](app-mcp.md)
 
-## 저장·복구·접근성
+## Saving, recovery and accessibility
 
-- 모델이 응답하지 않으면 비서가 모델 연결 상태와 원인을 안내한다. 기존 세션을 이어갈 수 없을 때는 변경, 결정, 미완료 단계, 출처를 새 실행에 인계한다. 같은 동작이 이미 반영됐는지 확인한 뒤 재시도한다.
-- 키보드로 탭·범례·업무·입력창을 탐색한다. 팝오버와 상세를 닫으면 열었던 조작으로 돌아간다. 상태·오류 문장은 해당 업무나 입력에 붙이고, 성공 표시는 저장이 확인된 뒤 갱신한다.
-- 제품 인수에서는 같은 파일을 동시에 수정하는 두 업무, 중단·완료 경합, 정지 확인이 안 된 도구, 권한 회수, 한글 조합, 연결 끊김, 옛 위키·워크플로우 저장을 확인한다. 브라우저 목업은 모의 실행을 사용한다.
+- When the model does not answer, the assistant explains the model connection state and the cause. When an earlier session cannot continue, the change, decisions, unfinished stages and sources are handed to a new run. A retry first checks whether the same action already landed.
+- Tabs, legend, jobs and the composer are reachable from the keyboard. Closing a popover or a detail returns to the control that opened it. A state or error sentence attaches to its job or input, and a success mark refreshes only after the save is confirmed.
+- Product acceptance covers two jobs editing the same file at once, a race between stop and completion, a tool whose stop is unconfirmed, a revoked permission, Hangul composition, a dropped connection, and an old wiki or workflow being saved. The browser mock uses a simulated run.

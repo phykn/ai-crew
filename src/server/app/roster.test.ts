@@ -52,35 +52,66 @@ test("비서와 여덟 역할이 각자의 스킬과 트리거를 데이터로 �
   ).toHaveLength(1);
 });
 
-test("역할 지침은 스킬·트리거와 대화 금지 규칙을 담는다", () => {
+test("a role definition carries its skills, its trigger and the no-chat rule", () => {
   const style = crewDefinition("style");
-  expect(style).toContain("파일이 바뀔 때마다");
-  expect(style).toContain("비서에게 보고");
-  expect(style).toContain("- 스킬: 코드, 문서");
+  expect(style).toContain("every time a file is saved");
+  expect(style).toContain("report the file, the line and the evidence to the assistant");
+  expect(style).toContain("- Skills: 코드, 문서");
   const assistant = crewDefinition("assistant");
-  expect(assistant).toContain("유일한 창구");
-  expect(assistant).not.toContain("사용자와 직접 대화하지 않습니다");
+  expect(assistant).toContain("only channel between the user and the crew");
+  expect(assistant).not.toContain("You do not talk to the user directly");
 });
 
-test("역할 지침이 원인 수정·사실/제안 구분·빠른 테스트 같은 작업 원칙을 담는다", () => {
+test("role instructions keep the working rules: fix the cause, facts and suggestions, fast tests", () => {
   const prompt = (id: RoleId) => roles.find((role) => role.id === id)!.prompt;
-  // 비서: 묻지 않고 정할 것, 넘기는 네 가지 때, 수치 중심 보고.
-  expect(prompt("assistant")).toContain("네 가지뿐");
-  expect(prompt("assistant")).toContain("바뀐 줄·함수·파일 수");
-  // 개발: 호출자 있는 코드, 선형 흐름, '왜' 한 줄 주석, 원인 지점 수정.
-  expect(prompt("development")).toContain("부르는 곳");
-  expect(prompt("development")).toContain("'왜' 한 줄");
-  expect(prompt("development")).toContain("원본 계약");
-  // 문서·리뷰·테스트·빌드: 각 스킬의 핵심 기준.
-  expect(prompt("docs")).toContain("결론을 맨 앞");
-  expect(prompt("review")).toContain("사실(Fact)");
-  expect(prompt("review")).toContain("제안(Suggestion)");
-  expect(prompt("test")).toContain("작은 대역");
-  expect(prompt("test")).toContain("회귀 테스트");
-  expect(prompt("build")).toContain("가장 싸게");
-  expect(prompt("vision")).toContain("추측해 채우지");
-  // 단계 프롬프트의 테스트는 가장 싼 검사를 고른다.
+  // The assistant decides the reversible things itself, hands over four cases, reports numbers.
+  expect(prompt("assistant")).toContain("exactly four reasons");
+  expect(prompt("assistant")).toContain("changed lines, functions and files");
+  // Development: called-only code, linear flow, a one-line why, the fix at the source contract.
+  expect(prompt("development")).toContain("name its callers");
+  expect(prompt("development")).toContain("one-line comment");
+  expect(prompt("development")).toContain("source contract");
+  // Docs, review, test, build and vision keep each skill's core rule.
+  expect(prompt("docs")).toContain("Put the conclusion first");
+  expect(prompt("review")).toContain("a fact you confirmed");
+  expect(prompt("review")).toContain("a suggestion you recommend");
+  expect(prompt("test")).toContain("small double");
+  expect(prompt("test")).toContain("regression test");
+  expect(prompt("build")).toContain("cheapest check");
+  expect(prompt("vision")).toContain("never fill in what is not visible");
+  // The verification stage prompt picks the cheapest check.
   expect(verificationPrompt).toContain("cheapest check");
+});
+
+test("the user's UX and architecture preferences are built into the roles that produce work", () => {
+  const prompt = (id: RoleId) => roles.find((role) => role.id === id)!.prompt;
+  // Preference 2: an interface usable without a manual, direct manipulation, flat pastel.
+  for (const id of ["assistant", "development", "review", "docs"] as RoleId[]) {
+    expect(prompt(id)).toMatch(/without (reading |opening )?a manual/);
+    expect(prompt(id)).toMatch(/direct manipulation|in the order a person takes them/);
+  }
+  // Preference 3: folder boundaries, non-redundant names, a one-line why, a fix at the source.
+  for (const id of ["development", "review", "style"] as RoleId[]) {
+    expect(prompt(id)).toMatch(/folders/);
+    expect(prompt(id)).toMatch(/prefix/);
+  }
+});
+
+test("every role keeps its own sprite, matching the picture order on screen", () => {
+  // `roles[].sprite` indexes the `sprites` array in `src/ui/common/ui.tsx`.
+  expect(
+    roles.map(({ id, sprite }) => [id, sprite]),
+  ).toEqual([
+    ["assistant", 0],
+    ["hr", 4],
+    ["development", 1],
+    ["build", 5],
+    ["docs", 6],
+    ["style", 3],
+    ["review", 2],
+    ["test", 7],
+    ["vision", 8],
+  ]);
 });
 
 test("기본 워크플로우 단계는 남아 있는 역할만 쓴다", () => {

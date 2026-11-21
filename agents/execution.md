@@ -1,58 +1,58 @@
-# 업무 실행과 복구
+# Running and recovering work
 
-같은 요청 ID로 재전송된 입력은 한 번만 접수한다. 사용자가 별도로 보낸 같은 문장은 새 요청으로 판단한다. 플랜, 담당자 인계, 변경, 검증, 사용자 결정은 같은 업무 ID에 연결한다. 화면과 MCP의 공통 동작은 [앱 도우미 명세](app-mcp.md)를 따른다. 아래 규칙은 AgentsRoom의 운영 동작을 AI Crew에 맞춰 구체화했다.
+Input resent with the same request ID is accepted once. The same sentence the user sent separately is a new request. A plan, a handoff between roles, a change, a verification and a user decision all hang off the same job ID. The screen and MCP share one set of behaviors, described in [the app helper spec](app-mcp.md). The rules below take AgentsRoom's operating behavior and make it concrete for AI Crew.
 
-## 상태 전이와 사용자 결정
+## State changes and user decisions
 
-| 사건 | 다음 상태 | 처리 기준 |
+| Event | Next state | How it is handled |
 |---|---|---|
-| 협업 요청 접수 | 계획 중 | 요청 ID와 업무 ID를 연결한다. |
-| 필수 결정이나 선행 작업이 남음 | 대기 | 계획 검토, 도구 승인, 담당자·파일 예약 등 현재 대기 이유를 저장한다. |
-| 선행 조건과 권한 확인 | 실행 중 | 승인된 변경 범위와 실행 ID로 단계 하나를 시작한다. |
-| 변경 또는 산출물 확정 | 검증 중 | 최신 지시와 변경 버전을 필수 검증 담당에게 넘긴다. |
-| 필수 검증 실패 | 수정 중 | 실패 근거로 같은 업무를 수정한다. 수정·재검증을 최대 3회 반복한다. 확인 자체가 불가능하면 남은 검증을 보고한다. |
-| 필수 검증 통과 | 완료 | 적용 대상인 필수 단계가 모두 해당 버전을 확인하면 보고한다. 조건에 해당하지 않는 단계는 합류의 대기 대상에서 제외한다. 격리 실행이면 원본 반영 상태도 함께 보고한다. |
-| 사용자 중단 | 중단 중 → 중단됨 | 중단이 먼저 저장되면 후속 배정을 닫는다. 뒤늦은 결과는 이력에 남기고 실제 정지 뒤에 범위 예약을 해제한다. 먼저 확정된 완료는 그대로 남는다. |
-| 복구 불가 또는 모델 한도 | 실패 또는 중단됨 | 일시 오류는 최초 시도 뒤 같은 단계에서 최대 3회 재시도한다. 모델 한도 도달은 해당 업무를 정지하고 남은 일을 보고한다. |
+| A collaboration request arrives | Planning | Link the request ID to the job ID. |
+| A required decision or an earlier piece of work is still open | Waiting | Store the current reason: plan review, tool approval, a reserved assignee or file. |
+| The precondition and the permission are confirmed | Running | Start one stage with the approved change scope and the execution ID. |
+| A change or an artifact is settled | Verifying | Hand the latest instruction and the change version to the assignee who must verify it. |
+| A required check fails | Fixing | Fix the same job from the failure evidence. Repeat fix and re-check up to three times. When the check itself cannot run, report the checks that remain. |
+| The required checks pass | Complete | Report once every required stage that applies has confirmed that version. A stage that does not apply is left out of the join's waiting set. For an isolated run, report the state of the original folder as well. |
+| The user stops the work | Stopping → Stopped | When the stop is stored first, close later assignments. A late result stays in the history, and the scope is released only after the real stop is confirmed. A completion settled earlier stays. |
+| Recovery is impossible, or the model limit is reached | Failed or Stopped | On a transient error, retry the same stage up to three times after the first try. On reaching a model limit, stop that job and report what remains. |
 
-계획 확정과 도구 호출 승인은 각각 자신의 요청 ID와 버전을 사용한다. 도구 호출은 실행 직전에 담당자의 현재 권한을 확인한다. 수동은 사용자가 결정한다. 자동은 비서가 범위와 목적을 판단하고 불명확하면 사용자에게 묻는다. 항상은 현재 역할 권한 안의 요청을 자동 승인한다. 담당자·도구가 바뀌거나 범위가 넓어지면 새 승인 요청을 만든다. 이미 접수된 질문은 원래 결정 절차를 이어간다.
+Plan approval and tool-call approval each use their own request ID and version. A tool call checks the assignee's current permission immediately before it runs. Manual means the user decides. Auto means the assistant judges scope and purpose and asks the user when unclear. Always auto-approves a request inside the current role's permission. A new approval request is made when the assignee or the tool changes, or the scope grows. A question already accepted keeps its original decision flow.
 
-## 계획·인계·추가 지시
+## Plans, handoffs and follow-up instructions
 
-- **계획 버전.** 플랜 담당이 범위, 파일이나 산출물, 완료 조건, 예상 위험, 후속 검증을 저장할 때마다 새 버전을 만든다. 비서는 평소에 검토와 인계를 처리한다. 사용자가 실행 전 확인을 부탁했거나 흐름에 사용자 확인 단계가 있으면 그 버전의 결정을 기다린다. 의견은 계획 버전과 단계 ID에 붙고, 수정해서 다시 올리면 바뀐 범위와 완료 조건을 비교할 수 있다. 이전 버전에 대한 답으로 새 계획을 시작할 수 없다. 계획 승인과 파일·도구 호출 허가는 각각 기존 실행 규칙을 적용한다.
-- **인계의 형식.** 업무·단계·시도 ID, 보낸 사람과 받을 담당자, 지시·워크플로우·변경 버전, 산출물 참조, 변경 범위, 위험, 검증 근거와 남은 일을 저장한다. 후속 단계나 조건 분기는 검증된 인계의 상태·값을 기준으로 시작한다. 필수 참조가 빠지면 동일 인계에 보완을 요청한다. 메시지를 다시 받아도 실행은 한 번이다.
-- **대기 중인 메시지.** 전송하지 않은 초안과 이미 접수된 지시를 따로 저장한다. 실행 환경이 끼어들기를 지원하면 지정한 업무의 현재 실행에 연결한다. 지원하지 않으면 해당 업무에 지시 버전을 먼저 남기고 안전한 단계 경계에서 순서대로 반영한다. 대상과 기준 버전이 바뀌면 현재 상태를 확인해 적용 범위를 다시 정한다. 독립 업무와 대화 초안은 각각의 상태를 유지한다.
-- **검증이 개발로 돌아갈 때.** 같은 담당자가 같은 업무를 맡을 수 있으면 이전 본인 세션에 검토 근거와 새 버전을 전달한다. 검증 결과는 검사한 변경 버전에 묶는다. 늦게 도착한 결과는 이력에 남기고 최신 변경의 필수 검증을 충족하는 데에는 최신 근거를 사용한다.
+- **Plan versions.** Every time the planning assignee stores scope, files or artifacts, completion criteria, expected risk and follow-up checks, a new version is made. The assistant normally handles the review and the handoff. When the user asked to confirm before running, or the flow has a user-confirmation stage, it waits for the decision on that version. Comments attach to a plan version and a stage ID, and re-submitting a revised plan lets the changed scope and criteria be compared. An answer to an earlier version cannot start a new plan. Plan approval and file or tool-call permission keep their existing rules.
+- **Handoff shape.** Store the job, stage and attempt IDs, the sender and the receiving assignee, the instruction, workflow and change versions, artifact references, change scope, risk, verification evidence and what remains. A later stage or a conditional branch starts from the state and values of a verified handoff. When a required reference is missing, ask for it in the same handoff. A message delivered twice still runs once.
+- **Messages waiting.** Keep an unsent draft apart from an instruction already accepted. When the runtime supports interruption, attach the instruction to the current run of the named job. When it does not, record an instruction version on that job first and apply it in order at a safe stage boundary. When the target or the reference version changes, read the current state and settle the scope again. An independent job and a conversation draft keep their own states.
+- **When verification goes back to development.** When the same assignee can take the same job, pass the review evidence and the new version into its earlier session. A verification result is bound to the change version it checked. A late result stays in the history, and the newest evidence is what satisfies the required checks of the newest change.
 
-## 수정 범위와 변경 근거
+## Change scope and change evidence
 
-기본은 사용자가 연 폴더에서 수정 범위를 예약하고 작업하는 방식이다. Git 프로젝트에서 사용자가 격리 실행을 선택하면 업무별 워크트리를 만든다. 같은 업무의 개발·리뷰·스타일·테스트는 그 워크트리의 같은 변경을 본다.
+The default is to reserve a scope inside the folder the user opened and work there. In a Git project, when the user chooses an isolated run, each job gets its own worktree. Development, review, style and test for the same job read the same change in that worktree.
 
-| 상태 | 백엔드 처리 |
+| State | Backend behavior |
 |---|---|
-| 준비 | 원본 프로젝트, 기준 커밋, 작업 브랜치와 워크트리, 적용 대상 브랜치를 업무에 기록한다. 미커밋 변경이 기준에 필요하면 원본 폴더에서 작업할지 승인된 기준을 따로 만들지 사용자에게 확인한다. 설정·시크릿 복사와 빌드 준비는 프로젝트에서 승인한 항목을 사용한다. |
-| 작업과 검증 | 쓰기는 정규화된 파일 범위에서 승인받고 실제 작업공간을 기준으로 예약한다. 변경 전후 버전, 파일별 변경분, 확인 가능한 작성자와 실행 ID를 저장한다. 명령 실행 전후 비교로 바뀐 파일을 확인한다. 작성 근거가 겹치면 출처를 미확인으로 표시한다. |
-| 결과 보고 | 작업 전부터 있던 변경, 이번 업무에서 생긴 변경, 검증 도중 들어온 외부 변경을 구분한다. 보고와 검토 의견에는 특정 변경 버전 및 파일 위치를 연결한다. 사용자가 한 줄을 지적하면 파일·변경 버전·구간과 함께 같은 업무의 추가 지시로 접수한다. |
-| 원본 반영 | 검증과 원본 반영을 별도 상태로 기록한다. 반영 요청을 받으면 원본의 현재 브랜치와 상태를 읽고 동일한 검증 결과를 적용할 수 있는지 확인한다. 충돌이나 보존해야 할 원본 변경이 있으면 `반영 대기`로 기록하고 사용자에게 이유를 알린다. 실행이 끝나면 변경분, 검증 결과와 보존하기로 한 산출물을 앱 데이터에 저장한다. 미반영 수정의 처리 여부를 확인한 뒤 작업공간을 정리한다. |
+| Preparing | Record the source project, the base commit, the working branch and worktree, and the target branch on the job. When uncommitted changes are needed as the base, ask the user whether to work in the source folder or to make a separate approved base. Copy settings and secrets and prepare the build from the items approved in the project. |
+| Working and verifying | A write is approved within the normalized file scope and reserved against the real workspace. Store the version before and after, the per-file change, the visible author and the execution ID. Compare before and after a command to see what changed. When authorship overlaps, mark the source as unconfirmed. |
+| Reporting a result | Separate changes that existed before the job, changes this job made, and external changes that arrived during verification. Bind a report or a review comment to a specific change version and file location. When the user points at a single line, accept it as a follow-up instruction on the same job with the file, change version and range. |
+| Applying to the original | Record verification and applying to the original as separate states. On a request to apply, read the original's current branch and state and check whether the same verification result still applies. When there is a conflict or an original change that must be kept, record `waiting to apply` and tell the user why. When the run ends, store the change, the verification result and the artifacts to keep in the app data. Confirm how unreleased edits should be handled, then clean up the workspace. |
 
-## 세션·프로세스 복구
+## Recovering sessions and processes
 
-단계 전환과 외부 효과가 확정될 때 현재 목표, 결정, 진행 단계, 담당자, 모델 실행 참조, 마지막 확인된 변경과 검증, 미결 요청과 남은 일을 체크포인트에 기록한다. 체크포인트는 앱 데이터에 저장해 작업 디렉터리를 닫거나 정리한 뒤에도 원래 로그에서 열 수 있다.
+When a stage changes or an external effect is settled, record the current goal, decisions, running stage, assignees, model-run references, the last confirmed change and verification, open requests and what remains in a checkpoint. Checkpoints live in the app data, so a log can be opened even after the working directory is closed or cleaned up.
 
-- 사용자가 이어가라고 하면 기존 실행을 먼저 조회한다. 재개가 가능하면 같은 에이전트 세션을 사용한다. 맥락 한도, 실행 만료 또는 제공자 변경으로 재개가 어려우면 필요한 정보만 체크포인트에서 읽어 같은 업무의 새 실행에 인계한다. 앞 실행과 맥락 교체 이유를 기록한다.
-- 연결 끊김과 실제 정지를 구분한다. 소유한 모델 실행·도구 요청·자식 프로세스를 실행 ID에 묶고, 중단하면 후속 배정을 닫은 뒤 해당 런타임의 정지를 확인한다. 정지 확인 전에는 수정 범위 예약을 유지한다. 외부 효과의 반영 여부가 불명확하면 조회로 확인한 뒤에만 재실행 여부를 결정한다.
-- 진행 신호가 없거나 프로세스 자원 이상이 관찰되면 근거와 마지막 진행 시점을 로그에 남긴다. 확인된 모델 한도에는 기존 중단 규칙을 적용한다. 사용량·캐시 지표는 런타임에서 받은 값을 기록한다.
+- When the user says to continue, look up the earlier run first. When it can resume, use the same agent session. When a context limit, an expired run or a provider change makes that hard, read only what is needed from the checkpoint and hand it to a new run of the same job. Record why the earlier run was replaced.
+- Tell a dropped connection apart from a real stop. Bind the model runs, tool requests and child processes you own to the execution ID, and after stopping, close later assignments and confirm that the runtime actually stopped. Until the stop is confirmed, keep the change scope reserved. When it is unclear whether an external effect landed, check by reading it before deciding to run it again.
+- When no progress signal arrives or a process resource looks wrong, log the evidence and when progress was last seen. An observed model limit follows the existing stop rule. Record usage and cache figures as the runtime reports them.
 
-## 산출물·스킬·알림
+## Artifacts, skills and notifications
 
-- **산출물.** 문서, 보고서, 데이터 파일, 미리보기 등 결과에는 프로젝트·업무·작성 담당자·변경 버전, 표시 이름, 형식, 실제 위치와 해시를 연결한다. 보고와 로그, MCP가 같은 산출물 ID를 읽는다. 열 때 현재 접근 권한과 파일 유효성을 검사하고 HTML 미리보기는 앱 제어 권한이 분리된 환경에 표시한다. 열람에 필요한 파일이 이동하면 기록에서 원래 출처를 확인할 수 있다.
-- **스킬과 메모리.** 스킬 등록 원본, 적용 버전, 호출 조건, 필수 모델 기능·MCP·권한을 보관한다. 단계 실행 때 역할에 배정된 스킬 중 업무 조건과 현재 권한에 맞는 것을 선택하고 사용 이벤트를 남긴다. 검증으로 확인한 프로젝트 규칙과 실행 방법은 출처 업무와 버전을 달아 공유 위키에 남길 수 있다. 개인 기억과 공유 지식의 조회 범위는 기존 정책을 적용한다.
-- **알림.** 사용자 답변 대기, 최종 보고 도착, 사용자 조치가 필요한 정지처럼 업무 기록에 확정된 사건에서 알림을 만든다. 상태가 저장된 뒤 같은 사건 ID의 알림은 한 번만 보낸다. 프로젝트·세션·업무 또는 승인 질문 ID로 연결하고, 눌렀을 때 원래 대화의 해당 위치를 연다. 읽음 처리는 대상 확인 뒤에 반영한다. 평소의 동료 호출과 진행 로그는 해당 업무에서 읽는다.
+- **Artifacts.** A document, report, data file or preview carries the project, job, authoring assignee, change version, display name, format, real location and hash. A report, a log and MCP read the same artifact ID. Opening one checks the current access right and whether the file is valid; an HTML preview is shown in an environment whose app-control permission is separate. When a file needed to read it moves, the original source can still be found in the record.
+- **Skills and memory.** Keep the registered source of a skill, the applied version, the call condition, and the model features, MCP servers and permissions it requires. When a stage runs, choose among the skills assigned to the role the ones that fit the job and the current permission, and record a use event. Project rules and run steps confirmed by verification can go into the shared wiki with their source job and version. Personal memory and shared knowledge keep their existing read scopes.
+- **Notifications.** A notification comes from an event already settled in the job record: waiting for a user answer, a final report arriving, a stop that needs the user. Once the state is stored, an event ID notifies once. It links to the project, session, job or approval question and opens that place in the original conversation when pressed. A read mark is applied after the target is confirmed. Ordinary peer calls and progress logs are read inside their job.
 
-## 인수 시나리오
+## Acceptance scenarios
 
-1. 계획을 수정한 뒤 옛 버전의 승인과 인계를 다시 전달한다. 최신 승인만 실행되고 같은 업무와 변경 이력이 이어진다.
-2. 같은 파일 이름을 두 워크트리에서 각각 수정한다. 서로의 파일을 건드리지 않고 각 업무의 리뷰·테스트가 해당 변경을 읽는다. 충돌이 있는 반영은 원본 변경을 보존하고 대기한다.
-3. 리뷰가 수정을 요청한 뒤 기존 모델 세션을 만료시킨다. 새 실행은 체크포인트부터 받아 작업하고, 앞 버전에 대한 검증 결과가 최신 완료 판정에 섞이지 않는다.
-4. 저장된 지시를 재시작 뒤 복구하고 승인 대기 알림을 두 번 전달한다. 지시는 지정한 대상에 한 번 적용되고 알림도 한 건이다. 알림을 열면 질문으로 이동한다.
-5. 결과 파일을 보존한 채 워크트리만 정리한다. 이전 보고·산출물과 검증 근거를 로그 및 MCP에서 다시 열 수 있다.
+1. Revise a plan, then deliver the earlier version's approval and handoff again. Only the newest approval runs, and the same job and change history continue.
+2. Edit the same file name in two worktrees. Neither touches the other's file, and each job's review and test read its own change. Applying a conflicting change keeps the original change and waits.
+3. A review asks for a fix and the existing model session then expires. The new run starts from the checkpoint, and verification results for the earlier version do not mix into the completion of the newest one.
+4. Restart with a stored instruction and deliver a waiting-approval notification twice. The instruction applies once and there is one notification. Opening the notification goes to the question.
+5. Clean up only the worktree while keeping the result files. Earlier reports, artifacts and verification evidence are still reachable from the log and MCP.

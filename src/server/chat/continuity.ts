@@ -1,40 +1,41 @@
-// 응답이 도중에 끊겨도 비서가 앞맥락을 잃지 않게, 저장된 대화 턴을 프롬프트로 옮기는
-// 규칙. 끊긴 응답은 그때까지 만든 글을 버리지 않고 '끊긴 지점' 표시와 함께 기록에 넣고,
-// 다음 턴 지침에서 그 지점을 이어받으라고 알린다.
+// When an answer is cut off, the assistant must not lose the thread. These rules
+// turn saved turns into prompt text: the partial answer is kept with a mark where
+// it stopped instead of being dropped, and the next turn is told to carry on from
+// that point.
 
 import type { InterruptionReason, Message } from "../../shared/actions";
 
 const interruptionLabels: Record<InterruptionReason, string> = {
-  "user-stop": "사용자가 멈춰서",
-  "new-message": "사용자가 새 메시지를 보내서",
-  error: "오류가 나서",
-  quit: "앱을 닫아서",
+  "user-stop": "the user stopped it",
+  "new-message": "the user sent a new message",
+  error: "an error occurred",
+  quit: "the app closed",
 };
 
-/** 프롬프트에 넣는 대화 한 턴. */
+/** One conversation turn as it goes into the prompt. */
 type HistoryEntry = { role: "user" | "assistant"; content: string };
 
-/** 끊긴 응답 조각에 붙는 표시. 다음 턴 모델이 여기서 잘렸음을 알아야 한다. */
-export const cutMark = "[여기서 응답이 끊겼습니다]";
+/** The mark on a cut-off answer. The next model turn has to see where it broke. */
+export const cutMark = "[the answer was cut off here]";
 
 type ContinuityOptions = {
-  /** 지금 답할 응답. 자기 자신은 기록에서 뺀다. */
+  /** The answer being written now. It is left out of the history. */
   excludeId?: string;
-  /** 아직 답하지 않은 대기열 요청. 지난 맥락에서 뺀다. */
+  /** Requests not answered yet. They are left out of the earlier context. */
   skip?: string[];
   /**
-   * 끊긴 글 자체를 지침에 함께 넣는다. 대화 기록을 못 보는 경로(Codex 스레드가
-   * 이미 있는 경우)에서 쓴다.
+   * Carry the cut text itself in the instructions. Used on a path that cannot
+   * read the conversation history, such as an existing Codex thread.
    */
   excerpt?: boolean;
-  /** 사용자 메시지에 붙은 그림의 설명. 메시지 id별로 한 덩이다. */
+  /** The description of the pictures on a user message, one block per message ID. */
   imageNotes?: Map<string, string>;
 };
 
-/** 지침에 넣을 때 길이를 묶어 둔다. 앞부분이 이어받기에 가장 중요하다. */
+/** Bound the instructions' length. The head matters most for carrying on. */
 const excerptLimit = 2000;
 
-/** 어시스턴트 응답이 끝까지 만들어지지 않았는지. */
+/** Whether an assistant answer was not finished. */
 export function isCutShort(message: Message) {
   if (message.role !== "assistant") return false;
   return (
@@ -47,20 +48,22 @@ export function isCutShort(message: Message) {
 function cutReason(message: Message) {
   return message.interruptReason
     ? interruptionLabels[message.interruptReason]
-    : "응답이 끝나기 전에";
+    : "it stopped before the end";
 }
 
-/** 끊긴 응답을 프롬프트에 넣을 한 덩어리로 만든다. 잘린 지점을 문장으로 밝힌다. */
+/** One block for the prompt from a cut-off answer, with the break stated. */
 function cutExcerpt(message: Message) {
+  const reason = cutReason(message);
+  const clause = reason.charAt(0).toUpperCase() + reason.slice(1);
   return (
     message.text.trimEnd() +
-    `\n\n${cutMark} (${cutReason(message)} 이 응답은 끝까지 만들어지지 않았습니다. 여기까지의 내용만 사용자에게 전달되었습니다.)`
+    `\n\n${cutMark} (${clause}. This answer was not finished, and only the text up to here reached the user.)`
   );
 }
 
 /**
- * 프롬프트에 넣을 대화 기록. 빈 글은 빼고, 끊긴 응답은 끊긴 지점 표시와 함께 넣는다.
- * 실패한 응답도 그때까지의 글이 있으면 넣는다.
+ * The conversation turns for the prompt: empty text is dropped and a cut-off
+ * answer goes in with its break mark. A failed answer keeps whatever text it made.
  */
 export function conversationHistory(
   messages: Message[],
@@ -73,7 +76,7 @@ export function conversationHistory(
     const attachment = options.imageNotes?.get(message.id);
     if (!message.text.trim() && !attachment) continue;
     if (message.role === "user") {
-      // 그림은 사용자가 쓴 글 바로 뒤에 붙여, 모델이 무엇에 대한 그림인지 알게 한다.
+      // The picture follows the text the user wrote, so the model knows what it belongs to.
       entries.push({
         role: "user",
         content: attachment
@@ -90,7 +93,7 @@ export function conversationHistory(
   return entries;
 }
 
-/** 가장 마지막 비서 응답. 빈 글과 이번 응답은 빼고 찾는다. */
+/** The latest assistant answer, skipping empty text and the answer being written. */
 function lastAnswer(
   messages: Message[],
   options: ContinuityOptions = {},
@@ -106,7 +109,7 @@ function lastAnswer(
   return null;
 }
 
-/** 직전 응답이 끊겼는지. 끊겼으면 그 조각을, 아니면 null. */
+/** The last answer if it was cut off, otherwise null. */
 export function lastInterruption(
   messages: Message[],
   options: ContinuityOptions = {},
@@ -116,8 +119,8 @@ export function lastInterruption(
 }
 
 /**
- * 다음 턴 지침에 붙이는 안내. 직전 응답이 정상적으로 끝났으면 빈 문자열이라
- * 평소 대화에는 아무것도 붙지 않는다.
+ * The notice appended to the next turn's instructions. An answer that finished
+ * normally returns an empty string, so an ordinary conversation adds nothing.
  */
 export function continuationNotice(
   messages: Message[],
@@ -128,19 +131,19 @@ export function continuationNotice(
   const byNewMessage = cut.interruptReason === "new-message";
   const tail = cut.text.trimEnd();
   const excerpt = options.excerpt
-    ? "\n\n중단된 지점까지의 내용:\n<<<\n" +
+    ? "\n\nText up to the interruption:\n<<<\n" +
       (tail.length > excerptLimit
-        ? tail.slice(0, excerptLimit) + "\n…(앞부분만 넣었습니다)"
+        ? tail.slice(0, excerptLimit) + "\n…(only the beginning is included)"
         : tail) +
       "\n>>>"
     : "";
   return [
-    "# 앞선 응답이 중단되었습니다",
-    `직전 비서 응답은 ${cutReason(cut)} 중단되었습니다. 위 대화 기록에서 ${cutMark} 표시가 붙은 말풍선이 그 응답이고, 표시 앞까지가 실제로 사용자에게 전달된 내용입니다.`,
-    "- 중단된 지점까지 이미 전한 내용을 처음부터 다시 반복하지 말고, 필요하면 그 내용을 이어받아 마무리하세요.",
+    "# The previous answer was interrupted",
+    `The last assistant answer was interrupted because ${cutReason(cut)}. In the history above, the bubble marked ${cutMark} is that answer, and only what comes before the mark reached the user.`,
+    "- Do not repeat from the start what already reached the user. Carry it on and finish it where the user still needs it.",
     byNewMessage
-      ? "- 지금 사용자가 보낸 새 메시지가 앞 응답을 끊은 이유입니다. 새 요청을 먼저 처리하고, 앞서 하려던 말은 새 요청 처리에 필요한 만큼만 짧게 마무리하세요."
-      : "- 사용자의 새 메시지에 답하면서, 앞서 하려던 말이 남아 있으면 짧게 마무리하세요.",
-    "- 사용자가 왜 끊겼는지 물으면 위 사유를 그대로 말하세요. 끊긴 내용을 지어내지 마세요.",
+      ? "- The new message the user just sent is why the earlier answer stopped. Handle the new request first, then close the earlier thought only as far as the new request needs it."
+      : "- While answering the user's new message, close briefly anything left over from the earlier answer.",
+    "- If the user asks why it stopped, say the reason above as it is. Do not invent what the cut text would have said.",
   ].join("\n") + excerpt;
 }

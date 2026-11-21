@@ -19,7 +19,7 @@ const digest = {
   links: [],
 };
 
-test("모든 역할의 지침이 프로젝트 위키 목차를 함께 받는다", () => {
+test("every role's instructions carry the project wiki contents", () => {
   for (const role of roles) {
     const instructions = crewInstructions(
       { ...member("assistant"), id: role.id, roleId: role.id },
@@ -27,28 +27,28 @@ test("모든 역할의 지침이 프로젝트 위키 목차를 함께 받는다"
       [],
       wikiReference([digest], "검사 실행"),
     );
-    expect(instructions).toContain("프로젝트 위키");
+    expect(instructions).toContain("Project wiki");
     expect(instructions).toContain("실행 방법");
     // 요청과 겹치는 문서는 본문까지 들어간다.
     expect(instructions).toContain("npm run check && npm test");
   }
 });
 
-test("위키가 비어 있어도 남기는 지침은 남는다", () => {
+test("an empty wiki still keeps the instruction to write one", () => {
   const instructions = crewInstructions(
     member("docs"),
     [],
     [],
     wikiReference([], ""),
   );
-  expect(instructions).toContain("아직 문서가 없습니다");
+  expect(instructions).toContain("There are no pages yet");
   expect(instructions).toContain("wiki_save");
-  expect(instructions).toContain("위키 도구");
+  expect(instructions).toContain("the wiki tools");
 });
 
-test("비서와 문서 역할 지침에 위키 축적이 적혀 있다", () => {
+test("the assistant and docs instructions say to build up the wiki", () => {
   const assistant = roles.find(({ id }) => id === "assistant")!;
   const docs = roles.find(({ id }) => id === "docs")!;
-  expect(assistant.prompt).toContain("프로젝트 위키에 남겨");
-  expect(docs.prompt).toContain("프로젝트 위키에 남겨");
+  expect(assistant.prompt).toContain("in the project wiki");
+  expect(docs.prompt).toContain("in the project wiki");
 });

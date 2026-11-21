@@ -85,9 +85,9 @@ test("without a vision endpoint the note keeps the file details and says the pic
       (note) => logged.push(note),
     );
     expect(notes).toHaveLength(1);
-    expect(notes[0]).toContain("첨부 이미지 1 · screen.png · image/png · 1KB");
-    expect(notes[0]).toContain("읽지 못했습니다");
-    expect(notes[0]).toContain("비전으로 표시");
+    expect(notes[0]).toContain("[attached image 1 · screen.png · image/png · 1KB]");
+    expect(notes[0]).toContain("could not be read");
+    expect(notes[0]).toContain("as vision");
     // 읽지 못한 까닭은 남기지 않는다. 연결을 고치면 다시 읽을 수 있어야 한다.
     expect(saved).toEqual([]);
     expect(logged.join(" ")).toContain("비전");
@@ -112,14 +112,14 @@ test("a marked multimodal endpoint reads the picture and the description is kept
       },
       () => {},
     );
-    expect(notes[0]).toContain("첨부 이미지 1 · screen.png · image/png · 1KB");
+    expect(notes[0]).toContain("[attached image 1 · screen.png · image/png · 1KB]");
     expect(notes[0]).toContain("빨간 버튼과 '저장 실패' 오류 문구가 보입니다.");
     expect(saved).toEqual([images[0].id]);
 
     // 그림 바이트는 base64 data URL로, 읽으라는 지시와 함께 모델에 간다.
     const sent = JSON.stringify(server.received[0]);
     expect(sent).toContain("data:image/png;base64," + picture.data);
-    expect(sent).toContain("이 그림에 보이는 것을");
+    expect(sent).toContain("visible in this picture");
 
     // 두 번째 턴에서는 다시 묻지 않고 남긴 설명을 쓴다.
     await imageNotes(
@@ -148,7 +148,7 @@ test("a failing vision endpoint leaves an honest note instead of a made-up descr
       (id) => saved.push(id),
       () => {},
     );
-    expect(notes[0]).toContain("읽지 못했습니다");
+    expect(notes[0]).toContain("could not be read");
     expect(notes[0]).toContain("screen.png");
     expect(saved).toEqual([]);
   } finally {

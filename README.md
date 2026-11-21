@@ -1,4 +1,4 @@
-<h1 align="center">AI Crew</h1>
+<h1 align="center">Crew</h1>
 
 <p align="center">One secretary talks with you, eight agents work behind it, and a pixel-art camp shows who is doing what.</p>
 
@@ -45,8 +45,3 @@ python3 -m http.server 48723 --bind 127.0.0.1 --directory demo
 ```
 
 Open `http://127.0.0.1:48723/` to walk the static concept of the camp, chat, and workflow editor.
-
-## References
-
-1. EngChooN, AI Office, 2026. [GitHub](https://github.com/EngChooN/ai-office)
-2. Microsoft Research, Agensh: Scaling Organizational Intelligence to 1,024 Agents, 2026. [Paper](https://arxiv.org/abs/2609.26781), [Code](https://github.com/microsoft/agensh)

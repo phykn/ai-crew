@@ -3584,7 +3584,7 @@ textarea::-webkit-scrollbar {
 .job-log-crumbs {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 6px 16px;
 }
 .job-log-header h2 {
   margin: 0;

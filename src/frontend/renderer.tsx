@@ -118,7 +118,7 @@ function Workspace() {
   const memoryOwner = data?.session
     ? (data.view.memoryOwnerId ?? undefined)
     : localMemoryOwner;
-  const panelWidth = resizing ?? data?.view.panelWidth ?? 380;
+  const panelWidth = resizing ?? data?.view.panelWidth ?? 440;
   const unread =
     data?.notifications.filter(({ readAt }) => readAt === null).length ?? 0;
 
@@ -379,7 +379,7 @@ function Workspace() {
           aria-label="작업 패널 폭"
           aria-valuenow={panelWidth}
           aria-valuemin={280}
-          aria-valuemax={720}
+          aria-valuemax={620}
           tabIndex={0}
           onKeyDown={(event) => {
             const step =
@@ -391,7 +391,7 @@ function Workspace() {
             if (!step) return;
             event.preventDefault();
             patchView({
-              panelWidth: Math.min(720, Math.max(280, panelWidth + step)),
+              panelWidth: Math.min(620, Math.max(380, panelWidth + step)),
             });
           }}
           onPointerDown={(event) => {

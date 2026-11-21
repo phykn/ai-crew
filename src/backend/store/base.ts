@@ -20,7 +20,7 @@ export const defaultViewState = (): ViewState => ({
   tab: "chat",
   camp: false,
   legend: false,
-  panelWidth: 340,
+  panelWidth: 440,
   logJobId: null,
   memorySection: "memory",
   memoryOwnerId: null,

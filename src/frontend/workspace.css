@@ -31,7 +31,7 @@ summary:focus-visible {
 .workspace {
   height: 100dvh;
   display: grid;
-  grid-template: minmax(0, 1fr) / minmax(0, 1fr) var(--panel-width, 380px);
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr) clamp(360px, var(--panel-width, 440px), 620px);
 }
 .panel-resizer {
   position: absolute;
@@ -657,7 +657,7 @@ summary:focus-visible {
 }
 .workspace.split-visible {
   --split-width: clamp(280px, 33vw, 560px);
-  grid-template-columns: minmax(0, 1fr) var(--panel-width, 380px) var(--split-width);
+  grid-template-columns: minmax(0, 1fr) clamp(360px, var(--panel-width, 440px), 620px) var(--split-width);
 }
 .split-log {
   min-height: 0;
@@ -1547,7 +1547,7 @@ summary:focus-visible {
 @media (max-width: 840px) {
   /* 좁은 창에서는 로그를 나란히 두지 않고 로그 탭으로 넘긴다. */
   .workspace.split-visible {
-    grid-template-columns: minmax(0, 1fr) var(--panel-width, 380px);
+    grid-template-columns: minmax(0, 1fr) clamp(360px, var(--panel-width, 440px), 620px);
   }
   .workspace.split-visible > .split-log {
     display: none;

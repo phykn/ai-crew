@@ -10,6 +10,7 @@ import {
   type Snapshot,
   type WorkCheck,
 } from "../../../shared/actions";
+import { CozyDetails } from "./cozy";
 import { skillStateLabels, skillStateOrder } from "../../../shared/skill-status";
 import { crewPortrait } from "../camp/art/scene";
 
@@ -238,9 +239,8 @@ export function ModelUsage({
   }
   if (!groups.size) return null;
   return (
-    <details className="change-log model-usage">
-      <summary>모델 실행</summary>
-      <ul>
+    <CozyDetails className="model-usage" title="모델 실행">
+      <ul className="cozy-list">
         {[...groups].map(([key, group]) => (
           <li key={key}>
             {roles.find(({ id }) => id === group.roleId)?.title} ·{" "}
@@ -256,6 +256,6 @@ export function ModelUsage({
           </li>
         ))}
       </ul>
-    </details>
+    </CozyDetails>
   );
 }

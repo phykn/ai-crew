@@ -1,20 +1,4 @@
-/* 나눔고딕을 앱 번들에 넣고 직접 등록한다. 운영체제에 폰트가 없어도, 오프라인이어도
-   항상 같은 글꼴로 그린다. 파일 출처와 라이선스는 같은 폴더의 OFL.txt에 있다. */
-@font-face {
-  font-family: "Nanum Gothic";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("./ui/fonts/NanumGothic-Regular.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Nanum Gothic";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("./ui/fonts/NanumGothic-Bold.woff2") format("woff2");
-}
-
+/* 글꼴과 색 토큰은 같은 폴더의 tokens.css가 등록한다. */
 * {
   box-sizing: border-box;
 }
@@ -3232,3 +3216,439 @@ textarea::-webkit-scrollbar {
     height: 36px;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   포근한 양피지·우드 작업 패널
+   캠프와 한 세계로 보이도록 작업 화면의 카드·입력·버튼·배지를 크림 양피지와
+   우드 테두리로 통일한다. 그라디언트 없이 단색 면과 2px 솔리드 턱으로 층을 낸다.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --cozy-cream: #fdf7e7;
+  --cozy-cream-2: #f7eedb;
+  --cozy-canvas: #f6ecd8;
+  --cozy-wood: #b99269;
+  --cozy-wood-lip: #dcc49e;
+  --cozy-wood-soft: #e6d3b4;
+  --cozy-ink: #4a3524;
+  --cozy-muted: #8b7357;
+  --cozy-sage: #cfe3cd;
+  --cozy-sage-ink: #3f6b48;
+  --cozy-butter: #f8e6bb;
+  --cozy-butter-ink: #8a611f;
+  --cozy-coral: #f4c9b9;
+  --cozy-coral-ink: #a44a34;
+}
+
+/* 컨트롤: 기본 브라우저 모양을 남기지 않는다. */
+.cozy-scope :is(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea
+) {
+  padding: 6px 9px;
+  border: 1.5px solid var(--cozy-wood);
+  border-radius: 9px;
+  background: var(--cozy-cream);
+  box-shadow: 0 2px 0 var(--cozy-wood-lip);
+  color: var(--cozy-ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+.cozy-scope textarea {
+  line-height: 1.55;
+}
+.cozy-scope :is(input, select, textarea):focus-visible {
+  outline: 2px solid var(--honey);
+  outline-offset: 1px;
+}
+.cozy-scope input[type="checkbox"],
+.cozy-scope input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #8fae86;
+}
+.cozy-scope button {
+  padding: 5px 10px;
+  border: 1.5px solid var(--cozy-wood);
+  border-radius: 9px;
+  background: var(--cozy-cream-2);
+  box-shadow: 0 2px 0 var(--cozy-wood-lip);
+  color: var(--cozy-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition:
+    background 0.12s ease,
+    box-shadow 0.12s ease,
+    transform 0.12s ease;
+}
+.cozy-scope button:hover:not(:disabled) {
+  background: var(--cozy-cream);
+}
+.cozy-scope button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 var(--cozy-wood-lip);
+}
+.cozy-scope .log-link {
+  padding: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  box-shadow: none;
+  color: var(--cozy-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--cozy-wood-soft);
+  text-underline-offset: 3px;
+}
+.cozy-scope .log-link:hover:not(:disabled) {
+  background: none;
+  color: var(--cozy-ink);
+}
+
+/* 카드와 접기 */
+.cozy-card {
+  border: 1.5px solid var(--cozy-wood);
+  border-radius: 10px;
+  background: var(--cozy-cream);
+  box-shadow: 0 2px 0 var(--cozy-wood-lip);
+}
+.cozy-stack {
+  display: grid;
+  gap: 8px;
+}
+.cozy-scope .chevron {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--cozy-wood);
+  transition: transform 0.15s ease;
+}
+.cozy-scope details[open] > summary .chevron,
+.cozy-scope details[open] > header .chevron,
+.cozy-scope [aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+.cozy-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  color: var(--cozy-ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+.cozy-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.cozy-disclosure > summary::marker {
+  content: "";
+}
+.cozy-disclosure > summary:hover {
+  background: var(--cozy-cream-2);
+}
+.cozy-disclosure[open] > summary {
+  border-bottom: 1px solid var(--cozy-wood-soft);
+  border-radius: 10px 10px 0 0;
+}
+.cozy-disclosure > summary .cozy-badge {
+  margin-left: auto;
+}
+.cozy-disclosure > summary .chevron {
+  margin-left: auto;
+}
+.cozy-disclosure > summary .cozy-badge + .chevron {
+  margin-left: 0;
+}
+.cozy-summary-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cozy-body {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px 12px;
+}
+.cozy-meta {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--cozy-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.cozy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 2px;
+  border: 1px solid var(--cozy-wood-soft);
+  border-radius: 999px;
+  background: #fbf1dc;
+  color: var(--cozy-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cozy-badge.is-on {
+  border-color: #b6d3b8;
+  background: var(--cozy-sage);
+  color: var(--cozy-sage-ink);
+}
+.cozy-badge.is-off {
+  border-color: #e0c9ae;
+  background: #f3e6d8;
+  color: #9a6a48;
+}
+.cozy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cozy-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cozy-list li {
+  display: grid;
+  gap: 2px;
+}
+.cozy-list code,
+.cozy-meta code {
+  color: var(--cozy-muted);
+  overflow-wrap: anywhere;
+}
+
+/* 빈 상태 */
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 18px 16px;
+  border: 1.5px dashed var(--cozy-wood-soft);
+  border-radius: 10px;
+  background: var(--cozy-cream-2);
+  color: var(--cozy-muted);
+  text-align: center;
+}
+.empty-state svg {
+  width: 22px;
+  height: 22px;
+  color: var(--cozy-wood);
+}
+.empty-state strong {
+  color: var(--cozy-ink);
+  font-size: 12.5px;
+}
+.logs .empty-state p,
+.empty-state p {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  max-width: 34ch;
+}
+.empty-state.is-compact {
+  padding: 10px 12px;
+  gap: 3px;
+}
+.empty-state.is-compact svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* 로그 한 줄: 시간 · 완료 표시 · 역할 배지 · 본문 */
+.log-section-title {
+  margin: 2px 2px 0;
+  color: var(--cozy-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.activity-log {
+  display: grid;
+  gap: 6px;
+}
+.activity-list {
+  display: grid;
+  gap: 2px;
+}
+.activity-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+.activity-row:nth-child(odd) {
+  border-color: #eee0c6;
+  background: var(--cozy-cream);
+}
+.logs .activity-time {
+  flex: none;
+  width: 58px;
+  margin: 0;
+  color: var(--cozy-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.log-status {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+}
+.log-status svg {
+  width: 11px;
+  height: 11px;
+}
+.log-status-done {
+  border-color: #b6d3b8;
+  background: var(--cozy-sage);
+  color: var(--cozy-sage-ink);
+}
+.log-status-running {
+  border-color: #e8d09a;
+  background: var(--cozy-butter);
+  color: var(--cozy-butter-ink);
+}
+.log-status-failed {
+  border-color: #e2ab97;
+  background: var(--cozy-coral);
+  color: var(--cozy-coral-ink);
+}
+.log-role-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px 2px 6px;
+  border: 1px solid var(--cozy-wood-soft);
+  border-radius: 999px;
+  background: #fbf1dc;
+  color: var(--cozy-ink);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.log-role-badge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.activity-text {
+  flex: 1 1 150px;
+  min-width: 0;
+  margin: 0;
+  color: var(--cozy-ink);
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.logs .activity-text,
+.logs .log-note,
+.logs .cozy-meta,
+.logs .memory-body {
+  padding: 0;
+  border: 0;
+}
+
+/* 업무 로그 */
+.worklog-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.job-log-header {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+}
+.job-log-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.job-log-header h2 {
+  margin: 0;
+  color: var(--cozy-ink);
+  font-size: 15px;
+  line-height: 1.35;
+}
+.job-workspace {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.job-workspace .cozy-meta {
+  flex-basis: 100%;
+}
+.logs .log-note {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--cozy-wood-soft);
+  border-radius: 8px;
+  background: var(--cozy-cream-2);
+  color: var(--cozy-ink);
+  font-size: 11.5px;
+}
+.previous-checks {
+  display: grid;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--cozy-wood-soft);
+}
+.previous-checks h4 {
+  margin: 0;
+  color: var(--cozy-muted);
+  font-size: 11.5px;
+}
+.change-log > summary code {
+  color: var(--cozy-muted);
+  font-weight: 400;
+}
+
+/* 카드가 좁은 패널을 밀어내지 않게 폭을 줄인다. */
+.cozy-stack,
+.cozy-card,
+.cozy-body,
+.cozy-disclosure > summary {
+  min-width: 0;
+}
+.cozy-summary-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cozy-scope .logs,
+.logs.worklog-panel,
+.logs.memory-panel,
+.logs.wiki-panel {
+  overflow-x: hidden;
+}
+.cozy-scope .model-usage ul {
+  padding: 0;
+}
+.cozy-scope .model-usage li {
+  color: var(--cozy-ink);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+

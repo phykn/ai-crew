@@ -2,6 +2,8 @@
 
 import { approvalLabels, type Action, type Snapshot } from "../../../shared/actions";
 import { CheckList, ModelUsage } from "../common/ui";
+import { CozyDetails, EmptyState, RoleBadge, StatusBadge } from "../common/cozy";
+import { parseActivity } from "./worklog-format";
 
 type WorklogPanelProps = {
   data: Snapshot | null;
@@ -26,21 +28,26 @@ export function WorklogPanel({
     data?.activity.filter((entry) => !logJob || entry.jobId === logJob) || [];
   const changes =
     data?.changes.filter((change) => !logJob || change.jobId === logJob) || [];
+  const rows = activity.map((entry) =>
+    parseActivity(entry, data?.members ?? []),
+  );
   return (
-    <div className="logs" aria-label="로그">
+    <div className="logs worklog-panel cozy-scope" aria-label="로그">
       {logJob && (
-        <div className="job-log-header">
-          <button className="log-link" onClick={() => setLogJob(null)}>
-            ← 전체 기록
-          </button>
-          {selectedLogJob && (
-            <button
-              className="log-link"
-              onClick={() => (close ? close() : setView("chat"))}
-            >
-              업무로 돌아가기
+        <section className="cozy-card job-log-header">
+          <div className="job-log-crumbs">
+            <button className="log-link" onClick={() => setLogJob(null)}>
+              ← 전체 기록
             </button>
-          )}
+            {selectedLogJob && (
+              <button
+                className="log-link"
+                onClick={() => (close ? close() : setView("chat"))}
+              >
+                업무로 돌아가기
+              </button>
+            )}
+          </div>
           {selectedLogJob && (
             <h2>{selectedLogJob.plan?.goal ?? selectedLogJob.request}</h2>
           )}
@@ -48,7 +55,7 @@ export function WorklogPanel({
             <div className="job-workspace">
               {selectedLogJob.worktree ? (
                 <>
-                  <span className="muted">
+                  <span className="cozy-meta">
                     격리 작업공간 · {selectedLogJob.branch} @{" "}
                     {selectedLogJob.baseCommit?.slice(0, 8)}
                     {selectedLogJob.applyState === "applied"
@@ -99,31 +106,33 @@ export function WorklogPanel({
               )}
             </div>
           )}
-        </div>
+        </section>
       )}
       <ModelUsage runs={data?.modelRuns ?? []} jobId={logJob} />
       {!!data?.artifacts.filter(({ jobId }) => !logJob || jobId === logJob)
         .length && (
-        <details className="change-log">
-          <summary>산출물</summary>
-          <ul>
+        <CozyDetails title="산출물" className="artifact-log">
+          <ul className="cozy-list">
             {data.artifacts
               .filter(({ jobId }) => !logJob || jobId === logJob)
               .map((artifact) => (
                 <li key={artifact.id}>
-                  {artifact.name} · <code>{artifact.path}</code> ·{" "}
-                  <code>{artifact.hash.slice(0, 8)}</code> · 산출물{" "}
-                  <code>{artifact.id.slice(0, 8)}</code>
+                  <strong>{artifact.name}</strong>
+                  <span className="cozy-meta">
+                    <code>{artifact.path}</code> ·{" "}
+                    <code>{artifact.hash.slice(0, 8)}</code> · 산출물{" "}
+                    <code>{artifact.id.slice(0, 8)}</code>
+                  </span>
                 </li>
               ))}
           </ul>
-        </details>
+        </CozyDetails>
       )}
       {selectedLogJob &&
         data?.fileApprovals
           .filter(({ jobId }) => jobId === selectedLogJob.id)
           .map((item) => (
-            <p key={item.id}>
+            <p className="log-note" key={item.id}>
               승인 {approvalLabels[item.mode]} · {item.scope} ·{" "}
               {item.decision
                 ? (item.decision === "allow" ? "허용" : "거절") +
@@ -135,7 +144,7 @@ export function WorklogPanel({
       {data?.toolApprovals
         .filter(({ jobId }) => !logJob || jobId === logJob)
         .map((item) => (
-          <p key={item.id}>
+          <p className="log-note" key={item.id}>
             MCP {item.serverName}/{item.toolName} · {item.memberName} ·{" "}
             {item.decision
               ? (item.decision === "allow" ? "허용" : "거절") +
@@ -147,12 +156,17 @@ export function WorklogPanel({
           </p>
         ))}
       {changes.map((change) => (
-        <details className="change-log" key={change.id}>
-          <summary>
-            {change.movedFrom ? change.movedFrom + " → " : ""}
-            {change.path} <code>{change.afterHash.slice(0, 8)}</code>
-          </summary>
-          <p className="muted">
+        <CozyDetails
+          className="change-log"
+          key={change.id}
+          title={
+            <>
+              {change.movedFrom ? change.movedFrom + " → " : ""}
+              {change.path} <code>{change.afterHash.slice(0, 8)}</code>
+            </>
+          }
+        >
+          <p className="cozy-meta">
             {change.beforeHash
               ? change.beforeHash.slice(0, 8)
               : "신규 파일"}{" "}
@@ -162,7 +176,7 @@ export function WorklogPanel({
             </time>
           </p>
           {change.authorMemberId && (
-            <p className="muted">
+            <p className="cozy-meta">
               작성 ·{" "}
               {data?.members.find(
                 ({ id }) => id === change.authorMemberId,
@@ -171,10 +185,8 @@ export function WorklogPanel({
           )}
           <CheckList checks={change.checks} />
           {change.previousChecks.length > 0 && (
-            <details>
-              <summary>
-                이전 검증 {change.previousChecks.length}건
-              </summary>
+            <section className="previous-checks">
+              <h4>이전 검증 {change.previousChecks.length}건</h4>
               {change.previousChecks.map((checks) => (
                 <section key={checks[0].batchId}>
                   <time dateTime={checks[0].checkedAt}>
@@ -183,23 +195,35 @@ export function WorklogPanel({
                   <CheckList checks={checks} />
                 </section>
               ))}
-            </details>
+            </section>
           )}
-        </details>
+        </CozyDetails>
       ))}
-      {activity.map((entry) => (
-        <p key={entry.id}>
-          {entry.recordedAt && (
-            <time className="activity-time" dateTime={entry.recordedAt}>
-              {new Date(entry.recordedAt).toLocaleTimeString()}
-            </time>
-          )}
-          {entry.text}
-        </p>
-      ))}
-      {!activity.length && (
-        <p className="muted">아직 활동 기록이 없어요.</p>
-      )}
+      <section className="activity-log" aria-label="활동 기록">
+        {rows.length > 0 && <h3 className="log-section-title">활동 기록</h3>}
+        {rows.length > 0 && (
+          <div className="activity-list">
+            {activity.map((entry, index) => {
+              const row = rows[index];
+              return (
+                <div className="activity-row" key={entry.id}>
+                  <time className="activity-time" dateTime={entry.recordedAt ?? undefined}>
+                    {row.time}
+                  </time>
+                  <StatusBadge status={row.status} />
+                  <RoleBadge label={row.label} color={row.color} />
+                  <p className="activity-text">{row.body}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {!rows.length && (
+          <EmptyState icon="log" title="아직 활동 기록이 없어요.">
+            업무를 시작하면 누가 무엇을 했는지 이곳에 차곡차곡 쌓입니다.
+          </EmptyState>
+        )}
+      </section>
     </div>
   );
 }

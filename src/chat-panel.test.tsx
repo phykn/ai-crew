@@ -160,3 +160,62 @@ test("lists every job once more than one is running", () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("shows waiting messages above the input as numbered chips", () => {
+  const directory = mkdtempSync(join(tmpdir(), "crew-chat-"));
+  const store = new CrewStore(join(directory, "crew.sqlite"));
+  try {
+    store.openFolder("/work/chat-queue");
+    const sessionId = store.snapshot().session!.id;
+    const first = store.beginResponse(sessionId, randomUUID(), "먼저 물어본 일")!;
+    store.append(first, "차례대로 답하는 중");
+    store.beginResponse(sessionId, randomUUID(), "보탠 일 하나", "queued");
+    store.beginResponse(sessionId, randomUUID(), "보탠 일 둘", "queued");
+    const html = renderChat(store.snapshot());
+    // 대기열은 입력창 위에 붙고, 칩마다 순서와 빼기 버튼을 갖는다.
+    const strip = html.indexOf('class="queue-strip"');
+    expect(strip).toBeGreaterThan(-1);
+    expect(strip).toBeLessThan(html.indexOf("<textarea"));
+    expect(html).toContain('class="queue-count"');
+    expect(html).toContain("보탠 일 하나");
+    expect(html).toContain("보탠 일 둘");
+    expect(html).toContain('class="queue-order"');
+    expect(html.split('class="queue-cancel"')).toHaveLength(3);
+    expect(html).toContain("대기열 2번째 메시지 대기열에서 빼기");
+    // 무엇이 대기열에 들어갔는지 스크린리더에도 알린다.
+    expect(html).toContain('aria-live="polite"');
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the composer bar keeps folder and approval left, send right", () => {
+  const directory = mkdtempSync(join(tmpdir(), "crew-chat-"));
+  const store = new CrewStore(join(directory, "crew.sqlite"));
+  try {
+    store.openFolder("/work/chat-bar");
+    const html = renderChat(store.snapshot());
+    // 단축키는 실제 동작과 같은 문장으로 입력창과 아래 안내에 적는다.
+    expect(html).toContain(
+      "(Enter 전송 · Ctrl+Enter 대기열 · Shift+Enter 줄바꿈)",
+    );
+    expect(html).toContain('class="compose-hint"');
+    // 입력 영역은 카드 하나, 컨트롤은 왼쪽·오른쪽 두 묶음이다.
+    expect(html).toContain('class="compose-card"');
+    const left = html.indexOf('class="compose-left"');
+    const right = html.indexOf('class="compose-actions"');
+    expect(left).toBeGreaterThan(-1);
+    expect(right).toBeGreaterThan(left);
+    // 폴더 팻말과 승인 모드는 왼쪽, 보내기는 오른쪽에 있다.
+    expect(html.indexOf('class="folder project-toggle"')).toBeGreaterThan(left);
+    expect(html.indexOf('class="approval-pill"')).toBeGreaterThan(left);
+    expect(html.indexOf('class="icon-button send"')).toBeGreaterThan(right);
+    // 승인 모드는 긴 select 대신 아이콘과 짧은 라벨이 붙은 알약이다.
+    expect(html).toContain('class="approval-text"');
+    expect(html).toContain('aria-label="승인 모드"');
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

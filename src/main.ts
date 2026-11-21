@@ -11,6 +11,7 @@ import { ActionRunner } from "./app-actions";
 import { resolveAppManual } from "./app-manual";
 import { appTools } from "./app-tools";
 import { ChatQueue } from "./chat-queue";
+import { continuationNotice, conversationHistory } from "./chat-continuity";
 import { findChatCommand } from "./chat-commands";
 import { CodexConnection } from "./codex";
 import { StopFence } from "./engine-fence";
@@ -86,33 +87,33 @@ async function startApp() {
     const session = store.getSession(sessionId);
     const project = store.getProject(session.projectId);
     const assistant = store.readMembers(project.id, "assistant")[0];
-    const history = store
-      .getMessages(sessionId)
-      .filter(
-        (message) =>
-          message.id !== id &&
-          message.text &&
-          !waiting.requests(sessionId).includes(message.id) &&
-          (message.role === "user" ||
-            message.state === "complete" ||
-            message.state === "stopped"),
-      )
-      .map(({ role, text: content }) => ({ role, content }));
+    // 중단된 앞 응답도 끊긴 지점 표시와 함께 기록에 넣고, 다음 턴 지침에서 이어받게 한다.
+    const messages = store.getMessages(sessionId);
+    const skip = waiting.requests(sessionId);
+    const history = conversationHistory(messages, { excludeId: id, skip });
     let status: Completion = "complete";
     let failure: string | null = null;
     const started = performance.now();
     const details: ModelDetails = {};
     const wiki = store.wikiOutline(project.id);
-    const instructions = crewInstructions(
-      assistant,
-      store.listSkills(project.id),
-      store.listMemories(project.id, assistant.id),
-      wiki,
-      {
-        appManual: resolveAppManual(manualRoots),
-        styleReports: store.takeStyleReports(project.id),
-      },
-    );
+    const notice = continuationNotice(messages, {
+      excludeId: id,
+      skip,
+      // Codex가 이미 앞 대화를 든 스레드라면 끊긴 글 자체를 지침에 넣어 준다.
+      excerpt:
+        assistant.provider === "codex" && !!store.getCodexThread(sessionId),
+    });
+    const instructions =
+      crewInstructions(
+        assistant,
+        store.listSkills(project.id),
+        store.listMemories(project.id, assistant.id),
+        wiki,
+        {
+          appManual: resolveAppManual(manualRoots),
+          styleReports: store.takeStyleReports(project.id),
+        },
+      ) + (notice ? "\n\n" + notice : "");
     const emit = (delta: string) => {
       if (closing || controller.signal.aborted) return;
       if (fences.isStale(id, generation)) return;
@@ -202,6 +203,9 @@ async function startApp() {
         failure = (
           error instanceof Error ? error.message : String(error)
         ).slice(0, 400);
+      // 오류로 끊겨도 그때까지 만든 글은 다음 턴이 이어받는다.
+      if (!controller.signal.aborted && store.hasText(id))
+        store.markInterrupted(id, "error");
     } finally {
       if (runs.get(sessionId)?.controller === controller) runs.delete(sessionId);
       if (!closing) {
@@ -218,7 +222,8 @@ async function startApp() {
           failure,
         );
         publish(null);
-        const next = waiting.shift(sessionId);
+        // 새 메시지가 앞 응답을 끊고 먼저 시작한 경우에는 대기열을 건드리지 않는다.
+        const next = runs.has(sessionId) ? undefined : waiting.shift(sessionId);
         if (next) {
           startResponse(sessionId, next);
           publish(null);
@@ -294,19 +299,61 @@ async function startApp() {
       )
         throw new Error("크루에서 비서를 재고용해 주세요.");
       if (current) {
-        // 답변 중에 보낸 메시지는 앞선 답변이 끝난 뒤 이어서 답한다.
+        // Ctrl+Enter: 앞선 답변이 끝난 뒤 이어서 답하도록 대기열에 넣는다.
+        if (action.queue) {
+          const queuedId = store.beginResponse(
+            action.sessionId,
+            action.requestId,
+            action.text,
+            "queued",
+          );
+          if (queuedId) {
+            waiting.add(action.sessionId, {
+              responseId: queuedId,
+              requestId: action.requestId,
+              text: action.text,
+            });
+            publish(null);
+          }
+          return;
+        }
+        // Enter: 지금 답변을 끊고 새 메시지를 먼저 답한다. 끊긴 지점까지의
+        // 내용은 남겨 다음 응답이 이어받는다.
         const responseId = store.beginResponse(
           action.sessionId,
           action.requestId,
           action.text,
           "queued",
         );
-        if (responseId)
-          waiting.add(action.sessionId, {
-            responseId,
-            requestId: action.requestId,
-            text: action.text,
-          });
+        if (!responseId) return;
+        fences.stop(current.id);
+        store.markInterrupted(current.id, "new-message");
+        store.finish(current.id, "stopping");
+        current.controller.abort();
+        startResponse(action.sessionId, {
+          responseId,
+          requestId: action.requestId,
+          text: action.text,
+        });
+        publish(null);
+        return;
+      }
+      if (action.queue) {
+        // 답변 중이 아니어도 대기열을 거쳐 바로 시작한다.
+        const queuedId = store.beginResponse(
+          action.sessionId,
+          action.requestId,
+          action.text,
+          "queued",
+        );
+        if (!queuedId) return;
+        waiting.add(action.sessionId, {
+          responseId: queuedId,
+          requestId: action.requestId,
+          text: action.text,
+        });
+        const next = waiting.shift(action.sessionId);
+        if (next) startResponse(action.sessionId, next);
         publish(null);
         return;
       }
@@ -334,11 +381,18 @@ async function startApp() {
       const run = runs.get(sessionId);
       if (!run || run.id !== responseId || run.controller.signal.aborted) return;
       fences.stop(responseId);
+      store.markInterrupted(run.id, "user-stop");
       store.finish(run.id, "stopping");
       run.controller.abort();
       // 멈추면 기다리던 메시지도 함께 접는다.
       for (const pending of waiting.take(sessionId))
         store.finish(pending.responseId, "stopped");
+      publish(null);
+    },
+    cancelQueue: (sessionId, responseId) => {
+      const pending = waiting.cancel(sessionId, responseId);
+      if (!pending) throw new Error("이미 시작했거나 대기열에 없는 메시지예요.");
+      store.finish(responseId, "stopped");
       publish(null);
     },
   });
@@ -395,6 +449,7 @@ async function startApp() {
     if (closing) return;
     closing = true;
     for (const run of runs.values()) {
+      store.markInterrupted(run.id, "quit");
       store.finish(run.id, "stopped");
       run.controller.abort();
     }

@@ -12,7 +12,7 @@ export function initStoreSchema(db: DatabaseSync) {
     const migration = db.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    if (migration.user_version > 37)
+    if (migration.user_version > 38)
       throw new Error("데이터를 저장한 최신 AI Crew 버전으로 열어 주세요.");
     if (migration.user_version === 0) {
       db.exec(`
@@ -545,11 +545,28 @@ export function initStoreSchema(db: DatabaseSync) {
         COMMIT;
       `);
     }
+    if (migration.user_version < 38) {
+      // 응답이 도중에 끊긴 자리를 남긴다. 그때까지 만든 글을 다음 턴이 이어받는다.
+      // 이미 열이 있는 저장본(버전만 되돌려 쓰는 옛 테스트)에는 다시 만들지 않는다.
+      const columns = new Set(
+        (
+          db.prepare("PRAGMA table_info(messages)").all() as { name: string }[]
+        ).map(({ name }) => name),
+      );
+      db.exec("BEGIN;");
+      if (!columns.has("interrupted"))
+        db.exec(
+          "ALTER TABLE messages ADD COLUMN interrupted INTEGER NOT NULL DEFAULT 0;",
+        );
+      if (!columns.has("interrupt_reason"))
+        db.exec("ALTER TABLE messages ADD COLUMN interrupt_reason TEXT;");
+      db.exec("PRAGMA user_version = 38; COMMIT;");
+    }
     db.exec(
       "UPDATE jobs SET state = 'stopped' WHERE state IN ('planning', 'queued', 'developing', 'reviewing', 'recovering', 'stopping');",
     );
     db.exec(
-      "UPDATE messages SET state = 'stopped' WHERE state IN ('running', 'stopping', 'queued');",
+      "UPDATE messages SET state = 'stopped', interrupted = CASE WHEN text <> '' THEN 1 ELSE interrupted END, interrupt_reason = COALESCE(interrupt_reason, 'quit') WHERE state IN ('running', 'stopping', 'queued');",
     );
     db.exec(
       "UPDATE tool_approvals SET decision = 'deny', actor = COALESCE(actor, '앱 종료') WHERE decision IS NULL;",

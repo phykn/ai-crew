@@ -65,6 +65,7 @@ const icons = {
   bug: "M9 9a3 3 0 0 1 6 0v4a3 3 0 0 1-6 0V9Zm-5 3h4m8 0h4M4 16h5m6 0h5M7 6l2 2m8-2-2 2M12 3v3",
   flask: "M9 3h6M10 3v5.2L5.4 17A2 2 0 0 0 7.2 20h9.6a2 2 0 0 0 1.8-3L14 8.2V3",
   pencil: "M4 20h4L20.5 7.5l-4-4L4 16v4Zm9.5-14.5 4 4",
+  shield: "M12 3 4 6v5c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6Zm-1 5h2v4h2l-3 4-3-4h2Z",
 };
 export function Icon({ name }: { name: keyof typeof icons }) {
   return (

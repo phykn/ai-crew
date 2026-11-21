@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import {
   type Completion,
+  type InterruptionReason,
   type Job,
   type Message,
   type WorkPlan,
@@ -14,9 +15,13 @@ export class StoreJobs extends StoreWorkspace {
   getMessages(sessionId: string) {
     return this.db
       .prepare(
-        "SELECT id, role, text, state, error, job_id AS jobId FROM messages WHERE session_id = ? ORDER BY rowid",
+        "SELECT id, role, text, state, error, job_id AS jobId, interrupted, interrupt_reason AS interruptReason FROM messages WHERE session_id = ? ORDER BY rowid",
       )
-      .all(sessionId) as Message[];
+      .all(sessionId)
+      .map((row) => ({
+        ...(row as Omit<Message, "interrupted"> & { interrupted: number }),
+        interrupted: Number(row.interrupted) === 1,
+      })) as Message[];
   }
 
   clearSession(sessionId: string, requestId: string) {
@@ -90,6 +95,22 @@ export class StoreJobs extends StoreWorkspace {
         "UPDATE messages SET text = text || ? WHERE id = ? AND state IN ('running', 'stopping')",
       )
       .run(delta, id);
+  }
+
+  /** 끝까지 답하지 못한 응답에 그 까닭을 남긴다. 글은 그대로 두고, 이미 끝난 응답은 건드리지 않는다. */
+  markInterrupted(id: string, reason: InterruptionReason) {
+    this.db
+      .prepare(
+        "UPDATE messages SET interrupted = 1, interrupt_reason = ? WHERE id = ? AND state IN ('running', 'stopping', 'queued')",
+      )
+      .run(reason, id);
+  }
+
+  /** 그 응답이 지금까지 남긴 글이 있는지. 빈 응답을 중단으로 기록하지 않으려고 본다. */
+  hasText(id: string) {
+    return !!this.db
+      .prepare("SELECT 1 FROM messages WHERE id = ? AND text <> ''")
+      .get(id);
   }
 
   finish(id: string, state: Completion, error: string | null = null) {

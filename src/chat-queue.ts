@@ -3,6 +3,8 @@
 // process; each waiting message is already stored as a `queued` assistant row so
 // the transcript shows it immediately.
 
+import type { Message } from "./actions";
+
 export type PendingChat = {
   responseId: string;
   requestId: string;
@@ -42,4 +44,39 @@ export class ChatQueue {
   requests(sessionId: string) {
     return (this.waiting.get(sessionId) ?? []).map(({ requestId }) => requestId);
   }
+
+  /** 대기 중인 메시지 하나를 뺀다. 이미 시작했거나 없으면 undefined. */
+  cancel(sessionId: string, responseId: string) {
+    const list = this.waiting.get(sessionId);
+    const index = list?.findIndex((pending) => pending.responseId === responseId) ?? -1;
+    if (!list || index < 0) return undefined;
+    const [removed] = list.splice(index, 1);
+    if (!list.length) this.waiting.delete(sessionId);
+    return removed;
+  }
+}
+
+/** 대기열 칩 하나. 번호는 기다리는 순서다. */
+export type QueueChip = {
+  responseId: string;
+  text: string;
+  position: number;
+};
+
+/**
+ * 입력창 위에 띄울 대기열 칩. 대기 중인 응답 바로 앞의 사용자 메시지가 그 내용이다.
+ * 화면은 저장된 대화만 보고 칩을 그리므로, 대기열을 따로 복제해 두지 않는다.
+ */
+export function queueChips(messages: Message[]): QueueChip[] {
+  const chips: QueueChip[] = [];
+  let asked = "";
+  for (const message of messages) {
+    if (message.role === "user") {
+      asked = message.text;
+      continue;
+    }
+    if (message.state === "queued" && !message.text)
+      chips.push({ responseId: message.id, text: asked, position: chips.length + 1 });
+  }
+  return chips;
 }

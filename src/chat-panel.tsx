@@ -1,7 +1,7 @@
 // The chat view: the live status banner, running jobs, the transcript, the
 // decisions waiting on the user, and the composer.
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   approvalLabels,
   type Action,
@@ -10,6 +10,8 @@ import {
   type Snapshot,
 } from "./actions";
 import { copyText } from "./clipboard";
+import { composerAction, composerHint } from "./chat-keys";
+import { queueChips } from "./chat-queue";
 import { ChatStatus } from "./chat-status";
 import { DecisionStack } from "./chat-decisions";
 import { filterMessages, searchCount } from "./chat-search";
@@ -44,7 +46,8 @@ type ChatPanelProps = {
   composer: { current: HTMLTextAreaElement | null };
   saveDraft: (text: string) => void;
   setCommandsDismissed: (dismissed: boolean) => void;
-  send: (event: FormEvent) => Promise<void>;
+  /** Enter는 바로 보내고, Ctrl/Cmd+Enter는 대기열에 넣는다. */
+  send: (mode: "now" | "queue") => Promise<void>;
   navigate: (action: Action) => Promise<void>;
   run: (action: Action, resetDraft?: boolean) => Promise<boolean>;
   openLog: (jobId: string) => void;
@@ -238,7 +241,11 @@ export function ChatPanel({
   const [showJump, setShowJump] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
   const [search, setSearch] = useState<string | null>(null);
+  const [queueNotice, setQueueNotice] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
+  // 입력창 위에 띄울 대기열 칩. 대기 중인 응답 앞의 사용자 메시지가 그 내용이다.
+  const chips = queueChips(data?.messages ?? []);
+  const announced = useRef(chips.length);
   const searching = search !== null;
   const query = search?.trim() ?? "";
   const currentJobs =
@@ -268,6 +275,14 @@ export function ChatPanel({
   useEffect(() => {
     setCommandIndex(0);
   }, [commandKey]);
+
+  // 대기열에 무엇이 들어갔는지 스크린리더에도 한 줄로 알린다.
+  useEffect(() => {
+    if (chips.length > announced.current)
+      setQueueNotice(`대기열에 넣었어요. ${chips.length}번째입니다.`);
+    else if (!chips.length) setQueueNotice("");
+    announced.current = chips.length;
+  }, [chips.length]);
 
   // Cmd/Ctrl+F로 대화 안 찾기를 열고 닫는다.
   useEffect(() => {
@@ -559,7 +574,13 @@ export function ChatPanel({
             {error}
           </p>
         )}
-        <form className="composer" onSubmit={(event) => void send(event)}>
+        <form
+          className="composer"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void send("now");
+          }}
+        >
           {commandSuggestions.length > 0 && (
             <div className="command-list" role="group" aria-label="채팅 명령">
               {commandSuggestions.map(([command, description], index) => (
@@ -594,166 +615,244 @@ export function ChatPanel({
               </button>
             </div>
           )}
-          <textarea
-            ref={composer}
-            aria-label="비서에게 메시지"
-            value={composeText}
-            maxLength={32000}
-            rows={2}
-            disabled={!data?.session || sending}
-            placeholder={
-              revision?.questionId
-                ? "비서의 질문에 답하기…"
-                : revision
-                  ? "이 업무에서 바꿀 내용을 알려 주세요…"
-                  : "비서에게 메시지 보내기…"
-            }
-            onChange={(event) => {
-              setCommandsDismissed(false);
-              if (revision)
-                setRevision({ ...revision, text: event.target.value });
-              else saveDraft(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing || event.keyCode === 229)
-                return;
-              if (commandSuggestions.length) {
-                if (event.key === "ArrowDown") {
+          <div className="compose-card">
+              {chips.length > 0 && (
+                <div className="queue-strip" role="group" aria-label="대기열">
+                  <span
+                    className="queue-count"
+                    title={`대기열 ${chips.length}건`}
+                    aria-label={`대기열 ${chips.length}건`}
+                  >
+                    {chips.length}
+                  </span>
+                  <ol className="queue-chips">
+                    {chips.map((chip) => (
+                      <li className="queue-chip" key={chip.responseId}>
+                        <span className="queue-order" aria-hidden="true">
+                          {chip.position}
+                        </span>
+                        <span className="queue-text" title={chip.text}>
+                          {chip.text}
+                        </span>
+                        <button
+                          type="button"
+                          className="queue-cancel"
+                          aria-label={`대기열 ${chip.position}번째 메시지 대기열에서 빼기`}
+                          title="대기열에서 빼기"
+                          disabled={sending}
+                          onClick={() => {
+                            if (!data?.session) return;
+                            void run({
+                              type: "chat.queue.cancel",
+                              sessionId: data.session.id,
+                              responseId: chip.responseId,
+                            });
+                          }}
+                        >
+                          <Icon name="close" />
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              <span className="visually-hidden" role="status" aria-live="polite">
+                {queueNotice}
+              </span>
+            <textarea
+              ref={composer}
+              aria-label="비서에게 메시지"
+              value={composeText}
+              maxLength={32000}
+              rows={2}
+              disabled={!data?.session || sending}
+              placeholder={
+                revision?.questionId
+                  ? "비서의 질문에 답하기…"
+                  : revision
+                    ? "이 업무에서 바꿀 내용을 알려 주세요…"
+                    : `비서에게 메시지 보내기… (${composerHint})`
+              }
+              onChange={(event) => {
+                setCommandsDismissed(false);
+                if (revision)
+                  setRevision({ ...revision, text: event.target.value });
+                else saveDraft(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                // 한글 조합 중에는 어떤 키도 전송·대기열로 쓰지 않는다.
+                if (event.nativeEvent.isComposing || event.keyCode === 229)
+                  return;
+                const action = composerAction({
+                  key: event.key,
+                  ctrlKey: event.ctrlKey,
+                  metaKey: event.metaKey,
+                  shiftKey: event.shiftKey,
+                  altKey: event.altKey,
+                  repeat: event.repeat,
+                  isComposing: event.nativeEvent.isComposing,
+                  keyCode: event.keyCode,
+                });
+                if (commandSuggestions.length) {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setCommandIndex(
+                      (selectedCommand + 1) % commandSuggestions.length,
+                    );
+                    return;
+                  }
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setCommandIndex(
+                      (selectedCommand - 1 + commandSuggestions.length) %
+                        commandSuggestions.length,
+                    );
+                    return;
+                  }
+                  if (event.key === "Tab") {
+                    event.preventDefault();
+                    saveDraft(commandSuggestions[selectedCommand][0]);
+                    return;
+                  }
+                }
+                if (event.key === "Escape" && commandSuggestions.length) {
                   event.preventDefault();
-                  setCommandIndex(
-                    (selectedCommand + 1) % commandSuggestions.length,
-                  );
+                  setCommandsDismissed(true);
                   return;
                 }
-                if (event.key === "ArrowUp") {
+                // Shift+Enter는 줄바꿈이라 그대로 둔다.
+                if (action === "queue") {
                   event.preventDefault();
-                  setCommandIndex(
-                    (selectedCommand - 1 + commandSuggestions.length) %
-                      commandSuggestions.length,
-                  );
+                  void send("queue");
                   return;
                 }
-                if (event.key === "Tab") {
+                if (action === "send") {
                   event.preventDefault();
-                  saveDraft(commandSuggestions[selectedCommand][0]);
-                  return;
+                  const suggestion = commandSuggestions[selectedCommand]?.[0];
+                  if (suggestion && suggestion !== composeText.trim()) {
+                    saveDraft(suggestion);
+                    return;
+                  }
+                  event.currentTarget.form?.requestSubmit();
                 }
-              }
-              if (event.key === "Escape" && commandSuggestions.length) {
-                event.preventDefault();
-                setCommandsDismissed(true);
-                return;
-              }
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                if (event.repeat) return;
-                const suggestion = commandSuggestions[selectedCommand]?.[0];
-                if (suggestion && suggestion !== composeText.trim()) {
-                  saveDraft(suggestion);
-                  return;
+              }}
+            />
+            <div className="compose-tools">
+              <div className="compose-left">
+              <button
+                type="button"
+                className="folder project-toggle"
+                aria-label="프로젝트 폴더"
+                title={data?.current?.root ?? "프로젝트 폴더"}
+                aria-expanded={menu === "projects"}
+                onClick={() =>
+                  setMenu(menu === "projects" ? null : "projects")
                 }
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-          />
-          <div className="compose-tools">
-            <button
-              type="button"
-              className="folder project-toggle"
-              aria-label="프로젝트 폴더"
-              title={data?.current?.root ?? "프로젝트 폴더"}
-              aria-expanded={menu === "projects"}
-              onClick={() =>
-                setMenu(menu === "projects" ? null : "projects")
-              }
-            >
-              <Icon name="folder" />{" "}
-              <span>{data?.current?.name || "프로젝트 폴더"}</span>
-            </button>
-            {menu === "projects" && (
-              <div className="menu projects" aria-label="프로젝트 폴더">
-                <button
-                  type="button"
-                  onClick={() => void navigate({ type: "project.pick" })}
-                >
-                  폴더 열기…
-                </button>
-                {data?.projects.map((project) => (
+              >
+                <Icon name="folder" />{" "}
+                <span>{data?.current?.name || "프로젝트 폴더"}</span>
+              </button>
+              {menu === "projects" && (
+                <div className="menu projects" aria-label="프로젝트 폴더">
                   <button
                     type="button"
-                    title={project.root}
-                    key={project.id}
-                    aria-current={data.current?.id === project.id}
-                    onClick={() =>
-                      void navigate({
-                        type: "project.open",
-                        projectId: project.id,
-                      })
-                    }
+                    onClick={() => void navigate({ type: "project.pick" })}
                   >
-                    {project.name}
+                    폴더 열기…
                   </button>
-                ))}
-              </div>
-            )}
-            {data?.current && (
-              <select
-                className="approval-mode"
-                aria-label="승인 모드"
-                value={data.current.approvalMode}
-                onChange={(event) => {
-                  if (data.current)
-                    void run({
-                      type: "project.approval",
-                      projectId: data.current.id,
-                      mode: event.target.value as ApprovalMode,
-                    });
-                }}
-              >
-                {Object.entries(approvalLabels).map(([value, label]) => (
-                  <option value={value} key={value}>
-                    승인 {label}
-                  </option>
-                ))}
-              </select>
-            )}
-            <div className="compose-actions">
-              {running && data?.session && (
-                <button
-                  type="button"
-                  className="icon-button stop"
-                  aria-label="응답 멈춤"
-                  title="응답 멈춤"
-                  disabled={running.state === "stopping"}
-                  onClick={() => {
-                    if (data.session)
-                      void run({
-                        type: "chat.stop",
-                        sessionId: data.session.id,
-                        responseId: running.id,
-                      });
-                  }}
-                >
-                  <Icon name="stop" />
-                </button>
+                  {data?.projects.map((project) => (
+                    <button
+                      type="button"
+                      title={project.root}
+                      key={project.id}
+                      aria-current={data.current?.id === project.id}
+                      onClick={() =>
+                        void navigate({
+                          type: "project.open",
+                          projectId: project.id,
+                        })
+                      }
+                    >
+                      {project.name}
+                    </button>
+                  ))}
+                </div>
               )}
-              {data?.session && (
-                <button
-                  className="icon-button send"
-                  type="submit"
-                  aria-label="보내기"
+              {data?.current && (
+                <span
+                  className="approval-pill"
                   title={
-                    running
-                      ? "지금 답변 중이에요. 보내면 이어서 답해요."
-                      : "보내기"
+                    "승인 모드 · " + approvalLabels[data.current.approvalMode]
                   }
-                  disabled={!composeText.trim() || sending}
                 >
-                  <Icon name="send" />
-                </button>
+                  <Icon name="shield" />
+                  <span className="approval-text">
+                    {approvalLabels[data.current.approvalMode]}
+                  </span>
+                  <select
+                    className="approval-mode"
+                    aria-label="승인 모드"
+                    title={
+                      "승인 모드 · " + approvalLabels[data.current.approvalMode]
+                    }
+                    value={data.current.approvalMode}
+                    onChange={(event) => {
+                      if (data.current)
+                        void run({
+                          type: "project.approval",
+                          projectId: data.current.id,
+                          mode: event.target.value as ApprovalMode,
+                        });
+                    }}
+                  >
+                    {Object.entries(approvalLabels).map(([value, label]) => (
+                      <option value={value} key={value}>
+                        승인 {label}
+                      </option>
+                    ))}
+                  </select>
+                </span>
               )}
+              </div>
+              <div className="compose-actions">
+                {running && data?.session && (
+                  <button
+                    type="button"
+                    className="icon-button stop"
+                    aria-label="응답 멈춤"
+                    title="응답 멈춤"
+                    disabled={running.state === "stopping"}
+                    onClick={() => {
+                      if (data.session)
+                        void run({
+                          type: "chat.stop",
+                          sessionId: data.session.id,
+                          responseId: running.id,
+                        });
+                    }}
+                  >
+                    <Icon name="stop" />
+                  </button>
+                )}
+                {data?.session && (
+                  <button
+                    className="icon-button send"
+                    type="submit"
+                    aria-label="보내기"
+                    title={
+                      running
+                        ? "지금 답변을 끊고 이 메시지를 먼저 보내요 (Ctrl+Enter는 대기열)"
+                        : "보내기 (Enter)"
+                    }
+                    disabled={!composeText.trim() || sending}
+                  >
+                    <Icon name="send" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+          <p className="compose-hint">{composerHint}</p>
         </form>
       </div>
     </section>

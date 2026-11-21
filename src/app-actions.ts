@@ -257,6 +257,10 @@ export class ActionRunner {
         if (!this.stopResponse) throw new Error("지금은 멈출 응답이 없어요.");
         this.stopResponse(action.sessionId, action.responseId);
         break;
+      case "chat.queue.cancel":
+        if (!this.cancelQueue) throw new Error("지금은 대기열을 비울 수 없어요.");
+        this.cancelQueue(action.sessionId, action.responseId);
+        break;
       case "job.answer":
         workflow.answer(action.jobId, action.requestId, action.allow);
         break;
@@ -291,15 +295,19 @@ export class ActionRunner {
     handlers: {
       send: (action: Extract<Action, { type: "chat.send" }>) => void;
       stop: (sessionId: string, responseId: string) => void;
+      cancelQueue: (sessionId: string, responseId: string) => void;
     },
   ) {
     this.chatHandler = handlers.send;
     this.stopResponse = handlers.stop;
+    this.cancelQueue = handlers.cancelQueue;
   }
 
   private chatHandler: ((action: Extract<Action, { type: "chat.send" }>) => void) | null =
     null;
   private stopResponse: ((sessionId: string, responseId: string) => void) | null =
+    null;
+  private cancelQueue: ((sessionId: string, responseId: string) => void) | null =
     null;
 
   private syncModels() {
@@ -380,6 +388,7 @@ const descriptions: Record<string, string> = {
     "Git 저장소·Codex 설치·로컬 모델·MCP 서버 상태를 점검해요.",
   "app.quit": "앱을 종료해요. 진행 중인 실행은 기존 종료 절차를 따라요.",
   "chat.send": "비서에게 메시지를 보내요.",
+  "chat.queue.cancel": "대기열에서 메시지 하나를 빼요.",
   "chat.stop": "응답 생성을 멈춰요.",
   "job.answer": "권한 요청에 허용·거절로 답해요.",
   "job.stop": "업무를 멈춰요.",

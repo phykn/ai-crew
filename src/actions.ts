@@ -360,6 +360,13 @@ export const actions = z.discriminatedUnion("type", [
     sessionId: identifier,
     requestId: identifier,
     text: z.string().trim().min(1).max(32000),
+    /** 답변 중이어도 끊지 않고 앞선 답변 뒤 대기열에 넣는다(Ctrl/Cmd+Enter). */
+    queue: z.boolean().optional(),
+  }),
+  z.strictObject({
+    type: z.literal("chat.queue.cancel"),
+    sessionId: identifier,
+    responseId: identifier,
   }),
   z.strictObject({
     type: z.literal("chat.stop"),
@@ -476,6 +483,14 @@ export type Completion =
   | "complete"
   | "stopped"
   | "failed";
+/** 응답이 끝까지 만들어지지 않은 까닭. 다음 턴에 이어받을 근거로 남긴다. */
+export const interruptionReasons = [
+  "user-stop",
+  "new-message",
+  "error",
+  "quit",
+] as const;
+export type InterruptionReason = (typeof interruptionReasons)[number];
 export type Message = {
   id: string;
   role: "user" | "assistant";
@@ -483,6 +498,9 @@ export type Message = {
   state: Completion;
   error: string | null;
   jobId: string | null;
+  /** 끝까지 만들어지지 않은 응답. 그때까지의 글을 버리지 않고 이어받는 표시. */
+  interrupted: boolean;
+  interruptReason: InterruptionReason | null;
 };
 export type Activity = {
   id: number;

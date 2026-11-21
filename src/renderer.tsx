@@ -1,13 +1,7 @@
 // The app window. The panels below hold the views; this file owns the workspace
 // state and the calls that change it.
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type FormEvent,
-} from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
 import { WorkflowPanel, type FlowDraft } from "./workflow-panel";
 import { MemoryPanel } from "./memory-panel";
@@ -270,8 +264,7 @@ function Workspace() {
     }
   }
 
-  async function send(event: FormEvent) {
-    event.preventDefault();
+  async function send(mode: "now" | "queue" = "now") {
     const text = (revision?.text ?? draft).trim();
     if (!data?.session || !text || sending) return;
     setSending(true);
@@ -292,7 +285,14 @@ function Workspace() {
       )
         setRevision(null);
     } else {
-      await run({ type: "chat.send", ...request }, true);
+      await run(
+        {
+          type: "chat.send",
+          ...request,
+          ...(mode === "queue" ? { queue: true } : {}),
+        },
+        true,
+      );
     }
     setSending(false);
     composer.current?.focus();

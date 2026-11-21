@@ -8,6 +8,7 @@ import {
   type ModelDetails,
 } from "./actions";
 import { ActionRunner } from "./app-actions";
+import { resolveAppManual } from "./app-manual";
 import { appTools } from "./app-tools";
 import { ChatQueue } from "./chat-queue";
 import { findChatCommand } from "./chat-commands";
@@ -57,6 +58,12 @@ async function startApp() {
   let window: BrowserWindow | null;
   let closing = false;
   const workflow = new CrewWorkflow(store, codex, () => publish(null), mcp);
+  // 매뉴얼은 대화마다 다시 읽는다. 고친 내용이 다음 대화부터 비서 지침에 들어간다.
+  const manualRoots = [
+    app.getAppPath(),
+    process.cwd(),
+    join(__dirname, "..", ".."),
+  ];
   // 파일이 바뀔 때마다 스타일 감시자에게 알린다. 결과는 채팅 말풍선이 아니라
   // 비서가 다음에 읽는 보고로 쌓인다.
   const styleWatch = new StyleWatch((change) => {
@@ -101,7 +108,10 @@ async function startApp() {
       store.listSkills(project.id),
       store.listMemories(project.id, assistant.id),
       wiki,
-      { styleReports: store.takeStyleReports(project.id) },
+      {
+        appManual: resolveAppManual(manualRoots),
+        styleReports: store.takeStyleReports(project.id),
+      },
     );
     const emit = (delta: string) => {
       if (closing || controller.signal.aborted) return;

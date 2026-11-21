@@ -1,6 +1,7 @@
 // The bell menu listing a session's notifications.
 
 import type { Action, Snapshot } from "../../../shared/actions";
+import { EmptyState } from "../common/cozy";
 
 type NotificationsMenuProps = {
   data: Snapshot | null;
@@ -57,7 +58,9 @@ export function NotificationsMenu({
           </button>
         ))
       ) : (
-        <small className="muted">아직 알림이 없어요.</small>
+        <EmptyState icon="bell" title="아직 알림이 없어요." compact>
+          승인을 기다리거나 업무가 끝나면 이곳에 알려 드려요.
+        </EmptyState>
       )}
     </div>
   );

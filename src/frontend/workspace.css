@@ -3652,3 +3652,475 @@ textarea::-webkit-scrollbar {
   line-height: 1.5;
 }
 
+/* 메모리 */
+.memory-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.panel-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.panel-heading {
+  color: var(--cozy-muted);
+  font-size: 12px;
+}
+.panel-heading b {
+  color: var(--cozy-ink);
+}
+.cozy-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cozy-muted);
+  font-size: 11.5px;
+}
+.cozy-field select {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.memory-card > summary .cozy-badge {
+  margin-left: 0;
+}
+.memory-card > summary .chevron {
+  margin-left: 0;
+}
+.memory-body {
+  margin: 0;
+  padding: 0;
+  color: var(--cozy-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.memory-confirm {
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* 위키 */
+.wiki-panel > * + * {
+  margin-top: 10px;
+}
+.wiki-panel .wiki-controls {
+  gap: 6px;
+}
+.wiki-panel .wiki-controls small {
+  color: var(--cozy-muted);
+}
+.wiki-panel .wiki-list {
+  display: grid;
+  gap: 4px;
+}
+.wiki-panel .wiki-list button {
+  width: 100%;
+  border: 1.5px solid var(--cozy-wood-soft);
+  border-radius: 8px;
+  background: var(--cozy-cream);
+  box-shadow: 0 1px 0 var(--cozy-wood-lip);
+  text-align: left;
+}
+.wiki-panel .wiki-list button[aria-current="true"] {
+  border-color: var(--cozy-wood);
+  background: var(--cozy-butter);
+  color: var(--cozy-ink);
+}
+.wiki-panel .wiki-chip {
+  border: 1px solid var(--cozy-wood-soft);
+  background: var(--cozy-cream-2);
+  box-shadow: none;
+}
+.wiki-panel .wiki-chip:hover {
+  border-color: var(--cozy-wood);
+  background: var(--cozy-butter);
+}
+.wiki-panel .wiki-chip-arrow {
+  color: var(--cozy-wood);
+}
+.wiki-panel .wiki-page {
+  padding: 12px 14px;
+  border: 1.5px solid var(--cozy-wood);
+  border-radius: 10px;
+  background: var(--cozy-cream);
+  box-shadow: 0 2px 0 var(--cozy-wood-lip);
+}
+.wiki-panel .wiki-page-head h2 {
+  margin: 0;
+  color: var(--cozy-ink);
+}
+.wiki-panel .wiki-graph {
+  border-color: var(--cozy-wood);
+  background: var(--cozy-canvas);
+}
+.wiki-panel .wiki-graph .react-flow {
+  color-scheme: light;
+}
+.wiki-panel .wiki-graph .react-flow__node {
+  border: 1.5px solid var(--cozy-wood);
+  background: var(--cozy-cream);
+  box-shadow: 0 2px 0 var(--cozy-wood-lip);
+}
+.wiki-panel .wiki-graph .react-flow__controls button {
+  background: var(--cozy-cream);
+}
+.wiki-panel .wiki-links {
+  border-top-color: var(--cozy-wood-soft);
+}
+.wiki-panel .wiki-link-list {
+  display: grid;
+  gap: 4px;
+}
+.wiki-panel .revision-card {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--cozy-wood-soft);
+  border-radius: 8px;
+  background: var(--cozy-cream-2);
+}
+.wiki-panel .revision-body {
+  border-color: var(--cozy-wood-soft);
+  background: var(--cozy-cream);
+  box-shadow: none;
+}
+
+/* 크루 설정: 접기 안에 접기를 두지 않고 섹션 카드로 나눈다. */
+.crew-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-block: 10px;
+  padding: 0;
+  border: 0;
+}
+.settings-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.settings-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid #fffdf5;
+  border-radius: 50%;
+  box-shadow: 0 2px 0 var(--cozy-wood-lip);
+  color: #fffdf5;
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: 0 1px 1px #00000033;
+}
+.settings-identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.settings-identity strong {
+  color: var(--cozy-ink);
+  font-size: 15px;
+}
+.settings-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.settings-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.settings-section {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.settings-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.settings-section-head h3 {
+  margin: 0;
+  color: var(--cozy-ink);
+  font-size: 13px;
+}
+.settings-add {
+  margin-left: auto;
+}
+.settings-note {
+  margin: 0;
+  color: var(--cozy-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.skill-card,
+.server-card,
+.model-connection {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--cozy-wood-soft);
+  border-radius: 9px;
+  background: var(--cozy-cream-2);
+}
+.skill-card > header,
+.server-card > header,
+.model-connection > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.skill-card > header strong,
+.server-card > header strong,
+.model-connection > header strong {
+  color: var(--cozy-ink);
+  font-size: 12.5px;
+}
+.settings-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 3px 8px;
+  font-size: 11.5px;
+}
+.settings-server-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.skill-card pre,
+.settings-section pre {
+  max-height: 180px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--cozy-wood-soft);
+  border-radius: 8px;
+  background: var(--cozy-cream);
+  color: var(--cozy-ink);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tool-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--cozy-wood-soft);
+  border-radius: 8px;
+  background: var(--cozy-cream);
+}
+.tool-grant {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.tool-grant code {
+  color: var(--cozy-ink);
+}
+.tool-detail {
+  display: grid;
+  flex-basis: 100%;
+  gap: 4px;
+}
+.tool-detail p {
+  margin: 0;
+  color: var(--cozy-muted);
+  font-size: 11.5px;
+}
+.tool-detail pre {
+  max-height: 160px;
+  margin: 0;
+  padding: 6px 8px;
+  overflow: auto;
+  border: 1px solid var(--cozy-wood-soft);
+  border-radius: 7px;
+  background: var(--cozy-cream-2);
+  font-size: 10.5px;
+}
+.settings-form {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.settings-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--cozy-muted);
+  font-size: 11.5px;
+}
+.settings-form .settings-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings-submit {
+  justify-self: start;
+  border-color: #c79a52;
+  background: var(--honey);
+  color: var(--on-warm);
+}
+
+/* 워크플로우: 양피지 캔버스와 우드 팻말 노드 */
+.workflow-panel {
+  gap: 8px;
+  padding: 10px 12px;
+}
+.workflow-tools {
+  gap: 6px;
+  padding: 8px;
+  border: 1.5px solid var(--cozy-wood);
+  border-radius: 10px;
+  background: var(--cozy-cream-2);
+  box-shadow: 0 2px 0 var(--cozy-wood-lip);
+}
+.workflow-tools input,
+.workflow-tools select {
+  background: var(--cozy-cream);
+  border: 1.5px solid var(--cozy-wood);
+  box-shadow: 0 1px 0 var(--cozy-wood-lip);
+}
+.workflow-tools .workflow-save {
+  border-color: #c79a52;
+  background: var(--honey);
+  color: var(--on-warm);
+}
+.workflow-state {
+  color: var(--cozy-muted);
+  font-size: 11.5px;
+}
+.workflow-legend {
+  color: var(--cozy-muted);
+}
+.workflow-legend span {
+  border: 1px solid var(--cozy-wood-soft);
+  background: var(--cozy-cream-2);
+}
+.flow-canvas {
+  border: 1.5px solid var(--cozy-wood);
+  background: var(--cozy-canvas);
+  box-shadow: none;
+}
+.flow-canvas .react-flow__controls {
+  border: 1.5px solid var(--cozy-wood);
+  box-shadow: 0 2px 0 var(--cozy-wood-lip);
+}
+.flow-canvas .react-flow__controls-button {
+  background: var(--cozy-cream);
+  border-bottom: 1px solid var(--cozy-wood-soft);
+}
+.flow-canvas .react-flow__controls-button:hover {
+  background: var(--cozy-butter);
+}
+.stage-card {
+  border: 2px solid var(--cozy-wood);
+  border-radius: 9px;
+  background: var(--cozy-cream);
+  box-shadow: 0 2px 0 #d8be98;
+}
+.stage-card:hover {
+  border-color: #a9793f;
+  box-shadow: 0 2px 0 #d8be98;
+}
+.stage-card[data-selected="true"] {
+  border-color: var(--honey);
+  box-shadow:
+    0 0 0 2px #f6dfae,
+    0 2px 0 #d8be98;
+}
+.stage-card strong {
+  color: var(--cozy-ink);
+}
+.stage-card small,
+.stage-card em,
+.stage-role {
+  color: var(--cozy-muted);
+}
+.stage-card .react-flow__handle {
+  border-color: var(--cozy-cream);
+}
+.stage-inspector {
+  border: 1.5px solid var(--cozy-wood);
+  border-radius: 10px;
+  background: var(--cozy-cream);
+  box-shadow: 0 2px 0 var(--cozy-wood-lip);
+}
+.stage-inspector header strong {
+  color: var(--cozy-ink);
+}
+.stage-inspector label {
+  color: var(--cozy-muted);
+}
+.stage-inspector input,
+.stage-inspector textarea,
+.stage-inspector select {
+  border: 1.5px solid var(--cozy-wood-soft);
+  border-radius: 8px;
+  background: var(--cozy-cream-2);
+  box-shadow: none;
+}
+.stage-details {
+  border: 0;
+  border-top: 1px dashed var(--cozy-wood-soft);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.stage-details > summary {
+  padding: 4px 0;
+  color: var(--cozy-muted);
+  font-size: 11.5px;
+}
+.stage-details > .cozy-body {
+  padding: 0;
+}
+.stage-remove {
+  border-color: #d9a08c;
+  background: #f7ded3;
+  color: #9a4a31;
+}
+
+/* 기억·프로젝트 위키 탭 */
+.knowledge-nav {
+  padding: 8px var(--pane-inset);
+  border-bottom: 1px solid var(--cozy-wood-soft);
+  background: var(--cozy-cream-2);
+}
+.knowledge-nav button {
+  padding: 5px 12px;
+  border: 1.5px solid var(--cozy-wood);
+  border-radius: 999px;
+  background: var(--cozy-cream);
+  box-shadow: 0 2px 0 var(--cozy-wood-lip);
+  color: var(--cozy-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.knowledge-nav button[aria-pressed="true"] {
+  border-color: #c79a52;
+  background: var(--honey);
+  color: var(--on-warm);
+}
+

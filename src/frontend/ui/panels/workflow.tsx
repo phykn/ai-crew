@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Background,
   BaseEdge,
   ConnectionMode,
   Controls,
@@ -30,6 +29,7 @@ import {
   type WorkflowGraph,
   type WorkflowStage,
 } from "../../../shared/actions";
+import { CozyDetails } from "../common/cozy";
 import {
   connectStages,
   connectable,
@@ -397,7 +397,7 @@ export function WorkflowPanel({
   };
 
   return (
-    <section className="workflow-panel" aria-label="워크플로우 편집기">
+    <section className="workflow-panel cozy-scope" aria-label="워크플로우 편집기">
       <div className="workflow-tools">
         <select
           aria-label="워크플로우 선택"
@@ -500,7 +500,6 @@ export function WorkflowPanel({
           maxZoom={1.8}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={22} size={1.3} color="#d9cdb8" />
           <Controls showInteractive={false} position="bottom-left" />
         </ReactFlow>
         {!flow.graph.edges.length && (
@@ -588,8 +587,7 @@ export function WorkflowPanel({
               필수 단계
             </label>
           </div>
-          <details className="stage-details">
-            <summary>완료 조건과 인계 산출물</summary>
+          <CozyDetails className="stage-details" title="완료 조건과 인계 산출물">
             <label>
               완료 조건
               <textarea
@@ -611,7 +609,7 @@ export function WorkflowPanel({
                 }
               />
             </label>
-          </details>
+          </CozyDetails>
           <footer>
             <button
               type="button"

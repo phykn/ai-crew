@@ -1,17 +1,17 @@
-/* 목업 페이지도 앱과 같은 글꼴 파일을 쓴다. 파일은 src/frontend/ui/fonts에 한 벌만 둔다. */
+/* 앱과 목업(demo/)이 함께 쓰는 색·간격 토큰과 글꼴. 글꼴 파일은 ui/fonts에 한 벌만 둔다. */
 @font-face {
   font-family: "Nanum Gothic";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("../src/frontend/ui/fonts/NanumGothic-Regular.woff2") format("woff2");
+  src: url("./ui/fonts/NanumGothic-Regular.woff2") format("woff2");
 }
 @font-face {
   font-family: "Nanum Gothic";
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url("../src/frontend/ui/fonts/NanumGothic-Bold.woff2") format("woff2");
+  src: url("./ui/fonts/NanumGothic-Bold.woff2") format("woff2");
 }
 
 :root {

@@ -10,6 +10,7 @@ import {
 import type { Action, Snapshot, WikiPage, WikiRevision } from "../../../shared/actions";
 import { changedSegments } from "../common/text-diff";
 import { Markdown } from "../common/markdown";
+import { CozyDetails, EmptyState } from "../common/cozy";
 import {
   filterWikiPages,
   wikiLayout,
@@ -170,7 +171,7 @@ export function WikiPanel({ data, run, source, openRule, error }: {
     rule && page && page.body.includes(rule.name) ? rule : undefined;
 
   return (
-    <section className="logs wiki-panel" aria-label="프로젝트 위키 문서">
+    <section className="logs wiki-panel cozy-scope" aria-label="프로젝트 위키 문서">
       <div className="wiki-controls">
         <button type="button" aria-pressed={layout === "list"} onClick={() => setLayout("list")}>탐색기</button>
         <button type="button" aria-pressed={layout === "graph"} onClick={() => setLayout("graph")}>그래프</button>
@@ -180,7 +181,9 @@ export function WikiPanel({ data, run, source, openRule, error }: {
         <small className="muted">{data.wiki.length}개 문서</small>
       </div>
       {!data.wiki.length && (
-        <p className="muted">위키 문서가 없어요. 비서에게 프로젝트 지식을 남겨 달라고 하거나 문서를 추가해 보세요.</p>
+        <EmptyState icon="wiki" title="위키 문서가 없어요.">
+          비서에게 프로젝트 지식을 남겨 달라고 하거나, 문서 추가로 직접 적을 수 있어요.
+        </EmptyState>
       )}
       {layout === "list" && (
         <>
@@ -208,7 +211,9 @@ export function WikiPanel({ data, run, source, openRule, error }: {
             })}
           </ul>
           {query && !filtered.length && (
-            <p className="muted">검색과 맞는 문서가 없어요.</p>
+            <EmptyState icon="wiki" title="검색과 맞는 문서가 없어요." compact>
+              다른 낱말로 찾아보세요.
+            </EmptyState>
           )}
         </>
       )}
@@ -227,7 +232,7 @@ export function WikiPanel({ data, run, source, openRule, error }: {
             deleteKeyCode={null}
             onNodeClick={(_, node) => open(node.id)}
           >
-            <Background gap={18} color="#3f2f23" />
+            <Background gap={18} color="#dcc7a3" />
             <Controls showInteractive={false} />
           </ReactFlow>
         </div>
@@ -240,26 +245,26 @@ export function WikiPanel({ data, run, source, openRule, error }: {
       {draft ? (
         <form className="wiki-editor" onSubmit={(event) => void save(event)}>
           {draftPage && draft.version !== draftPage.version && (
-            <details>
-              <summary>다른 곳에서 새 버전을 저장했어요.</summary>
+            <CozyDetails className="wiki-conflict" title="다른 곳에서 새 버전을 저장했어요">
               <Markdown text={draftPage.body} />
               <button type="button" onClick={() => setDraft({ ...draft, version: draftPage.version })}>최신 버전 위에서 계속 편집</button>
-            </details>
+            </CozyDetails>
           )}
           <label>제목 <input aria-label="제목" required maxLength={120} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
           <label>본문 <textarea aria-label="본문" required maxLength={24000} rows={8} value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} /></label>
           {!!data.wiki.filter(({ id }) => id !== draft.id).length && (
-            <details>
-              <summary>연결할 문서 ({draft.links.length})</summary>
-              {data.wiki.filter(({ id }) => id !== draft.id).map((target) => (
-                <label key={target.id} className="wiki-link">
-                  <input type="checkbox" checked={draft.links.includes(target.id)} onChange={(event) => setDraft({
-                    ...draft, links: event.target.checked ? [...draft.links, target.id] : draft.links.filter((id) => id !== target.id),
-                  })} />
-                  {target.title}
-                </label>
-              ))}
-            </details>
+            <CozyDetails title={`연결할 문서 (${draft.links.length})`}>
+              <div className="wiki-link-list">
+                {data.wiki.filter(({ id }) => id !== draft.id).map((target) => (
+                  <label key={target.id} className="wiki-link">
+                    <input type="checkbox" checked={draft.links.includes(target.id)} onChange={(event) => setDraft({
+                      ...draft, links: event.target.checked ? [...draft.links, target.id] : draft.links.filter((id) => id !== target.id),
+                    })} />
+                    {target.title}
+                  </label>
+                ))}
+              </div>
+            </CozyDetails>
           )}
           <div className="wiki-controls">
             <button type="submit" disabled={busy}>저장</button>
@@ -289,18 +294,14 @@ export function WikiPanel({ data, run, source, openRule, error }: {
                 <button type="button" onClick={() => setConfirmationVersion(null)}>취소</button></>
             ) : <button type="button" onClick={() => setConfirmationVersion(page.version)}>문서 삭제</button>}
           </div>
-          <details>
-            <summary>변경 이력 ({page.revisions.length})</summary>
+          <CozyDetails title={`변경 이력 (${page.revisions.length})`}>
+            <div className="cozy-stack">
             {page.revisions.map((revision, index) => (
-              <details className="change-log" key={revision.version}>
-                <summary>
-                  {revision.version === 1 ? "생성" : "수정"} · {revision.authorName} · {revision.title} ·{" "}
+              <article className="revision-card" key={revision.version}>
+                <header className="cozy-meta">
+                  <b>{revision.version === 1 ? "생성" : "수정"}</b> · {revision.authorName} · {revision.title} ·{" "}
                   <time dateTime={revision.createdAt}>{new Date(revision.createdAt).toLocaleString()}</time>
-                </summary>
-                {page.revisions[index + 1] && <details>
-                  <summary>이전 본문</summary>
-                  <Markdown text={page.revisions[index + 1].body} />
-                </details>}
+                </header>
                 <p className="memory-body">
                   {(page.revisions[index + 1]
                     ? changedSegments(page.revisions[index + 1].body, revision.body)
@@ -317,12 +318,18 @@ export function WikiPanel({ data, run, source, openRule, error }: {
                     ),
                   )}
                 </p>
+                {index + 1 < page.revisions.length && (
+                  <CozyDetails className="revision-body" title="이전 본문">
+                    <Markdown text={page.revisions[index + 1].body} />
+                  </CozyDetails>
+                )}
                 {data.sessions.some(({ id }) => id === revision.sourceSessionId) ? (
                   <button type="button" className="log-link" onClick={() => source(revision)}>{revision.sourceJobId ? "출처 업무 열기" : "출처 대화 열기"}</button>
                 ) : <small className="muted">삭제된 세션</small>}
-              </details>
+              </article>
             ))}
-          </details>
+            </div>
+          </CozyDetails>
         </article>
       )}
       {error && <p role="alert">{error}</p>}

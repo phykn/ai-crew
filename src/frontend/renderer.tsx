@@ -15,7 +15,7 @@ import { DiagnosticsBanner } from "./ui/panels/diagnostics-banner";
 import type { DiagnosticsReport } from "../backend/server/diagnostics/run";
 import { Toolbar } from "./ui/panels/toolbar";
 import { WorklogPanel } from "./ui/panels/worklog";
-import "../../demo/tokens.css";
+import "./tokens.css";
 import "./workspace.css";
 
 function Workspace() {

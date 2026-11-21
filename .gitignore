@@ -1,4 +1,5 @@
-/docs/
+/docs/*
+!/docs/APP_MANUAL.md
 /node_modules/
 /.vite/
 /out/

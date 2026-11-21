@@ -30,10 +30,10 @@ export function visionTarget(): VisionTarget | null {
 // 그림을 읽는 모델에 보내는 지시. 그림에 실제로 보이는 것만 옮겨 적게 하고, 못 읽은 부분은
 // 감추지 않게 한다. 그림을 만들어 내거나 보이는 것 이상을 추측하지 않는다.
 const readingPrompt = [
-  "이 그림에 보이는 것을 한국어로 모두 옮겨 적으세요.",
-  "그림에 적힌 글자는 그대로 옮겨 적고, 화면이면 어느 화면인지와 상태를, 오류 창이면 오류 문구를 그대로 적으세요.",
-  "보이지 않는 것은 추측해 채우지 말고, 흐리거나 잘려 읽지 못한 부분은 읽지 못했다고 밝히세요.",
-  "설명만 쓰고 인사나 되묻는 말은 쓰지 마세요.",
+  "Write down everything visible in this picture, in the language the user writes in (e.g., Korean).",
+  "Copy any text in the picture exactly; for a screen, name the screen and its state, and for an error window, copy the error message.",
+  "Do not guess at what is not visible, and say so when part of it is too blurry or cut off to read.",
+  "Write the description only, with no greeting and no question back.",
 ].join(" ");
 
 /** 파일 한 장의 크기를 사람이 읽는 단위로 적는다. */
@@ -44,7 +44,7 @@ function imageSize(byteSize: number) {
 
 /** 프롬프트에 넣는 한 장의 머리표. 그림이 몇 번째인지와 파일 정보를 함께 남긴다. */
 function imageHeading(image: StoredMessageImage, position: number) {
-  return `[첨부 이미지 ${position} · ${image.name} · ${image.mediaType} · ${imageSize(image.byteSize)}]`;
+  return `[attached image ${position} · ${image.name} · ${image.mediaType} · ${imageSize(image.byteSize)}]`;
 }
 
 async function readImage(
@@ -98,8 +98,8 @@ export async function imageNotes(
     let read = false;
     if (!target) {
       body =
-        "저장만 했고 이 그림의 내용은 읽지 못했습니다. 그림을 읽으려면 모델 연결에서 그림도 읽는 엔드포인트를 비전으로 표시해 주세요. " +
-        "사용자가 그림 내용을 묻는다면 읽지 못했다는 것과 이 설정이 필요하다는 것을 짧게 알리세요.";
+        "This picture was saved but its content could not be read. To read pictures, mark an endpoint that reads images as vision in model connections. " +
+        "When the user asks about the picture, say briefly that it could not be read and that this setting is needed.";
       log("비전 · 그림 " + (index + 1) + "장을 읽을 모델 연결이 없어 설명 없이 저장");
     } else {
       try {
@@ -114,9 +114,9 @@ export async function imageNotes(
         if (signal.aborted) break;
         const reason = (error instanceof Error ? error.message : String(error)).slice(0, 200);
         body =
-          "이 그림을 읽지 못했습니다(" +
+          "This picture could not be read (" +
           reason +
-          "). 저장된 파일 정보만 남습니다. 사용자가 그림 내용을 묻는다면 읽지 못했다고 알리세요.";
+          "). Only the stored file information remains. When the user asks about the picture, say that it could not be read.";
         log("비전 · 그림 " + (index + 1) + "장 읽기 실패 · " + reason);
       }
     }

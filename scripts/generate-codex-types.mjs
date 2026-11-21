@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const scratch = mkdtempSync(join(tmpdir(), "crew-codex-types-"));
-const output = resolve("src/codex-protocol");
+const output = resolve("src/server/codex-protocol");
 const pending = [
   "InitializeParams.ts",
   ...[

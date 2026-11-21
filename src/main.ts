@@ -2,27 +2,26 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  actions,
   type ChatEvent,
   type Completion,
   type ModelDetails,
-} from "./actions";
-import { ActionRunner } from "./app-actions";
-import { resolveAppManual } from "./app-manual";
-import { appTools } from "./app-tools";
-import { ChatQueue } from "./chat-queue";
-import { continuationNotice, conversationHistory } from "./chat-continuity";
-import { findChatCommand } from "./chat-commands";
-import { CodexConnection } from "./codex";
-import { StopFence } from "./engine-fence";
-import { classifyModelFailure } from "./model-errors";
-import { runLocal, setLocalConnection } from "./local";
-import { CrewMcp } from "./mcp";
-import { crewInstructions } from "./crew-definition";
-import { StyleWatch } from "./style-watch";
-import { CrewStore } from "./store";
-import { CrewWorkflow } from "./workflow";
-import { mentionsWiki, wikiTools } from "./wiki-tools";
+} from "./shared/actions";
+import { ActionRunner } from "./server/app-actions";
+import { resolveAppManual } from "./server/app-manual";
+import { appTools } from "./server/app-tools";
+import { ChatQueue } from "./shared/chat-queue";
+import { continuationNotice, conversationHistory } from "./server/chat-continuity";
+import { findChatCommand } from "./shared/chat-commands";
+import { CodexConnection } from "./server/codex";
+import { StopFence } from "./workflow/engine-fence";
+import { classifyModelFailure } from "./server/model-errors";
+import { runLocal, setLocalConnection } from "./server/local";
+import { CrewMcp } from "./server/mcp";
+import { crewInstructions } from "./shared/crew-definition";
+import { StyleWatch } from "./workflow/style-watch";
+import { CrewStore } from "./store/store";
+import { CrewWorkflow } from "./workflow/workflow";
+import { mentionsWiki, wikiTools } from "./server/wiki-tools";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;

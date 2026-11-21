@@ -3,17 +3,17 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
-import { WorkflowPanel, type FlowDraft } from "./workflow-panel";
-import { MemoryPanel } from "./memory-panel";
-import { WikiPanel } from "./wiki-panel";
-import { findChatCommand, suggestChatCommands } from "./chat-commands";
-import { type Action, type Snapshot } from "./actions";
-import { CampPanel } from "./camp-panel";
-import { ChatPanel } from "./chat-panel";
-import { DiagnosticsBanner } from "./diagnostics-banner";
-import type { DiagnosticsReport } from "./diagnostics";
-import { Toolbar } from "./toolbar";
-import { WorklogPanel } from "./worklog-panel";
+import { WorkflowPanel, type FlowDraft } from "./ui/workflow-panel";
+import { MemoryPanel } from "./ui/memory-panel";
+import { WikiPanel } from "./ui/wiki-panel";
+import { findChatCommand, suggestChatCommands } from "./shared/chat-commands";
+import { type Action, type Snapshot } from "./shared/actions";
+import { CampPanel } from "./ui/camp-panel";
+import { ChatPanel } from "./ui/chat-panel";
+import { DiagnosticsBanner } from "./ui/diagnostics-banner";
+import type { DiagnosticsReport } from "./server/diagnostics";
+import { Toolbar } from "./ui/toolbar";
+import { WorklogPanel } from "./ui/worklog-panel";
 import "../demo/tokens.css";
 import "./workspace.css";
 

@@ -1,61 +1,52 @@
 <h1 align="center">AI Crew</h1>
 
-<p align="center">비서 한 명에게 요청하고, 에이전트 팀이 일하는 모습을 픽셀 아트 캠프에서 지켜보는 데스크톱 앱 구상.</p>
+<p align="center">One secretary talks with you, eight agents work behind it, and a pixel-art camp shows who is doing what.</p>
 
-![AI Crew 캠프 콘셉트](docs/concept.png)
+<p align="center">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-45-47848f">
+  <img alt="React" src="https://img.shields.io/badge/React-19-61dafb">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178c6">
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-8-646cff">
+</p>
 
-## 앱 실행
+## Features
+
+- **One place to ask.** You talk to the secretary only. It answers directly or splits the job across the crew and brings the result back to the same conversation.
+- **A crew, not a fixed team.** Hiring, development, build, docs, style, review, test, and vision roles come as a starting roster: fire them, re-hire them, or add teammates with the same role.
+- **Edits you approve.** Text file changes, moves, and new files show the target paths on an approval card before anything is written. Verification results are readable in the job log.
+- **Memory and a shared wiki.** Project memories and per-member memories persist, and the crew can write and read the project wiki it shares.
+- **Local models or Codex.** Each role runs on a local OpenAI-compatible model or on the installed Codex CLI. Sessions, drafts, and job history live in a local SQLite file.
+- **A camp to watch.** The left pane renders the crew with PixiJS and animates walking, sitting, hand-offs, and watching with GSAP.
+
+## Run
 
 ```sh
 npm install
 npm start
 ```
 
-프로젝트 폴더를 열고 비서에게 메시지를 보냅니다. 로컬 LLM은 기본으로 `http://127.0.0.1:8082/v1`에 연결하며 `AI_CREW_LOCAL_URL`과 `AI_CREW_LOCAL_MODEL`로 주소와 모델 ID를 지정할 수 있습니다. 크루에서 역할별로 로컬 LLM 또는 설치된 Codex를 고릅니다. Codex 세션을 다시 열 수 없으면 저장된 대화에서 이어갑니다. 세션과 초안은 앱 데이터 폴더의 SQLite에 저장됩니다. 텍스트 파일 생성·수정·이동을 요청하면 승인 카드에 대상 경로가 표시되고, 세 검증 결과를 업무 로그에서 읽을 수 있습니다.
+Open a project folder and send the secretary a message. Models default to `http://127.0.0.1:8082/v1`; set `AI_CREW_LOCAL_URL` and `AI_CREW_LOCAL_MODEL` to point elsewhere.
 
-메시지 입력창에 `/`를 입력하면 채팅 명령이 나옵니다. `/clear`만 보내면 같은 프로젝트의 설정으로 빈 대화를 엽니다. 이전 대화와 업무는 세션 목록에서 다시 열 수 있습니다.
+Type `/` in the message box for chat commands. `/clear` opens an empty conversation with the same project settings.
 
-크루는 **비서 한 명과 그 뒤에서 일하는 여덟 역할**입니다. 채팅은 비서와만 하고, 인사·개발·빌드·문서·스타일·리뷰·테스트·비전은 비서의 지시를 받아 움직입니다. 처음 받은 아홉 역할은 고정 크루가 아니라 초기 로스터라서 해고하고 다시 뽑을 수 있습니다. 화면과 기능의 자세한 사용법은 [앱 매뉴얼](docs/APP_MANUAL.md)에 있고, 비서가 이 문서를 읽고 사용법을 답합니다.
+## Check
 
-크루 범례에서 **＋ 팀원**을 눌러 같은 역할의 팀원을 더할 수 있습니다. 별명을 눌러 수정하고, 팀원별로 모델과 고용 상태를 바꿉니다. 비서는 기존 담당자에게 같은 업무를 이어서 맡기고, 새 업무에는 같은 역할의 대기 중인 팀원을 우선 배정합니다.
+```sh
+npm run check
+npm test
+```
 
-필요한 역할이 비어 있으면 인사팀이 알바를 준비하고 비서가 채택합니다. 별도 전문 검토도 요청할 수 있고, 계속 함께할 담당자가 필요하면 정규 고용을 요청합니다. 알바는 맡은 업무가 끝나면 범례에서 빠지고 작업 이력에는 작성자가 남습니다.
+`npm run package` builds the desktop app, and `npm run test:desktop` drives the packaged app through folder selection, session restore, tool calls, and file approval. It needs a running local model and macOS.
 
-리뷰 담당이 계획을 확인한 뒤 파일 수정 단계로 넘어갑니다. 비서의 완료 보고에서 **업무 로그**를 열면 검증 결과와 동료 요청을 볼 수 있습니다. 줄 범위가 지정된 검토 의견은 검증 당시의 본문을 보여줍니다. **추가 지시**는 같은 업무를 이어가며 새 계획에 현재 승인 모드를 적용합니다.
-
-동료끼리 필요한 내용을 보완합니다. 사용자 확인이 필요한 질문은 입력창 위에 표시됩니다. 답변하면 비서가 같은 업무의 계획을 갱신하고 현재 승인 모드를 적용합니다.
-
-중단한 업무에서 **이어가기**를 누르면 파일과 저장 기록을 확인합니다. 이미 반영된 변경은 같은 버전에서 남은 검증을 진행하고, 저장 여부가 불명확하면 입력창 위에 확인 질문을 표시합니다.
-
-담당 모델의 연결이 잠시 끊기면 해당 단계에서 최대 세 번 자동 재시도합니다. Codex에 완료된 응답이 남아 있으면 그 결과를 가져옵니다. 모델이 한도를 알리면 비서가 업무를 멈추고 저장한 파일과 남은 단계를 알려줍니다.
-
-로그의 **모델 실행**에서 현재 세션 또는 선택한 업무의 역할·모델별 실행 횟수, 소요 시간, 제공자가 돌려준 토큰 수를 확인할 수 있습니다.
-
-**메모리**에서 프로젝트 공통 기억과 팀원별 기억을 확인하고 삭제할 수 있습니다. 로컬 모델을 쓰는 비서에게 작업 규칙을 기억해 달라고 하면 다음 대화에도 해당 기억을 가져옵니다. 보관한 기억에서 기록 시각과 출처 대화를 확인할 수 있습니다.
-
-같은 탭의 **프로젝트 위키**에서 팀이 공유하는 문서를 목록이나 연결된 노드로 엽니다. 문서를 편집하고 이전 본문, 작성자와 출처를 변경 이력에서 확인할 수 있습니다. 비서에게 공유 위키에 문서를 작성하거나 읽어 달라고 요청할 수도 있습니다.
-
-“그거 다시 해줘”처럼 앞선 업무를 가리키는 지시는 입력창 위에서 대상을 선택합니다. 원하는 변경이 모호하면 해당 업무에서 바꿀 내용을 다시 묻습니다.
-
-권한 승인 카드에서 업무 이름을 눌러 상세 로그를 엽니다. 로그에는 요청 당시 승인 모드와 범위, 결정 주체가 남습니다. 크루 범례에서 개발 담당의 파일 쓰기 권한을 부여하거나 회수할 수 있습니다.
-
-크루 범례의 팀원 설정에서 역할 정의 MD를 읽고 Markdown 스킬을 배정하거나 해제할 수 있습니다. 역할마다 코드·문서 작성 원칙과 작업 진행 방식을 담은 기본 스킬이 프로젝트를 처음 열 때 한 번 배정되며, 해제한 기본 스킬은 다시 심지 않습니다. 프로젝트에 인증 없는 Streamable HTTP MCP 서버를 연결하면 로컬 모델을 쓰는 팀원에게 읽기 도구를 개별 허용할 수 있습니다. 서버에서 도구 정의를 바꾸면 도구를 새로 고치고 다시 허용해야 합니다.
-
-`npm run package`로 데스크톱 앱을 만들고 `npm run check`와 `npm test`로 타입과 저장을 검사합니다. Apple Silicon에서는 로컬 모델을 띄운 뒤 `npm run test:desktop`으로 패키징한 앱의 폴더 선택·세션 복원·도구 호출·파일 승인 흐름을 확인할 수 있습니다.
-
-Codex 프로토콜 타입은 `node scripts/generate-codex-types.mjs`로 현재 설치된 CLI에서 다시 생성합니다.
-
-## 목업 실행
+## Mockup
 
 ```sh
 python3 -m http.server 48723 --bind 127.0.0.1 --directory demo
 ```
 
-[브라우저에서 열기](http://127.0.0.1:48723/). 대화에서 예시 요청을 골라 보내면 계획, 개발, 병렬 리뷰·스타일·테스트를 거쳐 결과를 받습니다. 폴더와 승인 모드는 보내기 줄에서, 세션은 상단 ☰에서 고릅니다. 메모리에서 공유 위키와 담당자 기억을 열고, 워크플로우에서 연결점을 끌어 단계 순서를 편집할 수 있습니다.
+Open `http://127.0.0.1:48723/` to walk the static concept of the camp, chat, and workflow editor.
 
-목업에서는 완성본의 캠프와 워크플로우 편집을 미리 볼 수 있습니다. [제품 구상](docs/concept.md) · [화면과 동작 명세](docs/interaction.md) · [구현 계획](docs/groove/PLAN.md) · [선행 조사](docs/research.md)
-
-## 참고
+## References
 
 1. EngChooN, AI Office, 2026. [GitHub](https://github.com/EngChooN/ai-office)
-2. Microsoft Research, Agensh: Scaling Organizational Intelligence to 1,024 Agents, 2026. [논문](https://arxiv.org/abs/2609.26781), [코드](https://github.com/microsoft/agensh)
+2. Microsoft Research, Agensh: Scaling Organizational Intelligence to 1,024 Agents, 2026. [Paper](https://arxiv.org/abs/2609.26781), [Code](https://github.com/microsoft/agensh)

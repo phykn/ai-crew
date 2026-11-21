@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { Action, ChatEvent, CrewApi } from "./actions";
+import type { Action, ChatEvent, CrewApi } from "./shared/actions";
 
 const api: CrewApi = {
   run: (action: Action) => ipcRenderer.invoke("crew:action", action),

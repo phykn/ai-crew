@@ -102,6 +102,53 @@ export function defaultGraph(): WorkflowGraph {
   };
 }
 
+/** 캔버스에서 이은 연결이 저장할 수 있는 연결인지. 없는 단계·자기 자신·같은 연결은 받지 않는다. */
+export function connectable(graph: WorkflowGraph, from: string, to: string) {
+  if (!from || !to || from === to) return false;
+  const ids = new Set(graph.stages.map(({ id }) => id));
+  if (!ids.has(from) || !ids.has(to)) return false;
+  return !graph.edges.some((edge) => edge.from === from && edge.to === to);
+}
+
+/** 연결점에서 끌어 놓은 연결 하나를 더한다. 받을 수 없는 연결이면 그래프를 그대로 둔다. */
+export function connectStages(
+  graph: WorkflowGraph,
+  from: string,
+  to: string,
+): WorkflowGraph {
+  if (!connectable(graph, from, to)) return graph;
+  return { ...graph, edges: [...graph.edges, { from, to }] };
+}
+
+/** 연결 하나를 끊는다. 없는 연결이면 그래프를 그대로 둔다. */
+export function disconnectStages(
+  graph: WorkflowGraph,
+  from: string,
+  to: string,
+): WorkflowGraph {
+  if (!graph.edges.some((edge) => edge.from === from && edge.to === to))
+    return graph;
+  return {
+    ...graph,
+    edges: graph.edges.filter((edge) => !(edge.from === from && edge.to === to)),
+  };
+}
+
+/** 노드를 끈 자리를 그래프 좌표에 남긴다. */
+export function moveStage(
+  graph: WorkflowGraph,
+  id: string,
+  x: number,
+  y: number,
+): WorkflowGraph {
+  return {
+    ...graph,
+    stages: graph.stages.map((stage) =>
+      stage.id === id ? { ...stage, x, y } : stage,
+    ),
+  };
+}
+
 /**
  * 저장 전에 끊긴 참조, 순환 의존, 완료까지 도달할 수 없는 구성을 찾는다.
  * 캔버스 좌표는 실행에 쓰지 않는다.

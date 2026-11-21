@@ -1,14 +1,22 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Background,
+  BaseEdge,
+  ConnectionMode,
   Controls,
+  EdgeLabelRenderer,
   Handle,
+  MarkerType,
   Position,
   ReactFlow,
+  getSmoothStepPath,
+  type Connection,
   type Edge,
+  type EdgeProps,
   type Node,
   type NodeChange,
   type NodeProps,
+  type OnConnectEnd,
   type OnNodesChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -21,7 +29,13 @@ import {
   type WorkflowGraph,
   type WorkflowStage,
 } from "../shared/actions";
-import { validateGraph } from "../workflow/workflow-graph";
+import {
+  connectStages,
+  connectable,
+  disconnectStages,
+  moveStage,
+  validateGraph,
+} from "../workflow/workflow-graph";
 
 export type FlowDraft = {
   id: string;
@@ -33,6 +47,70 @@ export type FlowDraft = {
 type StageData = { stage: WorkflowStage };
 type StageNode = Node<StageData, "stage">;
 
+type EdgeData = {
+  from: string;
+  to: string;
+  cut: (from: string, to: string) => void;
+};
+type FlowEdge = Edge<EdgeData>;
+
+/** 연결선 위에 뜨는 ✕. 선을 누르면 진해지고, 그 자리에서 바로 끊을 수 있다. */
+function CutEdge({
+  id,
+  data,
+  selected,
+  markerEnd,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+}: EdgeProps<FlowEdge>) {
+  const [path, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+    borderRadius: 16,
+    offset: 18,
+  });
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={markerEnd}
+        className="flow-edge-line"
+        style={{
+          stroke: selected ? "#d9a24a" : "#9fb28d",
+          strokeWidth: selected ? 2.6 : 1.8,
+        }}
+      />
+      {selected && (
+        <EdgeLabelRenderer>
+          <button
+            type="button"
+            className="edge-cut nodrag nopan"
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            }}
+            aria-label="연결 끊기"
+            title="연결 끊기 (Delete)"
+            onClick={() => data && data.cut(data.from, data.to)}
+          >
+            ✕
+          </button>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
+const edgeTypes = { cut: CutEdge };
+
 function StageCard({ data, selected }: NodeProps<StageNode>) {
   const role = roles.find(({ id }) => id === data.stage.roleId);
   return (
@@ -40,16 +118,28 @@ function StageCard({ data, selected }: NodeProps<StageNode>) {
       className="stage-card"
       data-required={data.stage.required}
       data-selected={selected}
-      style={{ borderColor: role?.color ?? "#8b8577" }}
     >
-      <Handle type="target" position={Position.Top} />
-      <strong style={{ color: role?.color }}>{data.stage.title}</strong>
-      <small>
-        {role?.title ?? data.stage.roleId} ·{" "}
-        {data.stage.required ? "필수" : "선택"}
-      </small>
+      <Handle
+        type="target"
+        id="in"
+        position={Position.Top}
+        className="stage-handle stage-handle-in"
+        title="여기로 이어 받기"
+      />
+      <span className="stage-role">
+        <i style={{ background: role?.color ?? "#b8a78c" }} aria-hidden />
+        {role?.title ?? data.stage.roleId}
+      </span>
+      <strong>{data.stage.title}</strong>
       {data.stage.condition && <em>{data.stage.condition}</em>}
-      <Handle type="source" position={Position.Bottom} />
+      {!data.stage.required && <small>선택 단계</small>}
+      <Handle
+        type="source"
+        id="out"
+        position={Position.Bottom}
+        className="stage-handle stage-handle-out"
+        title="끌어서 다음 단계와 잇기"
+      />
     </div>
   );
 }
@@ -65,12 +155,10 @@ function toNodes(graph: WorkflowGraph): StageNode[] {
   }));
 }
 
-function toEdges(graph: WorkflowGraph): Edge[] {
-  return graph.edges.map(({ from, to }) => ({
-    id: from + "-" + to,
-    source: from,
-    target: to,
-  }));
+function clientPoint(event: MouseEvent | TouchEvent) {
+  if ("clientX" in event) return { x: event.clientX, y: event.clientY };
+  const touch = event.changedTouches[0] ?? event.touches[0];
+  return touch ? { x: touch.clientX, y: touch.clientY } : null;
 }
 
 export function WorkflowPanel({
@@ -89,6 +177,7 @@ export function WorkflowPanel({
   openJob: (jobId: string) => void;
 }) {
   const [picked, setPicked] = useState<string | null>(null);
+  const [pickedEdge, setPickedEdge] = useState<string | null>(null);
   const [saved, setSaved] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const workflows = data.workflows;
@@ -113,11 +202,60 @@ export function WorkflowPanel({
       (job) => !["complete", "denied", "failed"].includes(job.state),
     ) ?? null;
   const nodes = useMemo(() => (flow ? toNodes(flow.graph) : []), [flow]);
-  const edges = useMemo(() => (flow ? toEdges(flow.graph) : []), [flow]);
+  const edges: FlowEdge[] = useMemo(() => {
+    if (!flow) return [];
+    const cut = (from: string, to: string) => {
+      update(disconnectStages(flow.graph, from, to));
+      setPickedEdge((id) => (id === from + "→" + to ? null : id));
+    };
+    return flow.graph.edges.map(({ from, to }) => {
+      const id = from + "→" + to;
+      const selected = id === pickedEdge;
+      return {
+        id,
+        type: "cut",
+        source: from,
+        target: to,
+        sourceHandle: "out",
+        targetHandle: "in",
+        selected,
+        data: { from, to, cut },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 16,
+          height: 16,
+          color: selected ? "#d9a24a" : "#9fb28d",
+        },
+      };
+    });
+  }, [flow, pickedEdge]);
+
+  // 고른 연결선은 Delete/Backspace로 바로 끊는다. 입력 중인 글자는 건드리지 않는다.
+  useEffect(() => {
+    if (!pickedEdge || !flow) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      )
+        return;
+      event.preventDefault();
+      const [from, to] = pickedEdge.split("→");
+      setSaved("");
+      setDraft({ ...flow, graph: disconnectStages(flow.graph, from, to) });
+      setPickedEdge(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pickedEdge, flow, setDraft]);
 
   if (!flow) return <p className="muted">이 프로젝트에 워크플로우가 없어요.</p>;
 
   const update = (graph: WorkflowGraph) => {
+    if (graph === flow.graph) return;
     setSaved("");
     setDraft({ ...flow, graph });
   };
@@ -129,42 +267,38 @@ export function WorkflowPanel({
       ),
     });
   const moveNodes: OnNodesChange<StageNode> = (changes) => {
-    const list = (Array.isArray(changes) ? changes : [changes]) as NodeChange<StageNode>[];
-    const moved = new Map(
-      list.flatMap((change) =>
-        change.type === "position" && change.position
-          ? [[change.id, change.position] as const]
-          : [],
-      ),
-    );
-    if (!moved.size) return;
-    update({
-      ...flow.graph,
-      stages: flow.graph.stages.map((item) => {
-        const position = moved.get(item.id);
-        return position ? { ...item, x: position.x, y: position.y } : item;
-      }),
-    });
-    setSaved("");
+    const list: NodeChange<StageNode>[] = Array.isArray(changes)
+      ? changes
+      : [...changes];
+    let graph = flow.graph;
+    for (const change of list)
+      if (change.type === "position" && change.position)
+        graph = moveStage(
+          graph,
+          change.id,
+          change.position.x,
+          change.position.y,
+        );
+    update(graph);
   };
-  const connect = (from: string, to: string) => {
-    if (
-      !from ||
-      !to ||
-      from === to ||
-      flow.graph.edges.some((edge) => edge.from === from && edge.to === to)
-    )
-      return;
-    update({ ...flow.graph, edges: [...flow.graph.edges, { from, to }] });
+  const connect = (connection: Connection) => {
+    if (!connection.source || !connection.target) return;
+    update(connectStages(flow.graph, connection.source, connection.target));
+    setPickedEdge(null);
   };
-  const removeEdge = (id: string) => {
-    const [from, to] = id.split("-");
-    update({
-      ...flow.graph,
-      edges: flow.graph.edges.filter(
-        (edge) => !(edge.from === from && edge.to === to),
-      ),
-    });
+  // 연결점에 정확히 놓지 않아도, 다른 단계 카드 위에서 손을 떼면 그 단계와 이어진다.
+  const endConnect: OnConnectEnd = (event, state) => {
+    const from = state.fromNode?.id;
+    if (!from || state.isValid) return;
+    const point = clientPoint(event);
+    if (!point) return;
+    const hit = document
+      .elementFromPoint(point.x, point.y)
+      ?.closest<HTMLElement>(".react-flow__node")?.dataset.id;
+    if (!hit || hit === from) return;
+    update(connectStages(flow.graph, from, hit));
+    setPicked(null);
+    setPickedEdge(null);
   };
   const addStage = () => {
     const id = "stage-" + (flow.graph.stages.length + 1);
@@ -187,6 +321,7 @@ export function WorkflowPanel({
       ],
     });
     setPicked(id);
+    setPickedEdge(null);
   };
   const removeStage = (id: string) => {
     update({
@@ -196,6 +331,7 @@ export function WorkflowPanel({
       ),
     });
     setPicked(null);
+    setPickedEdge(null);
   };
   const save = async () => {
     const problems = validateGraph(flow.graph);
@@ -236,6 +372,7 @@ export function WorkflowPanel({
       graph: workflow.graph,
     });
     setPicked(null);
+    setPickedEdge(null);
   };
 
   return (
@@ -264,121 +401,197 @@ export function WorkflowPanel({
         <button type="button" onClick={addStage}>
           ＋ 단계
         </button>
-        <button type="button" disabled={busy} onClick={() => void save()}>
-          저장 v{flow.version + 1}
+        <button
+          type="button"
+          className="workflow-save"
+          disabled={busy}
+          onClick={() => void save()}
+        >
+          저장
         </button>
         <span className="workflow-state" role="status">
-          {saved || (flow.version ? "적용 중 v" + flow.version : "")}
+          {saved ||
+            (flow.version
+              ? "적용 중 v" + flow.version
+              : "저장 전")}
         </span>
       </div>
-      <small className="muted workflow-hint">
-        노드를 끌어 배치를 바꾸고, 아래 연결점에서 위 연결점으로 이어 실행 순서를
-        정해요. 노드를 두 번 누르면 속성을 편집합니다. 저장한 버전은 다음 새
-        업무부터 적용돼요.
-      </small>
+      <div className="workflow-legend" aria-hidden>
+        <span>
+          <i className="legend-drag" /> 노드를 끌어 옮기기
+        </span>
+        <span>
+          <i className="legend-handle" /> 아래 점에서 위 점으로 끌어 잇기
+        </span>
+        <span>
+          <i className="legend-cut">✕</i> 선을 누르고 Delete
+        </span>
+      </div>
       {error && <p role="alert">{error}</p>}
       <div className="flow-canvas">
         <ReactFlow
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onNodesChange={moveNodes}
-          onEdgesDelete={(removed) => removed.forEach(({ id }) => removeEdge(id))}
-          onConnect={(connection) => connect(connection.source, connection.target)}
+          onConnect={connect}
+          onConnectEnd={endConnect}
+          isValidConnection={(connection) =>
+            connectable(flow.graph, connection.source, connection.target)
+          }
+          connectionMode={ConnectionMode.Loose}
+          connectionRadius={30}
+          connectionLineStyle={{ stroke: "#d9a24a", strokeWidth: 2 }}
+          onNodeClick={(_, node) => {
+            setPicked(node.id);
+            setPickedEdge(null);
+          }}
           onNodeDoubleClick={(_, node) => setPicked(node.id)}
-          onEdgeClick={(_, edge) => removeEdge(edge.id)}
+          onEdgeClick={(_, edge) => {
+            setPickedEdge(edge.id);
+            setPicked(null);
+          }}
+          onPaneClick={() => {
+            setPicked(null);
+            setPickedEdge(null);
+          }}
+          onEdgesDelete={(removed) => {
+            let graph = flow.graph;
+            for (const edge of removed)
+              if (edge.data)
+                graph = disconnectStages(graph, edge.data.from, edge.data.to);
+            update(graph);
+          }}
+          deleteKeyCode={null}
+          edgesFocusable={false}
           fitView
-          minZoom={0.4}
-          maxZoom={1.6}
+          fitViewOptions={{ padding: 0.12 }}
+          minZoom={0.35}
+          maxZoom={1.8}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={24} />
-          <Controls showInteractive={false} />
+          <Background gap={22} size={1.3} color="#d9cdb8" />
+          <Controls showInteractive={false} position="bottom-left" />
         </ReactFlow>
+        {!flow.graph.edges.length && (
+          <p className="flow-empty-hint">
+            아래 점에서 다른 단계의 위 점으로 끌면 실행 순서가 이어져요.
+          </p>
+        )}
       </div>
       {stage ? (
         <form
-          className="stage-form"
+          className="stage-inspector"
           onSubmit={(event) => {
             event.preventDefault();
             void save();
           }}
         >
           <header>
-            <strong>{stage.title} 속성</strong>
+            <span
+              className="stage-inspector-dot"
+              style={{
+                background:
+                  roles.find(({ id }) => id === stage.roleId)?.color ?? "#b8a78c",
+              }}
+              aria-hidden
+            />
+            <strong>{stage.title || "이름 없는 단계"}</strong>
+            <small className="muted">
+              {roles.find(({ id }) => id === stage.roleId)?.title ??
+                stage.roleId}
+            </small>
             <button type="button" onClick={() => setPicked(null)}>
               닫기
             </button>
           </header>
-          <label>
-            이름
-            <input
-              maxLength={64}
-              value={stage.title}
-              onChange={(event) =>
-                patchStage(stage.id, { title: event.target.value })
-              }
-            />
-          </label>
-          <label>
-            담당 역할
-            <select
-              value={stage.roleId}
-              onChange={(event) =>
-                patchStage(stage.id, { roleId: event.target.value as RoleId })
-              }
+          <div className="stage-fields">
+            <label>
+              이름
+              <input
+                maxLength={64}
+                value={stage.title}
+                onChange={(event) =>
+                  patchStage(stage.id, { title: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              담당 역할
+              <select
+                value={stage.roleId}
+                onChange={(event) =>
+                  patchStage(stage.id, {
+                    roleId: event.target.value as RoleId,
+                  })
+                }
+              >
+                {roles.map(({ id, title }) => (
+                  <option value={id} key={id}>
+                    {title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              실행 조건
+              <input
+                maxLength={300}
+                placeholder="비우면 항상 실행"
+                value={stage.condition}
+                onChange={(event) =>
+                  patchStage(stage.id, { condition: event.target.value })
+                }
+              />
+            </label>
+            <label className="stage-required">
+              <input
+                type="checkbox"
+                checked={stage.required}
+                onChange={(event) =>
+                  patchStage(stage.id, { required: event.target.checked })
+                }
+              />
+              필수 단계
+            </label>
+          </div>
+          <details className="stage-details">
+            <summary>완료 조건과 인계 산출물</summary>
+            <label>
+              완료 조건
+              <textarea
+                maxLength={300}
+                rows={2}
+                value={stage.criterion}
+                onChange={(event) =>
+                  patchStage(stage.id, { criterion: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              인계 산출물
+              <input
+                maxLength={300}
+                value={stage.artifact}
+                onChange={(event) =>
+                  patchStage(stage.id, { artifact: event.target.value })
+                }
+              />
+            </label>
+          </details>
+          <footer>
+            <button
+              type="button"
+              className="stage-remove"
+              onClick={() => removeStage(stage.id)}
             >
-              {roles.map(({ id, title }) => (
-                <option value={id} key={id}>
-                  {title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            인계 산출물
-            <input
-              maxLength={300}
-              value={stage.artifact}
-              onChange={(event) =>
-                patchStage(stage.id, { artifact: event.target.value })
-              }
-            />
-          </label>
-          <label>
-            완료 조건
-            <textarea
-              maxLength={300}
-              rows={2}
-              value={stage.criterion}
-              onChange={(event) =>
-                patchStage(stage.id, { criterion: event.target.value })
-              }
-            />
-          </label>
-          <label>
-            실행 조건
-            <input
-              maxLength={300}
-              value={stage.condition}
-              onChange={(event) =>
-                patchStage(stage.id, { condition: event.target.value })
-              }
-            />
-          </label>
-          <label className="stage-required">
-            <input
-              type="checkbox"
-              checked={stage.required}
-              onChange={(event) =>
-                patchStage(stage.id, { required: event.target.checked })
-              }
-            />
-            필수 단계
-          </label>
-          <button type="button" onClick={() => removeStage(stage.id)}>
-            단계 삭제
-          </button>
+              단계 삭제
+            </button>
+            <small className="muted">
+              저장을 눌러야 다음 새 업무부터 적용돼요.
+            </small>
+          </footer>
         </form>
       ) : (
         <div className="workflow-apply">
@@ -394,7 +607,11 @@ export function WorkflowPanel({
               setBusy(true);
               try {
                 if (
-                  await run({ type: "workflow.apply", jobId: activeJob.id, scope: "current" })
+                  await run({
+                    type: "workflow.apply",
+                    jobId: activeJob.id,
+                    scope: "current",
+                  })
                 )
                   setSaved("진행 중인 업무에 적용했어요.");
               } finally {
@@ -412,7 +629,11 @@ export function WorkflowPanel({
               setBusy(true);
               try {
                 if (
-                  await run({ type: "workflow.apply", jobId: activeJob.id, scope: "once" })
+                  await run({
+                    type: "workflow.apply",
+                    jobId: activeJob.id,
+                    scope: "once",
+                  })
                 )
                   setSaved("이번 업무에만 적용했어요.");
               } finally {
@@ -434,3 +655,5 @@ export function WorkflowPanel({
     </section>
   );
 }
+
+

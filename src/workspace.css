@@ -1675,8 +1675,8 @@ summary:focus-visible {
 }
 
 .workflow-panel {
-  display: grid;
-  grid-template-rows: auto auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
   height: 100%;
   padding: var(--space-2) var(--space-3);
@@ -1704,41 +1704,232 @@ summary:focus-visible {
   color: var(--warm);
   font-size: var(--font-detail);
 }
-.workflow-hint {
-  display: block;
-}
-.flow-canvas {
-  min-height: 380px;
-  height: 100%;
-  border: 1px solid var(--line-control);
-  border-radius: var(--radius-surface);
-  background: #15170f;
-}
-.stage-card {
-  padding: 8px 12px;
+.workflow-tools button {
+  padding: 5px 11px;
   border: 1px solid var(--line-control);
   border-radius: var(--radius-control);
   background: var(--card);
-  text-align: center;
-  font-size: var(--font-detail);
   color: var(--text);
 }
-.stage-card[data-required="true"] {
-  box-shadow: inset 0 0 0 1px #ebe1ca26;
+.workflow-tools button:hover {
+  border-color: var(--warm);
+}
+.workflow-tools .workflow-save {
+  border-color: color-mix(in srgb, var(--warm) 72%, #000 6%);
+  background: var(--warm);
+  color: var(--on-warm);
+  font-weight: 600;
+}
+.workflow-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+.workflow-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 66%, transparent);
+}
+.workflow-legend i {
+  flex: none;
+  display: inline-block;
+}
+.legend-drag {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--line-control);
+  border-radius: 3px;
+  background: var(--card);
+}
+.legend-handle {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: #e3ad58;
+}
+.legend-cut {
+  color: #b4552f;
+  font-style: normal;
+  font-size: 10px;
+}
+.flow-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 420px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-surface);
+  background: var(--panel);
+  background: color-mix(in srgb, var(--warm) 7%, var(--panel));
+  box-shadow: inset 0 1px 0 #ffffff80;
+  overflow: hidden;
+}
+.flow-canvas .react-flow__pane {
+  cursor: grab;
+}
+.flow-canvas .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+.flow-canvas .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--line-control);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px #2f29231f;
+}
+.flow-canvas .react-flow__controls-button {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+}
+.flow-canvas .react-flow__controls-button:hover {
+  background: var(--selected);
+}
+.flow-canvas .react-flow__controls-button svg {
+  fill: currentColor;
+}
+.flow-canvas .flow-edge-line {
+  stroke-linecap: round;
+  transition: stroke 0.12s ease, stroke-width 0.12s ease;
+}
+.flow-canvas .react-flow__edge:hover .flow-edge-line {
+  stroke: #d9a24a;
+}
+.flow-empty-hint {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 16px;
+  margin: 0;
+  color: var(--dim);
+  font-size: var(--font-detail);
+  text-align: center;
+  pointer-events: none;
+  z-index: 5;
+}
+.edge-cut {
+  position: absolute;
+  pointer-events: all;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-control);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--card) 90%, #fff);
+  color: var(--dim);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px #2f29231f;
+  transition: color 0.12s ease, scale 0.12s ease;
+}
+.edge-cut:hover {
+  color: #b4552f;
+  border-color: #d9a24a;
+  scale: 1.12;
+}
+.stage-card {
+  width: 150px;
+  padding: 9px 12px 10px;
+  border: 1.5px solid var(--line-control);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 84%, #fff);
+  color: var(--text);
+  text-align: left;
+  font-size: var(--font-detail);
+  box-shadow:
+    0 1px 2px #2f292314,
+    0 8px 18px #2f29230d;
+  transition:
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
+}
+.stage-card:hover {
+  border-color: color-mix(in srgb, var(--warm) 55%, var(--line-control));
+}
+.stage-card[data-selected="true"] {
+  border-color: var(--warm);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--warm) 30%, transparent),
+    0 10px 22px #2f29231a;
 }
 .stage-card strong {
   display: block;
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.25;
 }
 .stage-card small {
+  display: block;
+  margin-top: 3px;
   color: var(--dim);
+  font-size: 11px;
 }
 .stage-card em {
   display: block;
+  margin-top: 3px;
+  overflow: hidden;
   color: var(--dim);
   font-style: normal;
   font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
 }
-.stage-form,
+.stage-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dim);
+  font-size: 10.5px;
+}
+.stage-role i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.stage-card .react-flow__handle {
+  width: 13px;
+  height: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid color-mix(in srgb, var(--card) 62%, #fff);
+  border-radius: 50%;
+  background: #e3ad58;
+  box-shadow: 0 1px 3px #2f292326;
+  transition:
+    scale 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.stage-card .react-flow__handle::after {
+  content: "";
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fffdf8;
+}
+.stage-card .react-flow__handle:hover {
+  scale: 1.5;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--warm) 26%, transparent);
+}
+.stage-handle-in {
+  top: -7px;
+}
+.stage-handle-out {
+  bottom: -7px;
+}
+.stage-inspector,
 .workflow-apply {
   display: flex;
   flex-wrap: wrap;
@@ -1746,28 +1937,81 @@ summary:focus-visible {
   gap: var(--space-2);
   font-size: var(--font-detail);
 }
-.stage-form header {
-  flex-basis: 100%;
+.stage-inspector {
+  display: grid;
+  gap: var(--space-2);
+  padding: 10px 12px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-surface);
+  background: color-mix(in srgb, var(--card) 86%, #fff);
+}
+.stage-inspector header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-2);
 }
-.stage-form label {
+.stage-inspector header strong {
+  color: var(--text);
+}
+.stage-inspector header button {
+  margin-left: auto;
+  color: var(--dim);
+}
+.stage-inspector header button:hover {
+  color: var(--text);
+}
+.stage-inspector-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.stage-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+.stage-inspector label {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+  color: var(--dim);
+  font-size: 11.5px;
 }
-.stage-form input,
-.stage-form textarea,
-.stage-form select {
-  background: var(--card);
+.stage-inspector input,
+.stage-inspector textarea,
+.stage-inspector select {
+  padding: 5px 8px;
   border: 1px solid var(--line-control);
   border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--text);
 }
-.stage-form .stage-required {
+.stage-inspector .stage-required {
   flex-direction: row;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+}
+.stage-details {
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+}
+.stage-details summary {
+  color: var(--dim);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.stage-details label {
+  margin-top: 6px;
+}
+.stage-inspector footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.stage-remove {
+  color: #b4552f;
 }
 .workflow-apply {
   align-items: center;

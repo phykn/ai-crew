@@ -5254,3 +5254,8 @@ textarea::-webkit-scrollbar {
 .camp-badge .icon {
   color: var(--px-wood-dark);
 }
+.knowledge-nav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}

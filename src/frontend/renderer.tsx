@@ -14,6 +14,7 @@ import type { ChatAttachment } from "./ui/chat/attachments";
 import { DiagnosticsBanner } from "./ui/panels/diagnostics-banner";
 import type { DiagnosticsReport } from "../backend/server/diagnostics/run";
 import { Toolbar } from "./ui/panels/toolbar";
+import { PixelIcon } from "./ui/common/pixel-icons";
 import { WorklogPanel } from "./ui/panels/worklog";
 import "./tokens.css";
 import "./workspace.css";
@@ -459,7 +460,10 @@ function Workspace() {
           <section className="knowledge-view" aria-label="메모리 작업 공간">
             <div className="wiki-controls knowledge-nav">
               <button type="button" aria-pressed={memorySection === "memory"} onClick={() => setMemorySection("memory")}>기억</button>
-              <button type="button" aria-pressed={memorySection === "wiki"} onClick={() => setMemorySection("wiki")}>프로젝트 위키</button>
+              <button type="button" aria-pressed={memorySection === "wiki"} onClick={() => setMemorySection("wiki")}>
+                <PixelIcon name="book" />
+                프로젝트 위키
+              </button>
             </div>
             {memorySection === "wiki" && data ? (
               <WikiPanel key={data.current?.id} data={data} run={run} source={(revision) => void openMemorySource(revision)} openRule={() => { setView("workflow"); setShowCamp(false); }} error={error} />
